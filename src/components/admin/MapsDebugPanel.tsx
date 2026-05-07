@@ -82,11 +82,7 @@ export default function MapsDebugPanel() {
         <Row label="API key (masked)">
           <div className="flex items-center gap-2">
             <code className="text-xs bg-muted px-2 py-0.5 rounded">{diag.apiKeyMasked ?? '—'}</code>
-            {diag.apiKeyPresent && (
-              <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => copy('API key', GOOGLE_MAPS_API_KEY)}>
-                <Copy className="w-3 h-3" />
-              </Button>
-            )}
+            {/* Raw key copy intentionally disabled — never expose secrets in admin UI. */}
           </div>
         </Row>
         <Row label="Current origin">
