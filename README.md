@@ -107,7 +107,7 @@ Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/c
      https://your-production-domain.com/*
      ```
    - API restrictions → **Restrict key** → select the APIs listed above.
-6. Copy the key and set it in `.env`:
+6. Copy the key and set it in `.env` (referrer-restricted to your domains only — never commit it):
    ```
    VITE_GOOGLE_MAPS_API_KEY=AIza...yourKeyHere
    ```

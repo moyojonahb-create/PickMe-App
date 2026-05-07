@@ -2509,6 +2509,7 @@ export type Database = {
       }
       admin_set_fx_rate: { Args: { p_zar_per_usd: number }; Returns: Json }
       admin_unlock_wallet: { Args: { p_user_id: string }; Returns: Json }
+      auto_resolve_noise_fraud_flags: { Args: never; Returns: number }
       can_change_gender: { Args: { p_user_id: string }; Returns: boolean }
       can_driver_operate: { Args: { p_driver_id: string }; Returns: boolean }
       can_use_student_discount: { Args: { _user_id: string }; Returns: boolean }

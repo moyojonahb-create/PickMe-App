@@ -4,7 +4,10 @@ import path from "path";
 import { componentTagger } from "lovable-tagger";
 import { sentryVitePlugin } from "@sentry/vite-plugin";
 
-// Fallback values for Supabase (public anon key - safe to include)
+// Fallback values for Supabase (PUBLIC anon key — safe to embed in client bundle).
+// NOTE: Never add fallbacks for private secrets here (Google Maps key, Twilio,
+// Agora cert, Sentry auth token, etc.). Anything defined here is inlined into
+// the browser bundle and visible to every visitor.
 const FALLBACK_SUPABASE_URL = 'https://jidfganntquilvsytslp.supabase.co';
 const FALLBACK_SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImppZGZnYW5udHF1aWx2c3l0c2xwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkzNDM5MDIsImV4cCI6MjA4NDkxOTkwMn0.clwzOYffNy78E9kN2UnXVSHlWfTm3cMbZu3WtwCT3UM';
 
@@ -50,8 +53,10 @@ export default defineConfig(({ mode }) => {
     'import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY': JSON.stringify(
       env.VITE_SUPABASE_PUBLISHABLE_KEY || FALLBACK_SUPABASE_KEY
     ),
+    // Google Maps key MUST come from env (with HTTP-referrer restrictions).
+    // Do NOT inline a fallback — that would leak the key into every public bundle.
     'import.meta.env.VITE_GOOGLE_MAPS_API_KEY': JSON.stringify(
-      env.VITE_GOOGLE_MAPS_API_KEY || 'AIzaSyCsdyc5GgX50oEuAn5QUtLhYEw1jLYNiFU'
+      env.VITE_GOOGLE_MAPS_API_KEY || ''
     ),
   },
   resolve: {

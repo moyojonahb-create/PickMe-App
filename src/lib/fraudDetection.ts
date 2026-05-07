@@ -27,8 +27,12 @@ export function detectGPSSpoofing(
   if (timeDiffMin <= 0) return null;
   
   const speedKmh = distance / (timeDiffMin / 60);
-  
-  if (speedKmh > 300 && distance > 5) {
+
+  // Ignore obvious GPS noise / clock jitter (impossible speeds usually mean
+  // the device sent two positions with a near-zero timestamp delta).
+  // Real spoofing tops out around commercial-aircraft speed; anything above
+  // 2000 km/h is a sensor glitch, not actionable fraud.
+  if (speedKmh > 300 && speedKmh < 2000 && distance > 5) {
     return {
       type: 'gps_spoofing',
       severity: 'critical',
