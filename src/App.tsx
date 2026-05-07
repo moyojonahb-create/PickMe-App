@@ -7,15 +7,21 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import AdminEmergencyAlerts from "./components/admin/AdminEmergencyAlerts";
 import RidePaymentNotifier from "./components/notifications/RidePaymentNotifier";
 import AppHeader from "./components/AppHeader";
+import RouteErrorBoundary from "./components/RouteErrorBoundary";
 import { prefetchPages } from "./lib/prefetchPages";
+import { recordPrefetched, warmFromCache } from "./lib/persistentPrefetch";
 import { supabase } from "./integrations/supabase/client";
+
+// Warm chunk cache from previous session BEFORE React mounts —
+// keeps /ride, /wallet, /profile navigation instant after refresh.
+warmFromCache();
 
 // ─── Only the landing page is eagerly loaded ───
 import Index from "./pages/Index";
 // ─── Everything else is lazy — prefetched in idle time ───
 const Auth = lazy(() => import("./pages/Auth"));
 const Signup = lazy(() => import("./pages/Signup"));
-const Ride = lazy(() => import("./pages/Ride"));
+const Ride = lazy(() => import("./pages/Ride").then((m) => { recordPrefetched("/ride"); return m; }));
 const RideDetail = lazy(() => import("./pages/RideDetail"));
 const DriverDashboard = lazy(() => import("./pages/DriverDashboard"));
 const RiderRideDetail = lazy(() => import("./pages/RiderRideDetail"));
@@ -23,9 +29,9 @@ const AppDashboard = lazy(() => import("./pages/AppDashboard"));
 
 // ─── Secondary screens ───
 const RideHistory = lazy(() => import("./pages/RideHistory"));
-const RiderProfile = lazy(() => import("./pages/RiderProfile"));
+const RiderProfile = lazy(() => import("./pages/RiderProfile").then((m) => { recordPrefetched("/profile"); return m; }));
 const EditProfile = lazy(() => import("./pages/EditProfile"));
-const RiderWalletPage = lazy(() => import("./pages/RiderWalletPage"));
+const RiderWalletPage = lazy(() => import("./pages/RiderWalletPage").then((m) => { recordPrefetched("/wallet"); return m; }));
 const SafetyPage = lazy(() => import("./pages/SafetyPage"));
 const TermsOfService = lazy(() => import("./pages/TermsOfService"));
 const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
@@ -75,8 +81,12 @@ function SuspenseWrap({
   children: React.ReactNode;
   variant?: "ride" | "wallet" | "profile" | "admin" | "generic";
 }) {
-  // Skeleton-first: never show a blank page or a centred spinner.
-  return <Suspense fallback={<PageSkeleton variant={variant} />}>{children}</Suspense>;
+  // Skeleton-first + non-blocking error UI: never a blank page.
+  return (
+    <RouteErrorBoundary variant={variant}>
+      <Suspense fallback={<PageSkeleton variant={variant} />}>{children}</Suspense>
+    </RouteErrorBoundary>
+  );
 }
 
 // (prefetch is provided by ./lib/prefetchPages — it picks only the bundles
