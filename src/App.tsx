@@ -81,8 +81,12 @@ function SuspenseWrap({
   children: React.ReactNode;
   variant?: "ride" | "wallet" | "profile" | "admin" | "generic";
 }) {
-  // Skeleton-first: never show a blank page or a centred spinner.
-  return <Suspense fallback={<PageSkeleton variant={variant} />}>{children}</Suspense>;
+  // Skeleton-first + non-blocking error UI: never a blank page.
+  return (
+    <RouteErrorBoundary variant={variant}>
+      <Suspense fallback={<PageSkeleton variant={variant} />}>{children}</Suspense>
+    </RouteErrorBoundary>
+  );
 }
 
 // (prefetch is provided by ./lib/prefetchPages — it picks only the bundles
