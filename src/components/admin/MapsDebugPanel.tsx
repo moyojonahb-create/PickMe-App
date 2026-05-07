@@ -137,11 +137,23 @@ export default function MapsDebugPanel() {
   );
 }
 
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
+/**
+ * Row helper — uses React.forwardRef so it can safely receive a ref from
+ * parents (Radix primitives, Tooltip wrappers, etc.) without triggering
+ * "Function components cannot be given refs" warnings.
+ */
+const Row = React.forwardRef<
+  HTMLDivElement,
+  { label: string; children: React.ReactNode }
+>(function Row({ label, children }, ref) {
   return (
-    <div className="flex flex-col gap-1 p-2.5 rounded-lg bg-muted/30 border border-border/40 min-w-0">
+    <div
+      ref={ref}
+      className="flex flex-col gap-1 p-2.5 rounded-lg bg-muted/30 border border-border/40 min-w-0"
+    >
       <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</span>
       <div className="min-w-0">{children}</div>
     </div>
   );
-}
+});
+Row.displayName = "Row";
