@@ -14,8 +14,9 @@ export interface StudentProfile {
   id: string;
   user_id: string;
   institution_id: string;
-  registration_number: string;
-  national_id_number: string;
+  // Note: registration_number and national_id_number are intentionally NOT
+  // selected by the rider client. They are PII used only by the admin
+  // verification workflow (AdminStudents) and are never displayed in-app.
   id_photo_path: string | null;
   selfie_photo_path: string | null;
   id_photo_quality: StudentPhotoQuality | null;
@@ -42,12 +43,20 @@ export function useStudentProfile() {
       return;
     }
     setLoading(true);
+    // Explicit allowlist — never pull national_id_number / registration_number
+    // into the client bundle / memory. Those PII fields stay server-side and
+    // are only read by the admin verification surface.
     const { data } = await supabase
       .from('student_profiles')
-      .select('*')
+      .select(
+        'id, user_id, institution_id, id_photo_path, selfie_photo_path, ' +
+        'id_photo_quality, selfie_photo_quality, face_match_score, ' +
+        'verification_status, student_mode_active, attempt_count, ' +
+        'fraud_score, rejection_reason, created_at, updated_at'
+      )
       .eq('user_id', user.id)
       .maybeSingle();
-    setProfile((data as StudentProfile | null) ?? null);
+    setProfile((data as unknown as StudentProfile | null) ?? null);
     setLoading(false);
   }, [user]);
 
