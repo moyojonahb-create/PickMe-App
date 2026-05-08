@@ -92,6 +92,10 @@ export default function AdminSystemHealth() {
   const [logTab, setLogTab] = useState<string>('today');
   const [errorLogs, setErrorLogs] = useState<ErrorLog[]>([]);
   const [logsLoading, setLogsLoading] = useState(false);
+  const [autoRescan, setAutoRescan] = useState(true);
+  const [realtimeOn, setRealtimeOn] = useState(false);
+  const navigate = useNavigate();
+  const lastSosIdRef = useRef<string | null>(null);
 
   // Load persisted error logs
   const loadErrorLogs = useCallback(async (period: string) => {
