@@ -955,6 +955,7 @@ export default function AdminSystemHealth() {
                               </p>
                               <p className="text-xs text-foreground/80">{check.suggestion}</p>
                             </div>
+                            <FixNowButton check={check} onFix={runFix} />
                             <RamzPromptBlock check={check} />
                             <p className="text-[10px] text-muted-foreground mt-1.5">
                               Detected at {format(new Date(check.timestamp), 'HH:mm:ss · MMM d')}
