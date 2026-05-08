@@ -100,7 +100,7 @@ export const RAMZ_ACTIONS: Record<string, RamzAction> = {
       const ids = stuck.map(r => r.id);
       const { error } = await supabase
         .from('rides')
-        .update({ status: 'cancelled', cancellation_reason: 'auto-cancelled by Ramz One: driver inactive 1h+' } as never)
+        .update({ status: 'cancelled' } as never)
         .in('id', ids);
       if (error) throw error;
 
