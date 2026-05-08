@@ -170,7 +170,7 @@ export const RAMZ_ACTIONS: Record<string, RamzAction> = {
   },
 
   // Navigation-only fixes (no destructive write)
-  'unresolved-sos': { label: 'Open SOS queue', navigateTo: '/admin/emergency-alerts', run: async () => '' },
+  'unresolved-sos': { label: 'Open SOS queue', navigateTo: '/admin', run: async () => '' },
   'old-disputes': { label: 'Open disputes', navigateTo: '/admin/disputes', run: async () => '' },
   'pending-drivers': { label: 'Review drivers', navigateTo: '/admin/drivers', run: async () => '' },
   'pending-deposits': { label: 'Review deposits', navigateTo: '/admin/deposits', run: async () => '' },
