@@ -1,6 +1,14 @@
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabaseClient';
 import AdminGuard from '@/components/admin/AdminGuard';
+import {
+  getRamzAction,
+  countRecentOtpFailures,
+  countFatiguedDrivers,
+  avgSosResponseMinutes,
+} from '@/lib/ramzActions';
+import { Wrench, Loader2, Heart, Radio } from 'lucide-react';
 import AdminLayout from '@/components/admin/AdminLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -84,6 +92,10 @@ export default function AdminSystemHealth() {
   const [logTab, setLogTab] = useState<string>('today');
   const [errorLogs, setErrorLogs] = useState<ErrorLog[]>([]);
   const [logsLoading, setLogsLoading] = useState(false);
+  const [autoRescan, setAutoRescan] = useState(true);
+  const [realtimeOn, setRealtimeOn] = useState(false);
+  const navigate = useNavigate();
+  const lastSosIdRef = useRef<string | null>(null);
 
   // Load persisted error logs
   const loadErrorLogs = useCallback(async (period: string) => {
@@ -518,6 +530,55 @@ export default function AdminSystemHealth() {
         });
       }
 
+      // === PICKME-SPECIFIC SCANS ===
+
+      // 17. Africa's Talking OTP failures (24h)
+      const otpFailures = await countRecentOtpFailures();
+      if (otpFailures > 5) {
+        findings.push({
+          id: 'otp-failures',
+          category: 'security',
+          severity: otpFailures > 25 ? 'critical' : 'high',
+          title: `📱 ${otpFailures} OTP verifications failed (24h)`,
+          description: 'Phone numbers exhausted all 3 attempts without verifying. Likely SMS delivery or Africa\'s Talking issue.',
+          suggestion: 'Check Africa\'s Talking sender ID, account balance, and twilio-otp edge function logs.',
+          timestamp: now.toISOString(),
+          affectedUsers: otpFailures,
+          context: 'New user enters phone → never receives SMS → can\'t sign up',
+        });
+      }
+
+      // 18. Driver fatigue overrun (12h limit per PickMe rules)
+      const fatigued = await countFatiguedDrivers();
+      if (fatigued > 0) {
+        findings.push({
+          id: 'fatigue-overrun',
+          category: 'driver',
+          severity: fatigued > 3 ? 'critical' : 'high',
+          title: `🥱 ${fatigued} driver${fatigued > 1 ? 's' : ''} online >12h (fatigue limit)`,
+          description: 'PickMe enforces a 12h active limit. These drivers must take a mandatory rest break.',
+          suggestion: 'Force-offline and impose a 6h cool-down. Notify the driver via push.',
+          timestamp: now.toISOString(),
+          affectedUsers: fatigued,
+          context: 'Driver stays online past 12h → safety risk → fatigue accidents',
+        });
+      }
+
+      // 19. SOS response time SLA (admin must acknowledge within 5min)
+      const sosAvg = await avgSosResponseMinutes();
+      if (sosAvg !== null && sosAvg > 5) {
+        findings.push({
+          id: 'slow-sos-response',
+          category: 'security',
+          severity: sosAvg > 30 ? 'critical' : 'high',
+          title: `⏱️ Avg SOS response: ${sosAvg} min (target ≤5 min)`,
+          description: 'Admin team is acknowledging emergency alerts too slowly. Riders/drivers are at risk during the gap.',
+          suggestion: 'Set up on-call paging, push to admin device, and a 5-min auto-escalation.',
+          timestamp: now.toISOString(),
+          context: 'Rider presses SOS → admin notified → ack takes too long',
+        });
+      }
+
       // All clear
       if (findings.length === 0) {
         findings.push({
@@ -621,6 +682,68 @@ export default function AdminSystemHealth() {
 
   useEffect(() => { runSystemScan(); }, [runSystemScan]);
 
+  // Auto-rescan every 60s (background, no spinner takeover)
+  useEffect(() => {
+    if (!autoRescan) return;
+    const id = setInterval(() => { if (!scanning) runSystemScan(); }, 60_000);
+    return () => clearInterval(id);
+  }, [autoRescan, scanning, runSystemScan]);
+
+  // Realtime SOS pager — subscribe to emergency_alerts inserts
+  useEffect(() => {
+    const ch = supabase
+      .channel('ramz-one-sos-pager')
+      .on('postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'emergency_alerts' },
+        (payload) => {
+          const row = payload.new as { id: string; user_id: string };
+          if (lastSosIdRef.current === row.id) return;
+          lastSosIdRef.current = row.id;
+
+          toast.error('🆘 NEW SOS ALERT', {
+            description: 'A user just triggered an emergency. Open queue immediately.',
+            duration: 30_000,
+            action: { label: 'Open', onClick: () => navigate('/admin/emergency-alerts') },
+          });
+          if (navigator.vibrate) navigator.vibrate([400, 100, 400, 100, 400]);
+          try {
+            if ('Notification' in window && Notification.permission === 'granted') {
+              new Notification('🆘 PickMe SOS', { body: 'New emergency alert — open Ramz One.', tag: 'pickme-sos' });
+            }
+            // Short alert tone
+            const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+            const o = ctx.createOscillator(); const g = ctx.createGain();
+            o.frequency.value = 880; o.connect(g); g.connect(ctx.destination);
+            g.gain.setValueAtTime(0.18, ctx.currentTime);
+            o.start(); o.stop(ctx.currentTime + 0.4);
+          } catch { /* noop */ }
+
+          runSystemScan();
+        })
+      .subscribe((status) => setRealtimeOn(status === 'SUBSCRIBED'));
+
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission().catch(() => undefined);
+    }
+
+    return () => { void supabase.removeChannel(ch); };
+  }, [navigate, runSystemScan]);
+
+  const runFix = useCallback(async (check: HealthCheck) => {
+    const action = getRamzAction(check.id);
+    if (!action) return;
+    if (action.navigateTo) { navigate(action.navigateTo); return; }
+    if (action.confirm && !window.confirm(action.confirm)) return;
+    try {
+      const msg = await action.run();
+      toast.success(`✅ ${msg}`);
+      await runSystemScan();
+    } catch (err) {
+      toast.error(`Fix failed: ${(err as Error).message}`);
+    }
+  }, [navigate, runSystemScan]);
+
+
   const filteredChecks = filter === 'all' ? checks : checks.filter(c => c.category === filter);
   const criticalCount = checks.filter(c => c.severity === 'critical').length;
   const highCount = checks.filter(c => c.severity === 'high').length;
@@ -664,10 +787,19 @@ export default function AdminSystemHealth() {
                 </p>
               </div>
             </div>
-            <Button onClick={runSystemScan} disabled={scanning} className="font-bold gap-2">
-              <RefreshCw className={`w-4 h-4 ${scanning ? 'animate-spin' : ''}`} />
-              {scanning ? 'Scanning…' : 'Run Full Scan'}
-            </Button>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Badge variant="outline" className={`gap-1.5 ${realtimeOn ? 'bg-emerald-500/10 text-emerald-700 border-emerald-500/30' : 'bg-muted text-muted-foreground'}`}>
+                <Radio className={`w-3 h-3 ${realtimeOn ? 'animate-pulse' : ''}`} /> {realtimeOn ? 'Realtime' : 'Offline'}
+              </Badge>
+              <Badge variant="outline" className={`gap-1.5 cursor-pointer ${autoRescan ? 'bg-primary/10 text-primary border-primary/30' : 'bg-muted text-muted-foreground'}`}
+                onClick={() => setAutoRescan(v => !v)}>
+                <Heart className={`w-3 h-3 ${autoRescan ? 'animate-pulse' : ''}`} /> Auto-scan {autoRescan ? '60s' : 'off'}
+              </Badge>
+              <Button onClick={runSystemScan} disabled={scanning} className="font-bold gap-2">
+                <RefreshCw className={`w-4 h-4 ${scanning ? 'animate-spin' : ''}`} />
+                {scanning ? 'Scanning…' : 'Run Full Scan'}
+              </Button>
+            </div>
           </div>
 
           {/* Status Banner */}
@@ -832,6 +964,7 @@ export default function AdminSystemHealth() {
                               </p>
                               <p className="text-xs text-foreground/80">{check.suggestion}</p>
                             </div>
+                            <FixNowButton check={check} onFix={runFix} />
                             <RamzPromptBlock check={check} />
                             <p className="text-[10px] text-muted-foreground mt-1.5">
                               Detected at {format(new Date(check.timestamp), 'HH:mm:ss · MMM d')}
@@ -954,5 +1087,36 @@ function RamzPromptBlock({ check }: { check: HealthCheck }) {
         </pre>
       </div>
     </details>
+  );
+}
+
+/**
+ * FixNowButton — surfaces a one-click remediation when Ramz One has a
+ * registered action for this finding. Falls back to "no auto-fix" tag when
+ * the issue requires human judgment (e.g. SOS triage, dispute review).
+ */
+function FixNowButton({ check, onFix }: { check: HealthCheck; onFix: (c: HealthCheck) => Promise<void> }) {
+  const action = getRamzAction(check.id);
+  const [busy, setBusy] = useState(false);
+  if (!action) return null;
+
+  const handle = async () => {
+    setBusy(true);
+    try { await onFix(check); } finally { setBusy(false); }
+  };
+
+  return (
+    <Button
+      size="sm"
+      variant={action.navigateTo ? 'outline' : 'default'}
+      className="mt-2 h-8 gap-1.5 text-xs font-semibold"
+      onClick={handle}
+      disabled={busy}
+    >
+      {busy
+        ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+        : <Wrench className="w-3.5 h-3.5" />}
+      {busy ? 'Fixing…' : action.label}
+    </Button>
   );
 }
