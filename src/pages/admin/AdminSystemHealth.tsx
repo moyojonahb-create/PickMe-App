@@ -787,10 +787,19 @@ export default function AdminSystemHealth() {
                 </p>
               </div>
             </div>
-            <Button onClick={runSystemScan} disabled={scanning} className="font-bold gap-2">
-              <RefreshCw className={`w-4 h-4 ${scanning ? 'animate-spin' : ''}`} />
-              {scanning ? 'Scanning…' : 'Run Full Scan'}
-            </Button>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Badge variant="outline" className={`gap-1.5 ${realtimeOn ? 'bg-emerald-500/10 text-emerald-700 border-emerald-500/30' : 'bg-muted text-muted-foreground'}`}>
+                <Radio className={`w-3 h-3 ${realtimeOn ? 'animate-pulse' : ''}`} /> {realtimeOn ? 'Realtime' : 'Offline'}
+              </Badge>
+              <Badge variant="outline" className={`gap-1.5 cursor-pointer ${autoRescan ? 'bg-primary/10 text-primary border-primary/30' : 'bg-muted text-muted-foreground'}`}
+                onClick={() => setAutoRescan(v => !v)}>
+                <Heart className={`w-3 h-3 ${autoRescan ? 'animate-pulse' : ''}`} /> Auto-scan {autoRescan ? '60s' : 'off'}
+              </Badge>
+              <Button onClick={runSystemScan} disabled={scanning} className="font-bold gap-2">
+                <RefreshCw className={`w-4 h-4 ${scanning ? 'animate-spin' : ''}`} />
+                {scanning ? 'Scanning…' : 'Run Full Scan'}
+              </Button>
+            </div>
           </div>
 
           {/* Status Banner */}
