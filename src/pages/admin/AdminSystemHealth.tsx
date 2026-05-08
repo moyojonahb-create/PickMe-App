@@ -1089,3 +1089,34 @@ function RamzPromptBlock({ check }: { check: HealthCheck }) {
     </details>
   );
 }
+
+/**
+ * FixNowButton — surfaces a one-click remediation when Ramz One has a
+ * registered action for this finding. Falls back to "no auto-fix" tag when
+ * the issue requires human judgment (e.g. SOS triage, dispute review).
+ */
+function FixNowButton({ check, onFix }: { check: HealthCheck; onFix: (c: HealthCheck) => Promise<void> }) {
+  const action = getRamzAction(check.id);
+  const [busy, setBusy] = useState(false);
+  if (!action) return null;
+
+  const handle = async () => {
+    setBusy(true);
+    try { await onFix(check); } finally { setBusy(false); }
+  };
+
+  return (
+    <Button
+      size="sm"
+      variant={action.navigateTo ? 'outline' : 'default'}
+      className="mt-2 h-8 gap-1.5 text-xs font-semibold"
+      onClick={handle}
+      disabled={busy}
+    >
+      {busy
+        ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+        : <Wrench className="w-3.5 h-3.5" />}
+      {busy ? 'Fixing…' : action.label}
+    </Button>
+  );
+}
