@@ -682,6 +682,68 @@ export default function AdminSystemHealth() {
 
   useEffect(() => { runSystemScan(); }, [runSystemScan]);
 
+  // Auto-rescan every 60s (background, no spinner takeover)
+  useEffect(() => {
+    if (!autoRescan) return;
+    const id = setInterval(() => { if (!scanning) runSystemScan(); }, 60_000);
+    return () => clearInterval(id);
+  }, [autoRescan, scanning, runSystemScan]);
+
+  // Realtime SOS pager — subscribe to emergency_alerts inserts
+  useEffect(() => {
+    const ch = supabase
+      .channel('ramz-one-sos-pager')
+      .on('postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'emergency_alerts' },
+        (payload) => {
+          const row = payload.new as { id: string; user_id: string };
+          if (lastSosIdRef.current === row.id) return;
+          lastSosIdRef.current = row.id;
+
+          toast.error('🆘 NEW SOS ALERT', {
+            description: 'A user just triggered an emergency. Open queue immediately.',
+            duration: 30_000,
+            action: { label: 'Open', onClick: () => navigate('/admin/emergency-alerts') },
+          });
+          if (navigator.vibrate) navigator.vibrate([400, 100, 400, 100, 400]);
+          try {
+            if ('Notification' in window && Notification.permission === 'granted') {
+              new Notification('🆘 PickMe SOS', { body: 'New emergency alert — open Ramz One.', tag: 'pickme-sos' });
+            }
+            // Short alert tone
+            const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+            const o = ctx.createOscillator(); const g = ctx.createGain();
+            o.frequency.value = 880; o.connect(g); g.connect(ctx.destination);
+            g.gain.setValueAtTime(0.18, ctx.currentTime);
+            o.start(); o.stop(ctx.currentTime + 0.4);
+          } catch { /* noop */ }
+
+          runSystemScan();
+        })
+      .subscribe((status) => setRealtimeOn(status === 'SUBSCRIBED'));
+
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission().catch(() => undefined);
+    }
+
+    return () => { void supabase.removeChannel(ch); };
+  }, [navigate, runSystemScan]);
+
+  const runFix = useCallback(async (check: HealthCheck) => {
+    const action = getRamzAction(check.id);
+    if (!action) return;
+    if (action.navigateTo) { navigate(action.navigateTo); return; }
+    if (action.confirm && !window.confirm(action.confirm)) return;
+    try {
+      const msg = await action.run();
+      toast.success(`✅ ${msg}`);
+      await runSystemScan();
+    } catch (err) {
+      toast.error(`Fix failed: ${(err as Error).message}`);
+    }
+  }, [navigate, runSystemScan]);
+
+
   const filteredChecks = filter === 'all' ? checks : checks.filter(c => c.category === filter);
   const criticalCount = checks.filter(c => c.severity === 'critical').length;
   const highCount = checks.filter(c => c.severity === 'high').length;
