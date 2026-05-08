@@ -56,7 +56,7 @@ export function useStudentProfile() {
       )
       .eq('user_id', user.id)
       .maybeSingle();
-    setProfile((data as StudentProfile | null) ?? null);
+    setProfile((data as unknown as StudentProfile | null) ?? null);
     setLoading(false);
   }, [user]);
 
