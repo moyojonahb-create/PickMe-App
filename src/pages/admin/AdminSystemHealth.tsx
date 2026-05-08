@@ -530,6 +530,55 @@ export default function AdminSystemHealth() {
         });
       }
 
+      // === PICKME-SPECIFIC SCANS ===
+
+      // 17. Africa's Talking OTP failures (24h)
+      const otpFailures = await countRecentOtpFailures();
+      if (otpFailures > 5) {
+        findings.push({
+          id: 'otp-failures',
+          category: 'security',
+          severity: otpFailures > 25 ? 'critical' : 'high',
+          title: `📱 ${otpFailures} OTP verifications failed (24h)`,
+          description: 'Phone numbers exhausted all 3 attempts without verifying. Likely SMS delivery or Africa\'s Talking issue.',
+          suggestion: 'Check Africa\'s Talking sender ID, account balance, and twilio-otp edge function logs.',
+          timestamp: now.toISOString(),
+          affectedUsers: otpFailures,
+          context: 'New user enters phone → never receives SMS → can\'t sign up',
+        });
+      }
+
+      // 18. Driver fatigue overrun (12h limit per PickMe rules)
+      const fatigued = await countFatiguedDrivers();
+      if (fatigued > 0) {
+        findings.push({
+          id: 'fatigue-overrun',
+          category: 'driver',
+          severity: fatigued > 3 ? 'critical' : 'high',
+          title: `🥱 ${fatigued} driver${fatigued > 1 ? 's' : ''} online >12h (fatigue limit)`,
+          description: 'PickMe enforces a 12h active limit. These drivers must take a mandatory rest break.',
+          suggestion: 'Force-offline and impose a 6h cool-down. Notify the driver via push.',
+          timestamp: now.toISOString(),
+          affectedUsers: fatigued,
+          context: 'Driver stays online past 12h → safety risk → fatigue accidents',
+        });
+      }
+
+      // 19. SOS response time SLA (admin must acknowledge within 5min)
+      const sosAvg = await avgSosResponseMinutes();
+      if (sosAvg !== null && sosAvg > 5) {
+        findings.push({
+          id: 'slow-sos-response',
+          category: 'security',
+          severity: sosAvg > 30 ? 'critical' : 'high',
+          title: `⏱️ Avg SOS response: ${sosAvg} min (target ≤5 min)`,
+          description: 'Admin team is acknowledging emergency alerts too slowly. Riders/drivers are at risk during the gap.',
+          suggestion: 'Set up on-call paging, push to admin device, and a 5-min auto-escalation.',
+          timestamp: now.toISOString(),
+          context: 'Rider presses SOS → admin notified → ack takes too long',
+        });
+      }
+
       // All clear
       if (findings.length === 0) {
         findings.push({
