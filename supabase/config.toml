@@ -26,3 +26,6 @@ verify_jwt = false
 
 [functions.google-places-search]
 verify_jwt = false
+
+[functions.ramz-code-scan]
+verify_jwt = false
