@@ -26,6 +26,7 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { toast } from 'sonner';
 import { uuid } from '@/lib/uuid';
 import MapsDebugPanel from '@/components/admin/MapsDebugPanel';
+import RamzCodeScanPanel from '@/components/admin/RamzCodeScanPanel';
 import { generateLovablePrompt } from '@/lib/ramzPrompt';
 
 interface HealthCheck {
