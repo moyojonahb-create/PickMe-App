@@ -136,6 +136,9 @@ export default function RamzCodeScanPanel() {
 function FindingCard({ f }: { f: CodeFinding }) {
   const [copied, setCopied] = useState(false);
   const [open, setOpen] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [patch, setPatch] = useState<PatchResult | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
 
   const copy = async () => {
     try {
@@ -145,6 +148,25 @@ function FindingCard({ f }: { f: CodeFinding }) {
       setTimeout(() => setCopied(false), 1800);
     } catch {
       toast.error('Could not copy — select the text manually.');
+    }
+  };
+
+  const generateFix = async () => {
+    setGenerating(true);
+    try {
+      const result = await generatePatchForFinding(f);
+      setPatch(result);
+      setDialogOpen(true);
+      if (!result.changed) {
+        toast.message('Ramz One declined to auto-patch', {
+          description: result.summary || 'Manual review required.',
+        });
+      }
+    } catch (e) {
+      console.error(e);
+      toast.error(e instanceof Error ? e.message : 'Could not generate patch.');
+    } finally {
+      setGenerating(false);
     }
   };
 
@@ -167,7 +189,11 @@ function FindingCard({ f }: { f: CodeFinding }) {
               <p className="text-[11px] font-semibold text-primary mb-0.5">Suggested fix</p>
               <p className="text-xs text-foreground/80">{f.suggestion}</p>
             </div>
-            <div className="flex items-center gap-2 mt-2">
+            <div className="flex items-center gap-2 mt-2 flex-wrap">
+              <Button size="sm" onClick={generateFix} disabled={generating} className="h-7 gap-1 text-[11px] font-bold">
+                {generating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wand2 className="w-3 h-3" />}
+                {generating ? 'Generating…' : 'Generate fix'}
+              </Button>
               <Button size="sm" variant="outline" onClick={copy} className="h-7 gap-1 text-[11px] font-semibold">
                 {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
                 {copied ? 'Copied' : 'Copy Lovable prompt'}
@@ -184,6 +210,129 @@ function FindingCard({ f }: { f: CodeFinding }) {
           </div>
         </div>
       </CardContent>
+      {patch && (
+        <PatchReviewDialog
+          open={dialogOpen}
+          onOpenChange={setDialogOpen}
+          finding={f}
+          patch={patch}
+        />
+      )}
     </Card>
+  );
+}
+
+function PatchReviewDialog({
+  open, onOpenChange, finding, patch,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  finding: CodeFinding;
+  patch: PatchResult;
+}) {
+  const [confirmed, setConfirmed] = useState(false);
+  const [applying, setApplying] = useState(false);
+  const diff = computeLineDiff(patch.originalContent, patch.patchedContent);
+  const adds = diff.filter(d => d.type === 'add').length;
+  const removes = diff.filter(d => d.type === 'remove').length;
+
+  const apply = async () => {
+    if (!confirmed) {
+      setConfirmed(true);
+      return;
+    }
+    setApplying(true);
+    try {
+      const prompt = buildLovableApplyPrompt(patch, finding);
+      try { await navigator.clipboard.writeText(prompt); } catch { /* clipboard may be blocked */ }
+      downloadPatchedFile(patch.path, patch.patchedContent);
+      toast.success('Patch ready', {
+        description: 'Patched file downloaded and Lovable apply-prompt copied to clipboard. Paste it into the Lovable chat to commit the change.',
+      });
+      onOpenChange(false);
+      setConfirmed(false);
+    } catch (e) {
+      console.error(e);
+      toast.error('Could not finish applying patch.');
+    } finally {
+      setApplying(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) setConfirmed(false); }}>
+      <DialogContent className="max-w-3xl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Wand2 className="w-4 h-4 text-primary" />
+            Review auto-patch — {finding.title}
+          </DialogTitle>
+          <DialogDescription className="font-mono text-[11px]">
+            {patch.path} · +{adds} / -{removes} lines
+          </DialogDescription>
+        </DialogHeader>
+
+        {!patch.changed ? (
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-sm">
+            <p className="font-bold text-amber-700 mb-1">Ramz One did not auto-fix this.</p>
+            <p className="text-foreground/80">{patch.summary || 'The fix was deemed too risky to apply automatically. Use the Lovable prompt instead.'}</p>
+          </div>
+        ) : (
+          <>
+            <p className="text-xs text-foreground/80 -mt-1">{patch.summary}</p>
+            <div className="border border-border rounded-lg overflow-hidden bg-muted/20 max-h-[420px] overflow-y-auto">
+              <table className="w-full text-[11px] font-mono">
+                <tbody>
+                  {diff.map((d, i) => (
+                    <tr
+                      key={i}
+                      className={
+                        d.type === 'add'
+                          ? 'bg-emerald-500/10'
+                          : d.type === 'remove'
+                            ? 'bg-red-500/10'
+                            : ''
+                      }
+                    >
+                      <td className="text-muted-foreground/70 text-right px-2 py-0.5 select-none w-10 border-r border-border/50">
+                        {d.oldLine ?? ''}
+                      </td>
+                      <td className="text-muted-foreground/70 text-right px-2 py-0.5 select-none w-10 border-r border-border/50">
+                        {d.newLine ?? ''}
+                      </td>
+                      <td className="px-2 py-0.5 w-4 select-none">
+                        {d.type === 'add' ? '+' : d.type === 'remove' ? '−' : ' '}
+                      </td>
+                      <td className="px-2 py-0.5 whitespace-pre-wrap break-words">{d.text}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+
+        <DialogFooter className="gap-2 sm:gap-2">
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
+          {patch.changed && (
+            <Button
+              onClick={apply}
+              disabled={applying}
+              className="gap-1.5 font-bold"
+              variant={confirmed ? 'destructive' : 'default'}
+            >
+              {applying ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : confirmed ? (
+                <Download className="w-4 h-4" />
+              ) : (
+                <Wand2 className="w-4 h-4" />
+              )}
+              {applying ? 'Applying…' : confirmed ? 'Confirm — download & copy apply-prompt' : 'Apply patch'}
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
