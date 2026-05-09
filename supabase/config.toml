@@ -29,3 +29,6 @@ verify_jwt = false
 
 [functions.ramz-code-scan]
 verify_jwt = false
+
+[functions.ramz-generate-patch]
+verify_jwt = false
