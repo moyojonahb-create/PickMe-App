@@ -980,6 +980,9 @@ export default function AdminSystemHealth() {
             </div>
           </div>
 
+          {/* Ramz One — AI code scan */}
+          <RamzCodeScanPanel />
+
           {/* Error Logs — Today / Week */}
           <div>
             <h2 className="font-bold text-lg flex items-center gap-2 mb-3">
