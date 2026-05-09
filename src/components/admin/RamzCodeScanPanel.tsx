@@ -9,9 +9,11 @@ import { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { ScanSearch, Loader2, Bot, Copy, Check, FileCode2, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { ScanSearch, Loader2, Bot, Copy, Check, FileCode2, AlertTriangle, CheckCircle2, Wand2, Download } from 'lucide-react';
 import { runCodeScan, findingToLovablePrompt, type CodeFinding } from '@/lib/ramzCodeScan';
+import { generatePatchForFinding, computeLineDiff, downloadPatchedFile, buildLovableApplyPrompt, type PatchResult } from '@/lib/ramzPatch';
 
 const SEV_COLORS: Record<CodeFinding['severity'], string> = {
   critical: 'bg-red-500/10 text-red-600 border-red-500/20',
