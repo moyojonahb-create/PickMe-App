@@ -96,8 +96,8 @@ export function computeLineDiff(oldText: string, newText: string, contextLines =
       j++;
     }
   }
-  while (i < m) ops.push({ type: 'remove', oldLine: ++i && i, text: a[i - 1] });
-  while (j < n) ops.push({ type: 'add', newLine: ++j && j, text: b[j - 1] });
+  while (i < m) { ops.push({ type: 'remove', oldLine: i + 1, text: a[i] }); i++; }
+  while (j < n) { ops.push({ type: 'add', newLine: j + 1, text: b[j] }); j++; }
 
   // Trim long stretches of unchanged context.
   const keep = new Array(ops.length).fill(false);
