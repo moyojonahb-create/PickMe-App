@@ -69,7 +69,7 @@ export async function logAudit(
 
   const { data, error } = await supabase
     .from('ramz_patch_audit')
-    .insert(row)
+    .insert([row])
     .select('id')
     .maybeSingle();
 
