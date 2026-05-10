@@ -61,7 +61,7 @@ export async function logAudit(
     verification_status: extra.verification
       ? (extra.verification.cleared ? 'cleared' : extra.verification.error ? 'error' : 'remaining')
       : null,
-    verification_findings: extra.verification?.remaining ?? null,
+    verification_findings: extra.verification?.remaining ? JSON.parse(JSON.stringify(extra.verification.remaining)) : null,
     // Only store the heavy content snapshots for actions where rollback is meaningful.
     original_content: extra.storeContent ? patch.originalContent : null,
     patched_content: extra.storeContent ? patch.patchedContent : null,
