@@ -1309,6 +1309,57 @@ export type Database = {
           },
         ]
       }
+      ramz_patch_audit: {
+        Row: {
+          action: string
+          admin_id: string
+          ai_summary: string | null
+          created_at: string
+          file_path: string
+          finding_category: string
+          finding_line: number | null
+          finding_severity: string
+          finding_title: string
+          id: string
+          original_content: string | null
+          patched_content: string | null
+          verification_findings: Json | null
+          verification_status: string | null
+        }
+        Insert: {
+          action: string
+          admin_id: string
+          ai_summary?: string | null
+          created_at?: string
+          file_path: string
+          finding_category: string
+          finding_line?: number | null
+          finding_severity: string
+          finding_title: string
+          id?: string
+          original_content?: string | null
+          patched_content?: string | null
+          verification_findings?: Json | null
+          verification_status?: string | null
+        }
+        Update: {
+          action?: string
+          admin_id?: string
+          ai_summary?: string | null
+          created_at?: string
+          file_path?: string
+          finding_category?: string
+          finding_line?: number | null
+          finding_severity?: string
+          finding_title?: string
+          id?: string
+          original_content?: string | null
+          patched_content?: string | null
+          verification_findings?: Json | null
+          verification_status?: string | null
+        }
+        Relationships: []
+      }
       referrals: {
         Row: {
           bonus_amount: number
