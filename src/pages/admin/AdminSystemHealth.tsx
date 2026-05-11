@@ -27,6 +27,8 @@ import { toast } from 'sonner';
 import { uuid } from '@/lib/uuid';
 import MapsDebugPanel from '@/components/admin/MapsDebugPanel';
 import RamzCodeScanPanel from '@/components/admin/RamzCodeScanPanel';
+import LoadPulsePanel from '@/components/admin/LoadPulsePanel';
+import UserIncidentsPanel from '@/components/admin/UserIncidentsPanel';
 import { generateLovablePrompt } from '@/lib/ramzPrompt';
 
 interface HealthCheck {
@@ -767,6 +769,12 @@ export default function AdminSystemHealth() {
     <AdminGuard>
       <AdminLayout>
         <div className="space-y-6">
+          {/* Live load + capacity forecast (top — most important for scale) */}
+          <LoadPulsePanel />
+
+          {/* Named user incidents in the last 24h */}
+          <UserIncidentsPanel />
+
           {/* Maps integration debug panel */}
           <MapsDebugPanel />
 
