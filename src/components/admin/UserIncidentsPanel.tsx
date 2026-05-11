@@ -148,8 +148,8 @@ export default function UserIncidentsPanel() {
         userName: named(s.user_id),
         userPhone: phoneOf(s.user_id),
         occurredAt: s.created_at,
-        title: `SOS: ${s.alert_type || 'emergency'}`,
-        detail: s.message || 'No message provided',
+        title: 'SOS triggered',
+        detail: `Location ${s.latitude?.toFixed(4)}, ${s.longitude?.toFixed(4)}${s.ride_id ? ` • ride ${s.ride_id.slice(0, 8)}` : ''}${s.resolved ? ' • resolved' : ''}`,
         suggestion: 'Confirm response time <5 min, audit dispatcher notes, and verify emergency contacts on file.',
       }));
 
