@@ -567,6 +567,26 @@ export default function AdminSystemHealth() {
         });
       }
 
+      // 18b. Stale GPS rows (live_locations grows fastest, hurts capacity)
+      const oneHrAgo = subHours(now, 1).toISOString();
+      const { count: staleLocs } = await supabase
+        .from('live_locations')
+        .select('user_id', { count: 'exact', head: true })
+        .lt('updated_at', oneHrAgo);
+      if (staleLocs && staleLocs > 100) {
+        findings.push({
+          id: 'stale-live-locations',
+          category: 'performance',
+          severity: staleLocs > 1000 ? 'high' : 'medium',
+          title: `🛰️ ${staleLocs} stale GPS rows in live_locations`,
+          description: 'Old GPS rows accumulate and slow down driver-nearby queries that run on every ride request.',
+          suggestion: 'Purge rows older than 1h. Drivers will repopulate on their next location ping.',
+          timestamp: now.toISOString(),
+          affectedUsers: staleLocs,
+          context: 'Rider requests ride → driver-nearby query scans bloated table → slow match',
+        });
+      }
+
       // 19. SOS response time SLA (admin must acknowledge within 5min)
       const sosAvg = await avgSosResponseMinutes();
       if (sosAvg !== null && sosAvg > 5) {
