@@ -87,7 +87,7 @@ export default function UserIncidentsPanel() {
       // 3. Emergency SOS (last 24h)
       const { data: sos } = await supabase
         .from('emergency_alerts')
-        .select('id, user_id, alert_type, message, created_at, resolved')
+        .select('id, user_id, ride_id, latitude, longitude, created_at, resolved')
         .gte('created_at', since)
         .order('created_at', { ascending: false })
         .limit(20);
