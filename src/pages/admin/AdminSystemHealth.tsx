@@ -27,6 +27,8 @@ import { toast } from 'sonner';
 import { uuid } from '@/lib/uuid';
 import MapsDebugPanel from '@/components/admin/MapsDebugPanel';
 import RamzCodeScanPanel from '@/components/admin/RamzCodeScanPanel';
+import LoadPulsePanel from '@/components/admin/LoadPulsePanel';
+import UserIncidentsPanel from '@/components/admin/UserIncidentsPanel';
 import { generateLovablePrompt } from '@/lib/ramzPrompt';
 
 interface HealthCheck {
@@ -565,6 +567,26 @@ export default function AdminSystemHealth() {
         });
       }
 
+      // 18b. Stale GPS rows (live_locations grows fastest, hurts capacity)
+      const oneHrAgo = subHours(now, 1).toISOString();
+      const { count: staleLocs } = await supabase
+        .from('live_locations')
+        .select('user_id', { count: 'exact', head: true })
+        .lt('updated_at', oneHrAgo);
+      if (staleLocs && staleLocs > 100) {
+        findings.push({
+          id: 'stale-live-locations',
+          category: 'performance',
+          severity: staleLocs > 1000 ? 'high' : 'medium',
+          title: `🛰️ ${staleLocs} stale GPS rows in live_locations`,
+          description: 'Old GPS rows accumulate and slow down driver-nearby queries that run on every ride request.',
+          suggestion: 'Purge rows older than 1h. Drivers will repopulate on their next location ping.',
+          timestamp: now.toISOString(),
+          affectedUsers: staleLocs,
+          context: 'Rider requests ride → driver-nearby query scans bloated table → slow match',
+        });
+      }
+
       // 19. SOS response time SLA (admin must acknowledge within 5min)
       const sosAvg = await avgSosResponseMinutes();
       if (sosAvg !== null && sosAvg > 5) {
@@ -767,6 +789,12 @@ export default function AdminSystemHealth() {
     <AdminGuard>
       <AdminLayout>
         <div className="space-y-6">
+          {/* Live load + capacity forecast (top — most important for scale) */}
+          <LoadPulsePanel />
+
+          {/* Named user incidents in the last 24h */}
+          <UserIncidentsPanel />
+
           {/* Maps integration debug panel */}
           <MapsDebugPanel />
 
