@@ -28,8 +28,17 @@ Focus on:
 - React mistakes (missing deps, stale closures, key issues, ref misuse)
 - Supabase misuse (missing error handling, .single() vs .maybeSingle(), RLS-bypassing patterns, leaking PII to client)
 - Security issues (secrets in client, missing auth checks, XSS, unsafe eval)
-- Performance traps (unnecessary re-renders, N+1 queries, missing memoization on hot paths)
+- Performance traps (unnecessary re-renders, missing memoization on hot paths)
 - Accessibility regressions on critical flows
+
+SCALABILITY RULES (PickMe must support 100+ concurrent users on a small Cloud instance):
+- Flag N+1 Supabase queries inside .map() / for-loops — should be a single .in() or .or() query.
+- Flag any supabase.from(...).select(...) without .limit() OR .single()/.maybeSingle() — the implicit 1000-row cap silently truncates.
+- Flag select('*') on large tables (rides, live_locations, wallet_transactions, messages) — list explicit columns.
+- Flag setInterval polling shorter than 10s when a Realtime subscription would do — increases connection load.
+- Flag useEffect that calls supabase.channel(...).subscribe() without a cleanup that calls supabase.removeChannel(...).
+- Flag geospatial filters (lat/lng) without a bounding box — full table scans kill driver-nearby lookups.
+- Flag .eq()/.in() filters on columns that are likely missing an index (any column ending in _id, status, created_at filtered with .lt/.gt).
 
 For each issue produce ONE finding. Be precise: cite the exact file path and a line number.
 Skip files with no real problems. Better to return zero findings than fluff.`;

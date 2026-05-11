@@ -169,6 +169,20 @@ export const RAMZ_ACTIONS: Record<string, RamzAction> = {
     },
   },
 
+  'stale-live-locations': {
+    label: 'Purge stale GPS rows',
+    confirm: 'Delete live_locations rows older than 1 hour? Drivers repopulate on next ping.',
+    run: async () => {
+      const cutoff = subHours(new Date(), 1).toISOString();
+      const { error, count } = await supabase
+        .from('live_locations')
+        .delete({ count: 'exact' })
+        .lt('updated_at', cutoff);
+      if (error) throw error;
+      return `${count ?? 0} stale GPS row${count === 1 ? '' : 's'} purged.`;
+    },
+  },
+
   // Navigation-only fixes (no destructive write)
   'unresolved-sos': { label: 'Open SOS queue', navigateTo: '/admin', run: async () => '' },
   'old-disputes': { label: 'Open disputes', navigateTo: '/admin/disputes', run: async () => '' },
