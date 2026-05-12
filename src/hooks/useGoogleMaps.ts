@@ -138,7 +138,7 @@ function loadGoogleMapsScript(apiKey: string): Promise<void> {
 
     const script = document.createElement('script');
     script.id = SCRIPT_ID;
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=${LIBRARIES.join(',')}&callback=${MAPS_CALLBACK}&v=weekly`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=${LIBRARIES.join(',')}&callback=${MAPS_CALLBACK}&v=weekly&loading=async`;
     script.async = true;
     script.defer = true;
     script.onerror = () => {
