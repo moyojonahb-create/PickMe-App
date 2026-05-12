@@ -9,6 +9,7 @@
  * flows, admin guards) to keep the payload small and the signal high.
  */
 import { supabase } from '@/lib/supabaseClient';
+import { heuristicScanFile } from './ramzHeuristicScan';
 
 // Pull raw file contents at build time.
 const RAW_MODULES = import.meta.glob(
