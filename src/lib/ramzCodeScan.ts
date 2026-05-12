@@ -79,7 +79,18 @@ export async function runCodeScan(
     if (error) {
       // Surface auth/rate errors but keep scanning the rest of the project.
       console.error('ramz-code-scan batch failed', batch, error);
+      const msg = String((error as { message?: string })?.message ?? '');
+      if (msg.includes('402') || /credits? exhaust/i.test(msg)) {
+        throw new Error('AI credits exhausted — top up your workspace under Settings → Workspace → Usage to resume scans.');
+      }
+      if (msg.includes('429')) {
+        throw new Error('AI rate limit hit — wait a moment and re-run the scan.');
+      }
       continue;
+    }
+
+    if (data?.fallback) {
+      throw new Error(data?.error || 'AI gateway unavailable — try again later.');
     }
 
     if (Array.isArray(data?.findings)) {
