@@ -9,6 +9,7 @@
  * flows, admin guards) to keep the payload small and the signal high.
  */
 import { supabase } from '@/lib/supabaseClient';
+import { heuristicScanFile } from './ramzHeuristicScan';
 
 // Pull raw file contents at build time.
 const RAW_MODULES = import.meta.glob(
@@ -55,11 +56,17 @@ export async function listScannableFiles(): Promise<string[]> {
 }
 
 export async function runCodeScan(
-  options: { fileFilter?: (path: string) => boolean; onProgress?: (p: ScanProgress) => void } = {},
+  options: {
+    fileFilter?: (path: string) => boolean;
+    onProgress?: (p: ScanProgress) => void;
+    /** When true, skip the AI gateway entirely and only run local heuristics. */
+    heuristicOnly?: boolean;
+  } = {},
 ): Promise<ScanResult> {
   const allPaths = Object.keys(RAW_MODULES).filter(options.fileFilter ?? (() => true));
   const findings: CodeFinding[] = [];
   const scannedFiles: string[] = [];
+  let aiDisabled = options.heuristicOnly === true;
 
   for (let i = 0; i < allPaths.length; i += BATCH_SIZE) {
     const batch = allPaths.slice(i, i + BATCH_SIZE);
@@ -72,25 +79,31 @@ export async function runCodeScan(
       })),
     );
 
+    // ALWAYS run the local heuristic scanner — it costs nothing and works offline.
+    for (const f of files) {
+      const local = heuristicScanFile(f.path, f.content);
+      findings.push(...local);
+      scannedFiles.push(f.path);
+    }
+
+    // Optionally augment with AI findings when credits/quota are available.
+    if (aiDisabled) continue;
+
     const { data, error } = await supabase.functions.invoke('ramz-code-scan', {
       body: { files },
     });
 
     if (error) {
-      // Surface auth/rate errors but keep scanning the rest of the project.
-      console.error('ramz-code-scan batch failed', batch, error);
-      const msg = String((error as { message?: string })?.message ?? '');
-      if (msg.includes('402') || /credits? exhaust/i.test(msg)) {
-        throw new Error('AI credits exhausted — top up your workspace under Settings → Workspace → Usage to resume scans.');
-      }
-      if (msg.includes('429')) {
-        throw new Error('AI rate limit hit — wait a moment and re-run the scan.');
-      }
+      console.warn('ramz-code-scan AI batch failed — continuing with heuristic results.', error);
+      aiDisabled = true; // stop hammering the gateway for the rest of the run
       continue;
     }
 
     if (data?.fallback) {
-      throw new Error(data?.error || 'AI gateway unavailable — try again later.');
+      // 402 / 429 / gateway error — keep scanning with heuristics only.
+      console.warn('ramz-code-scan AI fallback signaled:', data?.error);
+      aiDisabled = true;
+      continue;
     }
 
     if (Array.isArray(data?.findings)) {
@@ -98,14 +111,23 @@ export async function runCodeScan(
         if (f && typeof f.file === 'string') findings.push(f);
       }
     }
-    if (Array.isArray(data?.scannedFiles)) scannedFiles.push(...data.scannedFiles);
   }
 
   options.onProgress?.({ scanned: allPaths.length, total: allPaths.length, currentBatch: [] });
 
+  // De-duplicate (same file + line + title).
+  const dedup = new Map<string, CodeFinding>();
+  for (const f of findings) {
+    const key = `${f.file}:${f.line}:${f.title}`;
+    if (!dedup.has(key)) dedup.set(key, f);
+  }
+  const unique = Array.from(dedup.values());
+
   // Sort by severity (critical first) then by file.
   const sevRank = { critical: 0, high: 1, medium: 2, low: 3 } as const;
-  findings.sort((a, b) => sevRank[a.severity] - sevRank[b.severity] || a.file.localeCompare(b.file));
+  unique.sort((a, b) => sevRank[a.severity] - sevRank[b.severity] || a.file.localeCompare(b.file));
+
+  return { findings: unique, scannedFiles: Array.from(new Set(scannedFiles)), batches: Math.ceil(allPaths.length / BATCH_SIZE) };
 
   return { findings, scannedFiles, batches: Math.ceil(allPaths.length / BATCH_SIZE) };
 }
