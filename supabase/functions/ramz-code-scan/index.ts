@@ -153,12 +153,16 @@ serve(async (req: Request) => {
       }),
     });
 
-    if (aiResp.status === 429) return json({ error: "AI rate limit — try again shortly." }, 429);
-    if (aiResp.status === 402) return json({ error: "AI credits exhausted — top up your workspace." }, 402);
+    if (aiResp.status === 429) {
+      return json({ error: "AI rate limit — try again shortly.", fallback: true, findings: [], scannedFiles: [] }, 200);
+    }
+    if (aiResp.status === 402) {
+      return json({ error: "AI credits exhausted — top up your workspace.", fallback: true, findings: [], scannedFiles: [] }, 200);
+    }
     if (!aiResp.ok) {
       const text = await aiResp.text();
       console.error("AI gateway error:", aiResp.status, text);
-      return json({ error: "AI gateway error" }, 502);
+      return json({ error: "AI gateway error", fallback: true, findings: [], scannedFiles: [] }, 200);
     }
 
     const aiData = await aiResp.json();
