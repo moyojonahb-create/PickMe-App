@@ -61,7 +61,7 @@ export function useTownPricing(townId: string | null) {
     setLoading(true);
     supabase
       .from('town_pricing')
-      .select('*')
+      .select('town_id, base_fare, per_km, per_minute, minimum_fare, surge_multiplier, currency_code, currency_symbol')
       .eq('town_id', townId)
       .maybeSingle()
       .then(({ data }) => {
