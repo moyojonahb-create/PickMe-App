@@ -58,7 +58,6 @@ export default function DriverETABanner({
 
   const isEnRoute = rideStatus === "accepted";
   const isArrived = rideStatus === "arrived";
-  const isInProgress = rideStatus === "in_progress";
 
   const distToPickup = haversineKm(driverLocation.lat, driverLocation.lng, pickupLat, pickupLng);
   const distToDropoff = haversineKm(driverLocation.lat, driverLocation.lng, dropoffLat, dropoffLng);
