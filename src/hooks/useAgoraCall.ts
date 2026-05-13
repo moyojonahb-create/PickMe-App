@@ -141,7 +141,7 @@ export function useAgoraCall({
             session.status === "answered" &&
             session.id === sessionIdRef.current
           ) {
-            console.log("[AgoraCall] Callee answered, joining channel…");
+            if (import.meta.env.DEV) console.log("[AgoraCall] Callee answered, joining channel…");
             stopRingtone();
             joinChannel(session.id as string);
           }
@@ -176,7 +176,7 @@ export function useAgoraCall({
     async (sid: string) => {
       // Guard against double-join (both realtime event and direct call)
       if (joiningRef.current) {
-        console.log("[AgoraCall] Already joining, skipping duplicate");
+        if (import.meta.env.DEV) console.log("[AgoraCall] Already joining, skipping duplicate");
         return;
       }
       joiningRef.current = true;
@@ -208,7 +208,7 @@ export function useAgoraCall({
           return;
         }
 
-        console.log("[AgoraCall] Requesting token for session:", sid);
+        if (import.meta.env.DEV) console.log("[AgoraCall] Requesting token for session:", sid);
 
         const { data, error } = await supabase.functions.invoke(
           "agora-token",
@@ -227,7 +227,7 @@ export function useAgoraCall({
         }
 
         const { token, channelName, agoraUid, appId } = data;
-        console.log("[AgoraCall] Got token, joining channel:", channelName);
+        if (import.meta.env.DEV) console.log("[AgoraCall] Got token, joining channel:", channelName);
 
         // Cleanup any previous client
         if (clientRef.current) {
@@ -247,12 +247,12 @@ export function useAgoraCall({
             try {
               await client.subscribe(user, mediaType);
               if (mediaType === "audio" && user.audioTrack) {
-                console.log("[AgoraCall] Remote audio subscribed, playing…");
+                if (import.meta.env.DEV) console.log("[AgoraCall] Remote audio subscribed, playing…");
                 // Set playback volume to 100% for clarity
                 user.audioTrack.setVolume(100);
                 await new Promise((r) => setTimeout(r, 150));
                 user.audioTrack.play();
-                console.log("[AgoraCall] Remote audio isPlaying:", user.audioTrack.isPlaying);
+                if (import.meta.env.DEV) console.log("[AgoraCall] Remote audio isPlaying:", user.audioTrack.isPlaying);
                 // Retry with staggered delays on mobile
                 if (!user.audioTrack.isPlaying) {
                   console.warn("[AgoraCall] Retrying audio play (attempt 2)…");
@@ -278,17 +278,17 @@ export function useAgoraCall({
         client.on(
           "user-joined",
           (user: IAgoraRTCRemoteUser) => {
-            console.log("[AgoraCall] Remote user joined:", user.uid);
+            if (import.meta.env.DEV) console.log("[AgoraCall] Remote user joined:", user.uid);
           }
         );
 
         client.on("user-left", () => {
-          console.log("[AgoraCall] Remote user left");
+          if (import.meta.env.DEV) console.log("[AgoraCall] Remote user left");
           endCall();
         });
 
         await client.join(appId, channelName, token, agoraUid);
-        console.log("[AgoraCall] Joined channel successfully");
+        if (import.meta.env.DEV) console.log("[AgoraCall] Joined channel successfully");
 
         // High-quality voice encoding with aggressive echo/noise cancellation
         const micTrack = await AgoraRTC.createMicrophoneAudioTrack({
@@ -304,16 +304,16 @@ export function useAgoraCall({
         localTrackRef.current = micTrack;
 
         // Verify mic track is active before publishing
-        console.log("[AgoraCall] Mic track created, enabled:", micTrack.enabled, "muted:", micTrack.muted);
+        if (import.meta.env.DEV) console.log("[AgoraCall] Mic track created, enabled:", micTrack.enabled, "muted:", micTrack.muted);
         if (!micTrack.enabled) {
           micTrack.setEnabled(true);
         }
 
         await client.publish([micTrack]);
-        console.log("[AgoraCall] Audio published successfully");
+        if (import.meta.env.DEV) console.log("[AgoraCall] Audio published successfully");
 
         setCallStatus("connected");
-        console.log("[AgoraCall] Connected & publishing audio");
+        if (import.meta.env.DEV) console.log("[AgoraCall] Connected & publishing audio");
 
         const start = Date.now();
         timerRef.current = setInterval(() => {
@@ -352,7 +352,7 @@ export function useAgoraCall({
     try {
       startRingtone('outgoing');
       setCallStatus("ringing");
-      console.log(
+      if (import.meta.env.DEV) console.log(
         "[AgoraCall] Starting call: ride=",
         rideId,
         "caller=",
@@ -405,7 +405,7 @@ export function useAgoraCall({
 
     try {
       stopRingtone();
-      console.log("[AgoraCall] Answering call:", incomingCall.sessionId);
+      if (import.meta.env.DEV) console.log("[AgoraCall] Answering call:", incomingCall.sessionId);
       await supabase
         .from("call_sessions")
         .update({ status: "answered" })
