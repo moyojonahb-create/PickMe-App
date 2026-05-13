@@ -50,20 +50,20 @@ export default function LoadPulsePanel() {
 
       const [active, pending, recent, users, errors, locsTotal, locsStale, fraud] = await Promise.all([
         supabase.from('rides').select('id', { count: 'exact', head: true })
-          .in('status', ['accepted', 'in_progress', 'arrived']),
+          .in('status', ['accepted', 'in_progress', 'arrived']).limit(1),
         supabase.from('rides').select('id', { count: 'exact', head: true })
-          .eq('status', 'pending'),
+          .eq('status', 'pending').limit(1),
         supabase.from('rides').select('id', { count: 'exact', head: true })
-          .gte('created_at', tenMinAgo),
+          .gte('created_at', tenMinAgo).limit(1),
         supabase.from('profiles').select('user_id', { count: 'exact', head: true })
-          .gte('created_at', oneHourAgo),
+          .gte('created_at', oneHourAgo).limit(1),
         supabase.from('system_error_logs').select('id', { count: 'exact', head: true })
-          .gte('created_at', oneHourAgo),
-        supabase.from('live_locations').select('user_id', { count: 'exact', head: true }),
+          .gte('created_at', oneHourAgo).limit(1),
+        supabase.from('live_locations').select('user_id', { count: 'exact', head: true }).limit(1),
         supabase.from('live_locations').select('user_id', { count: 'exact', head: true })
-          .lt('updated_at', oneHourAgo),
+          .lt('updated_at', oneHourAgo).limit(1),
         supabase.from('fraud_flags').select('id', { count: 'exact', head: true })
-          .eq('resolved', false).gte('created_at', oneHourAgo),
+          .eq('resolved', false).gte('created_at', oneHourAgo).limit(1),
       ]);
 
       setPulse({

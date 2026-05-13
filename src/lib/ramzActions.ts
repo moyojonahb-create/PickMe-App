@@ -147,7 +147,8 @@ export const RAMZ_ACTIONS: Record<string, RamzAction> = {
         .from('driver_sessions')
         .select('driver_id')
         .is('went_offline_at', null)
-        .lt('went_online_at', cutoff);
+        .lt('went_online_at', cutoff)
+        .limit(500);
       if (!long?.length) return 'No drivers exceeding 12h.';
 
       const ids = Array.from(new Set(long.map(s => s.driver_id)));
