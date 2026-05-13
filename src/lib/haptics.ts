@@ -15,7 +15,8 @@ const webPatterns: Record<HapticStyle, number | number[]> = {
   selection: 5,
 };
 
-let HapticsPlugin: any = null;
+type HapticsPluginType = { impact: (opts: { style: string }) => Promise<void>; vibrate: (opts: { duration: number }) => Promise<void> };
+let HapticsPlugin: HapticsPluginType | null = null;
 
 // Lazy-load native plugin only on native platforms
 async function getHaptics() {
