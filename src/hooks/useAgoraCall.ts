@@ -370,14 +370,15 @@ export function useAgoraCall({
           status: "ringing",
         })
         .select("id")
-        .single();
+        .maybeSingle();
 
       if (error) {
         console.error("[AgoraCall] Insert error:", error);
         throw error;
       }
+      if (!data) throw new Error("Failed to create call session");
 
-      console.log("[AgoraCall] Call session created:", data.id);
+      if (import.meta.env.DEV) console.log("[AgoraCall] Call session created:", data.id);
       // Set ref IMMEDIATELY so realtime handler can match it
       setSessionIdSync(data.id);
 

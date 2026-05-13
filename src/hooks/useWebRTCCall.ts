@@ -388,9 +388,10 @@ export function useWebRTCCall({
           status: "ringing",
         })
         .select("id")
-        .single();
+        .maybeSingle();
 
       if (error) throw error;
+      if (!data) throw new Error("Failed to create call session");
 
       setSessionId(data.id);
       toast.info("Calling...", { description: "Waiting for answer" });
