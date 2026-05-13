@@ -50,18 +50,18 @@ export const useWallet = () => {
       // Try to fetch existing wallet
       const { data: initialWalletData, error: walletError } = await supabase
         .from('wallets')
-        .select('*')
+        .select('id, user_id, balance, is_locked, locked_reason, created_at, updated_at')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
       let walletData = initialWalletData;
 
       // If no wallet exists, create one
-      if (walletError && walletError.code === 'PGRST116') {
+      if (!walletData && !walletError) {
         const { data: newWallet, error: createError } = await supabase
           .from('wallets')
           .insert({ user_id: user.id, balance: 0 })
-          .select()
-          .single();
+          .select('id, user_id, balance, is_locked, locked_reason, created_at, updated_at')
+          .maybeSingle();
 
         if (createError) throw createError;
         walletData = newWallet;

@@ -32,33 +32,32 @@ export default function DriverETABanner({
   const [countdownSeconds, setCountdownSeconds] = useState<number>(0);
   const lastEtaRef = useRef<number>(0);
 
-  // Re-render every second for live countdown
+  const isInProgress = rideStatus === "in_progress";
+
+  // Single consolidated timer: ticks UI + decrements countdown every 1s.
+  // This is a UI-only countdown (no network calls), with proper cleanup on unmount.
   useEffect(() => {
-    const interval = setInterval(() => setTick((t) => t + 1), 1000);
+    const interval = setInterval(() => {
+      setTick((t) => (t + 1) % 1_000_000);
+      setCountdownSeconds((prev) => Math.max(0, prev - 1));
+    }, 1000);
     return () => clearInterval(interval);
   }, []);
 
   // Sync countdown when ETA changes
   useEffect(() => {
-    const eta = isInProgress ? estimateMinutes(haversineKm(driverLocation.lat, driverLocation.lng, dropoffLat, dropoffLng))
+    const eta = isInProgress
+      ? estimateMinutes(haversineKm(driverLocation.lat, driverLocation.lng, dropoffLat, dropoffLng))
       : estimateMinutes(haversineKm(driverLocation.lat, driverLocation.lng, pickupLat, pickupLng));
     if (Math.abs(eta - lastEtaRef.current) >= 1 || countdownSeconds <= 0) {
       setCountdownSeconds(eta * 60);
       lastEtaRef.current = eta;
     }
-  }, [driverLocation.lat, driverLocation.lng]);
-
-  // Tick down every second
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCountdownSeconds(prev => Math.max(0, prev - 1));
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [driverLocation.lat, driverLocation.lng, isInProgress]);
 
   const isEnRoute = rideStatus === "accepted";
   const isArrived = rideStatus === "arrived";
-  const isInProgress = rideStatus === "in_progress";
 
   const distToPickup = haversineKm(driverLocation.lat, driverLocation.lng, pickupLat, pickupLng);
   const distToDropoff = haversineKm(driverLocation.lat, driverLocation.lng, dropoffLat, dropoffLng);

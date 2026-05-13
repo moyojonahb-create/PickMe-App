@@ -33,7 +33,7 @@ export function useVoiceNavigation(options: VoiceNavigationOptions = {}) {
 
   const speak = useCallback((text: string, force = false) => {
     if (!isSupported || !enabled) {
-      console.log('[Voice Nav - Text Fallback]:', text);
+      if (import.meta.env.DEV) console.log('[Voice Nav - Text Fallback]:', text);
       setLastInstruction(text);
       return;
     }

@@ -61,7 +61,7 @@ async function getUserOrThrow() {
 export async function fetchPendingOffers(rideId: string): Promise<Offer[]> {
   const { data, error } = await supabase
     .from("offers")
-    .select("*")
+    .select("id, ride_id, driver_id, price, eta_minutes, message, status, created_at")
     .eq("ride_id", rideId)
     .eq("status", "pending")
     .order("created_at", { ascending: false })
@@ -78,8 +78,16 @@ export async function fetchDriversByIds(driverIds: string[]): Promise<Record<str
 
   // Fetch drivers and profiles in parallel
   const [driversRes, profilesRes] = await Promise.all([
-    supabase.from("drivers").select("*").in("user_id", driverIds),
-    supabase.from("profiles").select("user_id, full_name").in("user_id", driverIds),
+    supabase
+      .from("drivers")
+      .select("id, user_id, status, vehicle_type, plate_number, vehicle_make, vehicle_model, is_online, trial_ends_at, gender, avatar_url, rating_avg, total_trips")
+      .in("user_id", driverIds)
+      .limit(driverIds.length),
+    supabase
+      .from("profiles")
+      .select("user_id, full_name")
+      .in("user_id", driverIds)
+      .limit(driverIds.length),
   ]);
 
   if (driversRes.error) throw new Error(driversRes.error.message);
@@ -107,7 +115,7 @@ export async function fetchOpenRides(driverGender?: string | null) {
   const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
   const { data, error } = await supabase
     .from("rides")
-    .select("*")
+    .select("id, user_id, status, pickup_address, dropoff_address, pickup_lat, pickup_lon, dropoff_lat, dropoff_lon, fare, distance_km, duration_minutes, vehicle_type, gender_preference, payment_method, passenger_count, town_id, created_at")
     .eq("status", "pending")
     .gte("created_at", fiveMinAgo)
     .order("created_at", { ascending: false })
@@ -137,7 +145,7 @@ export async function getDriverProfile(): Promise<DriverProfile | null> {
 
   const { data, error } = await supabase
     .from("drivers")
-    .select("*")
+    .select("id, user_id, status, vehicle_type, plate_number, vehicle_make, vehicle_model, is_online, trial_ends_at, gender, avatar_url, rating_avg, total_trips")
     .eq("user_id", user.id)
     .maybeSingle();
   
@@ -167,10 +175,11 @@ export async function submitOffer(input: {
   const { data, error } = await supabase
     .from("offers")
     .insert(payload as never)
-    .select("*")
-    .single();
-  
+    .select("id, ride_id, driver_id, price, eta_minutes, message, status, created_at")
+    .maybeSingle();
+
   if (error) throw new Error(error.message);
+  if (!data) throw new Error("Failed to create offer");
   return data as Offer;
 }
 
@@ -190,7 +199,7 @@ export async function acceptOffer(rideId: string, offerOrId: string | Offer) {
     .from("offers")
     .select("driver_id")
     .eq("id", offerId)
-    .single();
+    .maybeSingle();
 
   if (offerErr || !offer) throw new Error("Offer not found");
 

@@ -121,7 +121,7 @@ const RULES: Rule[] = [
     category: 'type-safety',
     severity: 'low',
     title: 'Explicit any weakens type safety',
-    description: 'Explicit `: any` disables checking at the call-site and hides Supabase shape mismatches.',
+    description: 'Explicit any-type annotations disable checking at the call-site and hide Supabase shape mismatches.',
     suggestion: 'Replace with the Database row type or a narrow interface.',
     test: (line, idx, lines, path) => {
       if (isTestFile(path)) return false;

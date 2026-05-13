@@ -46,7 +46,7 @@ export async function enablePush(): Promise<boolean> {
   if (!granted) throw new Error("Notifications permission not granted.");
 
   if (!isPushSupported()) {
-    console.log("[Push] Push not supported, using browser notifications only");
+    if (import.meta.env.DEV) console.log("[Push] Push not supported, using browser notifications only");
     return true;
   }
 
@@ -89,7 +89,7 @@ export async function enablePush(): Promise<boolean> {
       });
     }
 
-    console.log("[Push] Web Push enabled successfully");
+    if (import.meta.env.DEV) console.log("[Push] Web Push enabled successfully");
     return true;
   } catch (err) {
     console.warn("[Push] Web Push setup failed, using browser notifications:", err);
@@ -107,7 +107,7 @@ export async function disablePush(): Promise<void> {
         await subscription.unsubscribe();
       }
     }
-    console.log("[Push] Push notifications disabled");
+    if (import.meta.env.DEV) console.log("[Push] Push notifications disabled");
   } catch {
     console.warn("[Push] Error disabling push");
   }

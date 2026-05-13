@@ -76,8 +76,8 @@ export function useGooglePlacesAutocomplete() {
         } else {
           setSuggestions([]);
         }
-      } catch (err: any) {
-        if (err.name !== 'AbortError') {
+      } catch (err: unknown) {
+        if ((err as { name?: string })?.name !== 'AbortError') {
           console.error('[useGooglePlacesAutocomplete]', err);
           setSuggestions([]);
         }

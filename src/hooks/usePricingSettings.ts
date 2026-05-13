@@ -70,9 +70,10 @@ export const useUpdatePricingSettings = () => {
           updated_by: user.user?.id,
         })
         .select()
-        .single();
+        .maybeSingle();
 
       if (error) throw error;
+      if (!data) throw new Error('Pricing settings not found');
       return data;
     },
     onSuccess: () => {

@@ -121,15 +121,19 @@ export async function requestRide(input: RequestRideInput) {
       return { ok: false as const, error: result?.reason || 'Wallet ride could not be created' };
     }
     // Fetch the inserted ride row
-    const fetched = await supabase.from('rides').select('*').eq('id', result.ride_id).maybeSingle();
+    const fetched = await supabase
+      .from('rides')
+      .select('id, user_id, status, pickup_address, dropoff_address, fare, distance_km, duration_minutes, pickup_lat, pickup_lon, dropoff_lat, dropoff_lon, vehicle_type, payment_method, town_id, scheduled_at, created_at')
+      .eq('id', result.ride_id)
+      .maybeSingle();
     return { ok: true as const, ride: (fetched.data ?? { id: result.ride_id }) as RideRow };
   }
 
   const firstInsert = await supabase
     .from("rides")
     .insert(insertPayload as never)
-    .select("*")
-    .single();
+    .select("id, user_id, status, pickup_address, dropoff_address, fare, distance_km, duration_minutes, pickup_lat, pickup_lon, dropoff_lat, dropoff_lon, vehicle_type, payment_method, town_id, scheduled_at, created_at")
+    .maybeSingle();
 
   data = firstInsert.data as RideRow | null;
   error = firstInsert.error
@@ -146,8 +150,8 @@ export async function requestRide(input: RequestRideInput) {
     const fallbackInsert = await supabase
       .from("rides")
       .insert(fallbackPayload as never)
-      .select("*")
-      .single();
+      .select("id, user_id, status, pickup_address, dropoff_address, fare, distance_km, duration_minutes, pickup_lat, pickup_lon, dropoff_lat, dropoff_lon, vehicle_type, payment_method, town_id, scheduled_at, created_at")
+      .maybeSingle();
 
     data = fallbackInsert.data as RideRow | null;
     error = fallbackInsert.error

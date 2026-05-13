@@ -61,7 +61,7 @@ export function useTownPricing(townId: string | null) {
     setLoading(true);
     supabase
       .from('town_pricing')
-      .select('*')
+      .select('town_id, base_fare, per_km, per_minute, minimum_fare, surge_multiplier, currency_code, currency_symbol')
       .eq('town_id', townId)
       .maybeSingle()
       .then(({ data }) => {
@@ -137,7 +137,10 @@ export function formatFare(amount: number, symbol: string = '$', _code?: string)
 /** Preload all town pricing */
 export async function preloadAllTownPricing(): Promise<Record<string, TownPricingConfig>> {
   if (Object.keys(pricingCache).length > 0) return pricingCache;
-  const { data } = await supabase.from('town_pricing').select('*');
+  const { data } = await supabase
+    .from('town_pricing')
+    .select('town_id, base_fare, per_km, per_minute, minimum_fare, surge_multiplier, currency_code, currency_symbol')
+    .limit(500);
   if (data) {
     for (const row of data) {
       const config = row as unknown as TownPricingConfig;
