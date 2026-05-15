@@ -82,11 +82,11 @@ export interface GoogleMapsState {
 }
 
 export function useGoogleMaps(retryKey = 0): GoogleMapsState {
-  const apiKey = getGoogleMapsKey();
+  const envKey = getGoogleMapsKey();
   const [state, setState] = useState<GoogleMapsState>({
     isLoaded: typeof window !== 'undefined' && !!window.google?.maps,
     loadError: null,
-    apiKey,
+    apiKey: envKey ?? 'runtime',
   });
 
   useEffect(() => {
@@ -98,23 +98,19 @@ export function useGoogleMaps(retryKey = 0): GoogleMapsState {
 
   useEffect(() => {
     let active = true;
-    if (!apiKey) {
-      setState({ isLoaded: false, loadError: new Error('Google Maps API key is not configured'), apiKey: null });
-      return;
-    }
     loadGoogleMaps()
       .then(() => {
         if (!active) return;
         if (DEV) console.info('[PickMe Maps] loaded');
-        setState({ isLoaded: true, loadError: null, apiKey });
+        setState({ isLoaded: true, loadError: null, apiKey: envKey ?? 'runtime' });
       })
       .catch((err: Error) => {
         if (!active) return;
         if (DEV) console.error('[PickMe Maps] load error:', err.message);
-        setState({ isLoaded: false, loadError: err, apiKey });
+        setState({ isLoaded: false, loadError: err, apiKey: envKey });
       });
     return () => { active = false; };
-  }, [retryKey, apiKey]);
+  }, [retryKey, envKey]);
 
   return state;
 }
