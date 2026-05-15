@@ -1,24 +1,58 @@
 /**
  * Centralized Google Maps JS API loader (singleton).
- * - Reads key from import.meta.env.VITE_GOOGLE_MAPS_API_KEY only.
+ *
+ * Key resolution order:
+ *   1. import.meta.env.VITE_GOOGLE_MAPS_API_KEY (build-time secret)
+ *   2. Lovable Cloud `google-maps-key` edge function (runtime secret GOOGLE_MAPS_API_KEY)
+ *
+ * Either source works — no key is ever hardcoded in the bundle.
+ *
  * - Injects the script exactly once.
- * - Loads required libraries: places, geometry, routes, marker.
+ * - Loads required libraries: places, geometry, marker.
  * - One automatic retry on script error.
  * - Resolves once window.google.maps is available.
  */
 
+import { supabase } from '@/integrations/supabase/client';
+
 const SCRIPT_ID = 'pickme-google-maps-script';
 const CALLBACK = '__pickmeGmapsInit' as const;
-const LIBRARIES = ['places', 'geometry', 'routes', 'marker'] as const;
+const LIBRARIES = ['places', 'geometry', 'marker'] as const;
 
 type WinWithCb = Window & { [CALLBACK]?: () => void };
 
 let cachedPromise: Promise<typeof google.maps> | null = null;
+let cachedKey: string | null = null;
 let didRetry = false;
 
+/** Synchronous key getter — only returns the build-time env value. */
 export function getGoogleMapsKey(): string | null {
+  if (cachedKey) return cachedKey;
   const k = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
   return typeof k === 'string' && k.length > 0 ? k : null;
+}
+
+/** Async resolver: env first, then edge function fallback. */
+async function resolveGoogleMapsKey(): Promise<string> {
+  if (cachedKey) return cachedKey;
+
+  const envKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+  if (typeof envKey === 'string' && envKey.length > 0) {
+    cachedKey = envKey;
+    return envKey;
+  }
+
+  // Fallback: fetch from authenticated edge function
+  const { data, error } = await supabase.functions.invoke('google-maps-key');
+  if (error) {
+    throw new Error(
+      `Could not fetch Google Maps key: ${error.message}. Make sure you are signed in or set VITE_GOOGLE_MAPS_API_KEY.`,
+    );
+  }
+  const key = (data as { apiKey?: string } | null)?.apiKey;
+  if (!key) throw new Error('Google Maps key not configured on the server');
+  cachedKey = key;
+  return key;
 }
 
 function injectScript(apiKey: string): Promise<typeof google.maps> {
@@ -65,24 +99,24 @@ function injectScript(apiKey: string): Promise<typeof google.maps> {
 
 export function loadGoogleMaps(): Promise<typeof google.maps> {
   if (cachedPromise) return cachedPromise;
-  const key = getGoogleMapsKey();
-  if (!key) {
-    return Promise.reject(new Error('VITE_GOOGLE_MAPS_API_KEY not configured'));
-  }
-  cachedPromise = injectScript(key).catch(async (err) => {
-    if (didRetry) throw err;
-    didRetry = true;
-    cachedPromise = null;
-    // Remove failed tag, retry once
-    document.getElementById(SCRIPT_ID)?.remove();
-    cachedPromise = injectScript(key);
-    return cachedPromise;
-  });
+  cachedPromise = (async () => {
+    const key = await resolveGoogleMapsKey();
+    try {
+      return await injectScript(key);
+    } catch (err) {
+      if (didRetry) throw err;
+      didRetry = true;
+      cachedPromise = null;
+      document.getElementById(SCRIPT_ID)?.remove();
+      return injectScript(key);
+    }
+  })();
   return cachedPromise;
 }
 
 export function resetGoogleMapsLoader() {
   cachedPromise = null;
+  cachedKey = null;
   didRetry = false;
   document.getElementById(SCRIPT_ID)?.remove();
 }
