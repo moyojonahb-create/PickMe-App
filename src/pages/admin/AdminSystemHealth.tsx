@@ -25,7 +25,6 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { toast } from 'sonner';
 import { uuid } from '@/lib/uuid';
-import MapsDebugPanel from '@/components/admin/MapsDebugPanel';
 import RamzCodeScanPanel from '@/components/admin/RamzCodeScanPanel';
 import LoadPulsePanel from '@/components/admin/LoadPulsePanel';
 import UserIncidentsPanel from '@/components/admin/UserIncidentsPanel';
@@ -823,9 +822,6 @@ export default function AdminSystemHealth() {
 
           {/* Named user incidents in the last 24h */}
           <UserIncidentsPanel />
-
-          {/* Maps integration debug panel */}
-          <MapsDebugPanel />
 
           {/* Ramz One Header */}
           <div className="flex items-center justify-between flex-wrap gap-3">
