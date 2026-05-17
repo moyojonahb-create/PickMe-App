@@ -681,6 +681,13 @@ export default function AdminSystemHealth() {
         timeline.push({ hour: format(hourEnd, 'HH:mm'), errors: cancelledH || 0, completed: completedH || 0 });
       }
 
+      // Tag operational stat findings (not technical errors).
+      for (const f of findings) {
+        if (STAT_FINDING_IDS.has(f.id)) {
+          f.isStat = true;
+        }
+      }
+
       // Sort by severity
       findings.sort((a, b) => {
         const order = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
