@@ -555,9 +555,46 @@ function FindingCard({
               <FileCode2 className="w-3 h-3" /> {f.file}:{f.line}
             </p>
             <p className="text-xs text-foreground/80 mt-1.5">{f.description}</p>
+            {(f.rootCause || f.userImpact || f.scalabilityImpact || f.performanceImpact || f.securityImpact) && (
+              <div className="grid sm:grid-cols-2 gap-1.5 mt-2">
+                {f.rootCause && (
+                  <div className="rounded-md border border-border bg-muted/30 px-2 py-1.5">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Root cause</p>
+                    <p className="text-[11px] text-foreground/80">{f.rootCause}</p>
+                  </div>
+                )}
+                {f.userImpact && (
+                  <div className="rounded-md border border-border bg-muted/30 px-2 py-1.5">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">User impact</p>
+                    <p className="text-[11px] text-foreground/80">{f.userImpact}</p>
+                  </div>
+                )}
+                {f.scalabilityImpact && (
+                  <div className="rounded-md border border-indigo-500/20 bg-indigo-500/5 px-2 py-1.5">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-indigo-700">Scalability</p>
+                    <p className="text-[11px] text-foreground/80">{f.scalabilityImpact}</p>
+                  </div>
+                )}
+                {f.performanceImpact && (
+                  <div className="rounded-md border border-amber-500/20 bg-amber-500/5 px-2 py-1.5">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-amber-700">Performance</p>
+                    <p className="text-[11px] text-foreground/80">{f.performanceImpact}</p>
+                  </div>
+                )}
+                {f.securityImpact && (
+                  <div className="rounded-md border border-purple-500/20 bg-purple-500/5 px-2 py-1.5 sm:col-span-2">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-purple-700">Security</p>
+                    <p className="text-[11px] text-foreground/80">{f.securityImpact}</p>
+                  </div>
+                )}
+              </div>
+            )}
             <div className="bg-primary/5 border border-primary/10 rounded-lg p-2 mt-2">
-              <p className="text-[11px] font-semibold text-primary mb-0.5">Suggested fix</p>
+              <p className="text-[11px] font-semibold text-primary mb-0.5">Required fix</p>
               <p className="text-xs text-foreground/80">{f.suggestion}</p>
+              {f.expectedResult && (
+                <p className="text-[11px] text-foreground/70 mt-1"><span className="font-semibold">Expected result:</span> {f.expectedResult}</p>
+              )}
             </div>
             <div className="flex items-center gap-2 mt-2 flex-wrap">
               <Button size="sm" onClick={generateFix} disabled={generating || disabled} className="h-7 gap-1 text-[11px] font-bold">
