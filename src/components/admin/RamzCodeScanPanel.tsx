@@ -420,8 +420,7 @@ export default function RamzCodeScanPanel() {
           <div className="flex items-start justify-between gap-3 flex-wrap">
             <div className="min-w-0 flex-1">
               <p className="text-sm text-foreground">
-                Ramz One reviews the project's hooks, libraries, and ride/wallet/admin components for bugs,
-                React mistakes, Supabase misuse, security gaps, and performance traps — then suggests fixes.
+                Ramz One AI agent 
               </p>
               <p className="text-[11px] text-muted-foreground mt-1">
                 Scans run in batches; results stream in as each batch completes.
