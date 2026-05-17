@@ -245,7 +245,7 @@ function MapboxMapInner({
     };
 
     const animate = opts?.animate !== false;
-    const ease: mapboxgl.EaseToOptions['easing'] = (t) => 1 - Math.pow(1 - t, 3); // cubic-out
+    const ease = (t: number) => 1 - Math.pow(1 - t, 3); // cubic-out
 
     if (pts.length >= 2) {
       const bounds = pts.reduce(
