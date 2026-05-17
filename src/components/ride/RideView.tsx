@@ -1089,55 +1089,71 @@ export default function RideView() {
         </div>
       </GlassSheet>
 
-      {/* ═══ PAYMENT METHOD PROMPT — compact floating pill ═══ */}
+      {/* ═══ PAYMENT METHOD PROMPT — refined card ═══ */}
       {showPaymentPrompt.open && (
         <div
-          className="fixed inset-0 z-[80] bg-black/20 backdrop-blur-[2px] animate-in fade-in"
+          className="fixed inset-0 z-[80] bg-black/40 backdrop-blur-md animate-in fade-in flex items-end justify-center"
           onClick={() => setShowPaymentPrompt({ open: false, fare: 0 })}>
           <div
             onClick={(e) => e.stopPropagation()}
-            className="absolute left-1/2 -translate-x-1/2 bottom-[calc(env(safe-area-inset-bottom)+96px)] flex items-center gap-1.5 px-2 py-1.5 rounded-full bg-background shadow-2xl border border-border animate-in slide-in-from-bottom-2">
-            <span className="pl-1 text-[11px] font-medium text-muted-foreground whitespace-nowrap">Pay with</span>
-            <button
-              onClick={() => {
-                const fare = showPaymentPrompt.fare;
-                setPaymentMethod('cash');
-                setShowPaymentPrompt({ open: false, fare: 0 });
-                handleSendOffer(fare, 'cash');
-              }}
-              className="flex items-center gap-1 pl-1 pr-2.5 py-1 rounded-full bg-primary text-primary-foreground text-[12px] font-semibold active:scale-95 transition-transform">
-              <span className="w-5 h-5 flex items-center justify-center rounded-full bg-white/20 shrink-0">
-                <Banknote className="w-3 h-3" />
-              </span>
-              Cash
-            </button>
-            <button
-              onClick={() => {
-                const fare = showPaymentPrompt.fare;
-                if (walletBalance < fare) {
-                  toast({
-                    title: 'Insufficient wallet',
-                    description: `Need $${fare.toFixed(2)}, have $${walletBalance.toFixed(2)}.`,
-                    variant: 'destructive',
-                  });
-                  return;
-                }
-                setPaymentMethod('wallet');
-                setShowPaymentPrompt({ open: false, fare: 0 });
-                handleSendOffer(fare, 'wallet');
-              }}
-              className="flex items-center gap-1 pl-1 pr-2.5 py-1 rounded-full bg-accent text-accent-foreground text-[12px] font-semibold active:scale-95 transition-transform">
-              <span className="w-5 h-5 flex items-center justify-center rounded-full bg-white/25 shrink-0">
-                <Wallet className="w-3 h-3" />
-              </span>
-              <span>Wallet</span>
-              <span className="text-[9px] opacity-80 font-medium">${walletBalance.toFixed(0)}</span>
-            </button>
-            <button
-              onClick={() => setShowPaymentPrompt({ open: false, fare: 0 })}
-              className="w-6 h-6 flex items-center justify-center rounded-full bg-muted text-muted-foreground hover:bg-muted/80 active:scale-90 transition-colors">
-              <X className="w-3 h-3" />
-            </button>
+            className="w-[calc(100%-24px)] max-w-[380px] mb-[calc(env(safe-area-inset-bottom)+24px)] bg-background rounded-3xl shadow-2xl border border-border/60 overflow-hidden animate-in slide-in-from-bottom-4">
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 pt-4 pb-3">
+              <div>
+                <h3 className="text-[15px] font-semibold text-foreground leading-tight">Choose payment</h3>
+                <p className="text-[11px] text-muted-foreground mt-0.5">Fare ${showPaymentPrompt.fare.toFixed(2)}</p>
+              </div>
+              <button
+                onClick={() => setShowPaymentPrompt({ open: false, fare: 0 })}
+                className="w-7 h-7 flex items-center justify-center rounded-full bg-muted text-muted-foreground active:scale-90 transition-transform">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {/* Options */}
+            <div className="px-3 pb-3 grid grid-cols-2 gap-2">
+              <button
+                onClick={() => {
+                  const fare = showPaymentPrompt.fare;
+                  setPaymentMethod('cash');
+                  setShowPaymentPrompt({ open: false, fare: 0 });
+                  handleSendOffer(fare, 'cash');
+                }}
+                className="group flex flex-col items-start gap-2 p-3 rounded-2xl bg-primary text-primary-foreground active:scale-[0.97] transition-transform shadow-md">
+                <span className="w-9 h-9 flex items-center justify-center rounded-full bg-white/20">
+                  <Banknote className="w-4.5 h-4.5" strokeWidth={2.2} />
+                </span>
+                <div className="text-left">
+                  <div className="text-[13px] font-semibold leading-tight">Cash</div>
+                  <div className="text-[10px] opacity-80 mt-0.5">Pay driver</div>
+                </div>
+              </button>
+
+              <button
+                onClick={() => {
+                  const fare = showPaymentPrompt.fare;
+                  if (walletBalance < fare) {
+                    toast({
+                      title: 'Insufficient wallet',
+                      description: `Need $${fare.toFixed(2)}, have $${walletBalance.toFixed(2)}.`,
+                      variant: 'destructive',
+                    });
+                    return;
+                  }
+                  setPaymentMethod('wallet');
+                  setShowPaymentPrompt({ open: false, fare: 0 });
+                  handleSendOffer(fare, 'wallet');
+                }}
+                className="group flex flex-col items-start gap-2 p-3 rounded-2xl bg-accent text-accent-foreground active:scale-[0.97] transition-transform shadow-md">
+                <span className="w-9 h-9 flex items-center justify-center rounded-full bg-black/10">
+                  <Wallet className="w-4.5 h-4.5" strokeWidth={2.2} />
+                </span>
+                <div className="text-left">
+                  <div className="text-[13px] font-semibold leading-tight">Wallet</div>
+                  <div className="text-[10px] opacity-80 mt-0.5">Balance ${walletBalance.toFixed(2)}</div>
+                </div>
+              </button>
+            </div>
           </div>
         </div>
       )}
