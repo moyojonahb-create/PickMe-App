@@ -126,8 +126,10 @@ function MapboxMapInner({
       cancelled = true;
       Object.values(markersRef.current).forEach((m) => m.remove());
       driverMarkersRef.current.forEach((m) => m.remove());
+      suggestionMarkersRef.current.forEach((m) => m.remove());
       markersRef.current = {};
       driverMarkersRef.current.clear();
+      suggestionMarkersRef.current = [];
       mapRef.current?.remove();
       mapRef.current = null;
     };
