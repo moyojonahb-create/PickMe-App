@@ -460,6 +460,16 @@ export default function RamzCodeScanPanel() {
                 {(scanning || batchRunning) ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
                 Full Scan & Auto-Fix
               </Button>
+              <Button
+                onClick={() => analyzeWithAi('deep')}
+                disabled={aiLoading || !findings || findings.length === 0}
+                variant="outline"
+                className="font-bold gap-2 border-violet-500/40 text-violet-700 hover:bg-violet-500/10"
+                title="Send sanitized findings to OpenAI for deep root-cause analysis"
+              >
+                {aiLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Brain className="w-4 h-4" />}
+                Analyze with AI
+              </Button>
             </div>
           </div>
 
