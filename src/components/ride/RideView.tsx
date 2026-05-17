@@ -1111,7 +1111,7 @@ export default function RideView() {
             </div>
 
             {/* Options */}
-            <div className="px-3 pb-3 grid grid-cols-2 gap-2">
+            <div className="px-3 pb-3 grid grid-cols-2 gap-1.5">
               <button
                 onClick={() => {
                   const fare = showPaymentPrompt.fare;
@@ -1119,13 +1119,13 @@ export default function RideView() {
                   setShowPaymentPrompt({ open: false, fare: 0 });
                   handleSendOffer(fare, 'cash');
                 }}
-                className="group flex flex-col items-start gap-2 p-3 rounded-2xl bg-primary text-primary-foreground active:scale-[0.97] transition-transform shadow-md">
-                <span className="w-9 h-9 flex items-center justify-center rounded-full bg-white/20">
-                  <Banknote className="w-4.5 h-4.5" strokeWidth={2.2} />
+                className="group flex flex-col items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-primary text-primary-foreground active:scale-[0.97] transition-transform shadow-sm">
+                <span className="w-7 h-7 flex items-center justify-center rounded-full bg-white/20">
+                  <Banknote className="w-3.5 h-3.5" strokeWidth={2.2} />
                 </span>
-                <div className="text-left">
-                  <div className="text-[13px] font-semibold leading-tight">Cash</div>
-                  <div className="text-[10px] opacity-80 mt-0.5">Pay driver</div>
+                <div className="text-center">
+                  <div className="text-[12px] font-semibold leading-tight">Cash</div>
+                  <div className="text-[9px] opacity-80 mt-0">Pay driver</div>
                 </div>
               </button>
 
@@ -1144,13 +1144,13 @@ export default function RideView() {
                   setShowPaymentPrompt({ open: false, fare: 0 });
                   handleSendOffer(fare, 'wallet');
                 }}
-                className="group flex flex-col items-start gap-2 p-3 rounded-2xl bg-accent text-accent-foreground active:scale-[0.97] transition-transform shadow-md">
-                <span className="w-9 h-9 flex items-center justify-center rounded-full bg-black/10">
-                  <Wallet className="w-4.5 h-4.5" strokeWidth={2.2} />
+                className="group flex flex-col items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-accent text-accent-foreground active:scale-[0.97] transition-transform shadow-sm">
+                <span className="w-7 h-7 flex items-center justify-center rounded-full bg-black/10">
+                  <Wallet className="w-3.5 h-3.5" strokeWidth={2.2} />
                 </span>
-                <div className="text-left">
-                  <div className="text-[13px] font-semibold leading-tight">Wallet</div>
-                  <div className="text-[10px] opacity-80 mt-0.5">Balance ${walletBalance.toFixed(2)}</div>
+                <div className="text-center">
+                  <div className="text-[12px] font-semibold leading-tight">Wallet</div>
+                  <div className="text-[9px] opacity-80 mt-0">Balance ${walletBalance.toFixed(2)}</div>
                 </div>
               </button>
             </div>
