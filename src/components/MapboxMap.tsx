@@ -23,7 +23,17 @@ export interface MapboxMapProps {
   defaultZoom?: number;
   etaMinutes?: number;
   stops?: Array<{ id: string; address: string; lat: number; lng: number }>;
+  /** Top autocomplete suggestions to preview on the map as labelled pins. */
+  suggestions?: Array<{ id?: string; name?: string; lat?: number; lng?: number }>;
+  /** Show a floating "Fit map" button (defaults to true). */
+  showFitButton?: boolean;
 }
+
+// Keep streets readable: never zoom further than ~country level, never deeper than building level.
+const MIN_ZOOM = 4;
+const MAX_ZOOM = 19;
+// Minimum zoom we'll settle on after auto-fit so labels stay legible.
+const LABEL_FRIENDLY_MIN_FIT_ZOOM = 12.5;
 
 const ZW_CENTER: Coords = { lat: -19.015, lng: 29.155 };
 
