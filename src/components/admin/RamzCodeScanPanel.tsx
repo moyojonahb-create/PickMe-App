@@ -123,9 +123,10 @@ export default function RamzCodeScanPanel() {
   };
   const clearSelection = () => setSelected(new Set());
 
-  const runBatch = async () => {
-    if (!findings || selected.size === 0) return;
-    const queue = findings.filter((f) => selected.has(findingKey(f)));
+  const runBatch = async (opts: { autoApprove?: boolean; queueOverride?: CodeFinding[] } = {}) => {
+    const queue = opts.queueOverride
+      ?? (findings ? findings.filter((f) => selected.has(findingKey(f))) : []);
+    if (queue.length === 0) return;
     setBatchRunning(true);
     let applied = 0, skipped = 0, failed = 0;
 
@@ -141,13 +142,16 @@ export default function RamzCodeScanPanel() {
             skipped++;
             continue;
           }
-          // Surface the diff for admin review and wait for their decision.
-          setBatchPatch({ patch, finding: f });
-          const decision = await new Promise<'apply' | 'skip' | 'cancel'>((resolve) => {
-            setBatchDecisionResolver(() => resolve);
-          });
-          setBatchPatch(null);
-          setBatchDecisionResolver(null);
+          let decision: 'apply' | 'skip' | 'cancel' = 'apply';
+          if (!opts.autoApprove) {
+            // Surface the diff for admin review and wait for their decision.
+            setBatchPatch({ patch, finding: f });
+            decision = await new Promise<'apply' | 'skip' | 'cancel'>((resolve) => {
+              setBatchDecisionResolver(() => resolve);
+            });
+            setBatchPatch(null);
+            setBatchDecisionResolver(null);
+          }
           if (decision === 'cancel') break;
           if (decision === 'skip') {
             await logAudit(patch, f, 'skipped');
@@ -174,6 +178,40 @@ export default function RamzCodeScanPanel() {
       await refreshAudit();
       toast.success(`Batch complete — ${applied} applied, ${skipped} skipped${failed ? `, ${failed} failed` : ''}.`);
     }
+  };
+
+  /** One-click: full scan, then auto-apply every generated patch without per-item prompts. */
+  const runFullScanAndFix = async () => {
+    setScanning(true);
+    setFindings(null);
+    setSelected(new Set());
+    setProgress({ scanned: 0, total: 0 });
+    let scanResult: Awaited<ReturnType<typeof runCodeScan>> | null = null;
+    try {
+      scanResult = await runCodeScan({
+        onProgress: (p) => {
+          setProgress({ scanned: p.scanned, total: p.total });
+          setCurrentBatch(p.currentBatch);
+        },
+      });
+      setFindings(scanResult.findings);
+      setScannedCount(scanResult.scannedFiles.length);
+    } catch (e) {
+      console.error(e);
+      toast.error('Full scan failed — see console.');
+      setScanning(false);
+      setCurrentBatch([]);
+      return;
+    }
+    setScanning(false);
+    setCurrentBatch([]);
+
+    if (!scanResult || scanResult.findings.length === 0) {
+      toast.success(`Full scan complete — ${scanResult?.scannedFiles.length ?? 0} files clean.`);
+      return;
+    }
+    toast.info(`Auto-fixing ${scanResult.findings.length} finding${scanResult.findings.length > 1 ? 's' : ''}…`);
+    await runBatch({ autoApprove: true, queueOverride: scanResult.findings });
   };
 
   const handleRollback = async (entry: AuditEntry) => {
@@ -211,10 +249,21 @@ export default function RamzCodeScanPanel() {
                 Scans run in batches; results stream in as each batch completes.
               </p>
             </div>
-            <Button onClick={start} disabled={scanning || batchRunning} className="font-bold gap-2 shrink-0">
-              {scanning ? <Loader2 className="w-4 h-4 animate-spin" /> : <ScanSearch className="w-4 h-4" />}
-              {scanning ? 'Scanning…' : 'Scan code now'}
-            </Button>
+            <div className="flex flex-col sm:flex-row gap-2 shrink-0">
+              <Button onClick={start} disabled={scanning || batchRunning} variant="outline" className="font-bold gap-2">
+                {scanning ? <Loader2 className="w-4 h-4 animate-spin" /> : <ScanSearch className="w-4 h-4" />}
+                {scanning ? 'Scanning…' : 'Scan only'}
+              </Button>
+              <Button
+                onClick={runFullScanAndFix}
+                disabled={scanning || batchRunning}
+                className="font-bold gap-2 bg-gradient-to-r from-primary to-primary/80"
+                title="Run a full AI scan and auto-apply every generated patch"
+              >
+                {(scanning || batchRunning) ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
+                Full Scan & Auto-Fix
+              </Button>
+            </div>
           </div>
 
           {scanning && (
@@ -247,7 +296,7 @@ export default function RamzCodeScanPanel() {
                 )}
                 <Button
                   size="sm"
-                  onClick={runBatch}
+                  onClick={() => runBatch()}
                   disabled={batchRunning || selected.size === 0}
                   className="h-7 gap-1 text-[11px] font-bold"
                 >
