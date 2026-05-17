@@ -31,10 +31,31 @@ export interface CodeFinding {
   file: string;
   line: number;
   severity: 'critical' | 'high' | 'medium' | 'low';
-  category: 'bug' | 'react' | 'supabase' | 'security' | 'performance' | 'accessibility' | 'type-safety';
+  category:
+    | 'bug'
+    | 'react'
+    | 'supabase'
+    | 'security'
+    | 'performance'
+    | 'accessibility'
+    | 'type-safety'
+    | 'scalability'
+    | 'mobile'
+    | 'realtime'
+    | 'database'
+    | 'ux'
+    | 'reliability';
   title: string;
   description: string;
   suggestion: string;
+  /** Optional deeper engineering context produced by the upgraded AI engine. */
+  rootCause?: string;
+  userImpact?: string;
+  scalabilityImpact?: string;
+  performanceImpact?: string;
+  securityImpact?: string;
+  implementationDetails?: string;
+  expectedResult?: string;
 }
 
 export interface ScanProgress {
