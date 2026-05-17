@@ -109,11 +109,17 @@ serve(async (req: Request) => {
       }),
     });
 
-    if (aiResp.status === 429) return json({ error: "AI rate limit — try again shortly." }, 429);
-    if (aiResp.status === 402) return json({ error: "AI credits exhausted — top up your workspace." }, 402);
+    // Return 200 with a fallback signal so the Supabase client SDK delivers the
+    // body instead of throwing a generic non-2xx error (which crashes the UI).
+    if (aiResp.status === 429) {
+      return json({ error: "AI rate limit — try again shortly.", code: "RATE_LIMIT", fallback: true }, 200);
+    }
+    if (aiResp.status === 402) {
+      return json({ error: "AI credits exhausted — top up your workspace.", code: "CREDITS_EXHAUSTED", fallback: true }, 200);
+    }
     if (!aiResp.ok) {
       console.error("AI gateway error:", aiResp.status, await aiResp.text());
-      return json({ error: "AI gateway error" }, 502);
+      return json({ error: "AI gateway error", code: "GATEWAY_ERROR", fallback: true }, 200);
     }
 
     const aiData = await aiResp.json();
