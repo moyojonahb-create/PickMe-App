@@ -1128,10 +1128,17 @@ export default function AdminSystemHealth() {
 
           {/* Error Logs — Today / Week */}
           <div>
-            <h2 className="font-bold text-lg flex items-center gap-2 mb-3">
-              <Archive className="h-5 w-5 text-primary" />
-              Error Log History
-            </h2>
+            <div className="flex items-center justify-between mb-3 gap-2">
+              <h2 className="font-bold text-lg flex items-center gap-2">
+                <Archive className="h-5 w-5 text-primary" />
+                Error Log History
+              </h2>
+              {errorLogs.some(l => !l.resolved) && (
+                <Button size="sm" variant="outline" className="text-xs" onClick={clearAllLogs}>
+                  <CheckCircle2 className="w-3 h-3 mr-1" /> Clear all
+                </Button>
+              )}
+            </div>
 
             <Tabs value={logTab} onValueChange={setLogTab}>
               <TabsList className="mb-4">
