@@ -1049,12 +1049,7 @@ export default function RideView() {
             const fmt = (v: number) => `${sym}${v.toFixed(2)}`;
             return (
               <>
-                {studentDiscountAvailable && (
-                  <div className="mb-2 flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-primary/10 border border-primary/20">
-                    <span className="text-[12px] font-semibold text-primary">🎓 Student discount applied −{fmt(discount)}</span>
-                    <span className="text-[10px] text-muted-foreground">{studentRidesUsedToday}/{studentDailyCap} today</span>
-                  </div>
-                )}
+                {/* Student discount banner intentionally hidden on the ride view — surfaced on the profile instead. Discount still applies to the fare. */}
                 <div className="mb-2">
                   <PaymentMethodSelector
                     selected={paymentMethod}
