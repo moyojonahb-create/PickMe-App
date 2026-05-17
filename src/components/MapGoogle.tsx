@@ -341,6 +341,7 @@ function MapGoogle(props: MapGoogleProps) {
         drivers={props.drivers}
         stops={props.stops}
         etaMinutes={props.etaMinutes}
+        suggestions={props.suggestions}
         className={className}
         height={height}
       />
