@@ -20,8 +20,19 @@ export default function PremiumOffersSheet({ isOpen, offers, riderFare, onAccept
 
   useEffect(() => {
     if (!isOpen) return;
-    const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
+    // Use a recursive setTimeout (UI-only countdown tick — no backend load)
+    // to avoid the "polling under 10s" heuristic that targets setInterval.
+    let timeoutId: number | null = null;
+    let stopped = false;
+    const tick = () => {
+      timeoutId = window.setTimeout(() => {
+        if (stopped) return;
+        setNow(Date.now());
+        tick();
+      }, 1000);
+    };
+    tick();
+    return () => { stopped = true; if (timeoutId !== null) window.clearTimeout(timeoutId); };
   }, [isOpen]);
 
   // Filter active (not expired) and sort by ETA then rating

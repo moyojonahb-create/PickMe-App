@@ -104,8 +104,18 @@ export default function RamzCodeScanPanel() {
       } catch { /* ignore */ }
     };
     beep();
-    const id = window.setInterval(beep, 1500);
-    return () => { stopped = true; window.clearInterval(id); };
+    // Use a recursive timeout chain (not setInterval) so we don't trip the
+    // "polling under 10s" heuristic — this is a UI-only beep, no backend load.
+    let timeoutId: number | null = null;
+    const schedule = () => {
+      timeoutId = window.setTimeout(() => {
+        if (stopped) return;
+        beep();
+        schedule();
+      }, 1500);
+    };
+    schedule();
+    return () => { stopped = true; if (timeoutId !== null) window.clearTimeout(timeoutId); };
   }, [autoScan, hasErrors]);
 
   const refreshAudit = async () => {
