@@ -703,8 +703,8 @@ export default function AdminSystemHealth() {
       await persistFindings(findings);
       await loadErrorLogs(logTab);
 
-      // Alert for critical issues
-      const criticals = findings.filter(f => f.severity === 'critical');
+      // Alert for critical issues (operational stats are excluded — they're not errors).
+      const criticals = findings.filter(f => f.severity === 'critical' && !f.isStat);
       if (criticals.length > 0) {
         toast.error(`🤖 Ramz One: ${criticals.length} CRITICAL issue${criticals.length > 1 ? 's' : ''} found!`, {
           description: criticals[0].title,
