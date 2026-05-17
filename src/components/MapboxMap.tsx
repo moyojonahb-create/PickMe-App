@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, memo } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
-import { AlertTriangle, RefreshCw } from 'lucide-react';
+import { AlertTriangle, RefreshCw, Maximize2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getMapboxToken, resetMapboxToken } from '@/lib/mapboxLoader';
@@ -23,7 +23,17 @@ export interface MapboxMapProps {
   defaultZoom?: number;
   etaMinutes?: number;
   stops?: Array<{ id: string; address: string; lat: number; lng: number }>;
+  /** Top autocomplete suggestions to preview on the map as labelled pins. */
+  suggestions?: Array<{ id?: string; name?: string; lat?: number; lng?: number }>;
+  /** Show a floating "Fit map" button (defaults to true). */
+  showFitButton?: boolean;
 }
+
+// Keep streets readable: never zoom further than ~country level, never deeper than building level.
+const MIN_ZOOM = 4;
+const MAX_ZOOM = 19;
+// Minimum zoom we'll settle on after auto-fit so labels stay legible.
+const LABEL_FRIENDLY_MIN_FIT_ZOOM = 12.5;
 
 const ZW_CENTER: Coords = { lat: -19.015, lng: 29.155 };
 
@@ -53,11 +63,13 @@ function buildMarkerEl(color: string, label: string, dark = false): HTMLDivEleme
 function MapboxMapInner({
   pickup, dropoff, driverLocation, routeGeometry, secondaryRouteGeometry,
   onMapClick, className = '', height = '100%', drivers, defaultCenter, defaultZoom = 14.5, stops,
+  suggestions, showFitButton = true,
 }: MapboxMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const markersRef = useRef<Record<string, mapboxgl.Marker>>({});
   const driverMarkersRef = useRef<Map<string, mapboxgl.Marker>>(new Map());
+  const suggestionMarkersRef = useRef<mapboxgl.Marker[]>([]);
   const [ready, setReady] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -81,7 +93,9 @@ function MapboxMapInner({
           container: containerRef.current!,
           style: 'mapbox://styles/mapbox/streets-v12',
           center: [startCenter.lng, startCenter.lat],
-          zoom: defaultZoom,
+          zoom: Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, defaultZoom)),
+          minZoom: MIN_ZOOM,
+          maxZoom: MAX_ZOOM,
           attributionControl: true,
           cooperativeGestures: false,
         });
@@ -112,8 +126,10 @@ function MapboxMapInner({
       cancelled = true;
       Object.values(markersRef.current).forEach((m) => m.remove());
       driverMarkersRef.current.forEach((m) => m.remove());
+      suggestionMarkersRef.current.forEach((m) => m.remove());
       markersRef.current = {};
       driverMarkersRef.current.clear();
+      suggestionMarkersRef.current = [];
       mapRef.current?.remove();
       mapRef.current = null;
     };
@@ -207,10 +223,10 @@ function MapboxMapInner({
     src?.setData({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: coords } });
   }, [ready, secondaryRouteGeometry]);
 
-  // ── Auto-fit ──
-  useEffect(() => {
-    if (!ready || !mapRef.current) return;
+  // ── Auto-fit (smooth) ──
+  const fitToContent = useCallback((opts?: { animate?: boolean }) => {
     const map = mapRef.current;
+    if (!map) return;
     const pts: [number, number][] = [];
     if (pickup) pts.push([pickup.lng, pickup.lat]);
     if (dropoff) pts.push([dropoff.lng, dropoff.lat]);
@@ -218,7 +234,7 @@ function MapboxMapInner({
     stops?.forEach((s) => { if (s.lat && s.lng) pts.push([s.lng, s.lat]); });
     if (routeGeometry) decodePolyline(routeGeometry).forEach((p) => pts.push(p));
 
-    // Adaptive padding: don't let the bottom sheet eat the map on short viewports.
+    // Adaptive padding keeps labels readable when the bottom sheet is open.
     const h = map.getContainer().clientHeight || 600;
     const w = map.getContainer().clientWidth || 600;
     const padding = {
@@ -228,16 +244,82 @@ function MapboxMapInner({
       right: Math.max(32, Math.min(64, w * 0.08)),
     };
 
+    const animate = opts?.animate !== false;
+    const ease = (t: number) => 1 - Math.pow(1 - t, 3); // cubic-out
+
     if (pts.length >= 2) {
       const bounds = pts.reduce(
         (b, p) => b.extend(p as mapboxgl.LngLatLike),
         new mapboxgl.LngLatBounds(pts[0] as mapboxgl.LngLatLike, pts[0] as mapboxgl.LngLatLike),
       );
-      map.fitBounds(bounds, { padding, duration: 600, maxZoom: 16.5 });
+      // Compute the camera the bounds would produce, then clamp zoom for label legibility.
+      const cam = map.cameraForBounds(bounds, { padding, maxZoom: 16.5 });
+      if (cam) {
+        const z = Math.max(LABEL_FRIENDLY_MIN_FIT_ZOOM, Math.min(MAX_ZOOM, (cam.zoom as number) ?? 14));
+        map.easeTo({
+          center: cam.center as mapboxgl.LngLatLike,
+          zoom: z,
+          bearing: (cam.bearing as number) ?? 0,
+          pitch: (cam.pitch as number) ?? 0,
+          duration: animate ? 900 : 0,
+          easing: ease,
+          essential: true,
+        });
+      } else {
+        map.fitBounds(bounds, { padding, duration: animate ? 900 : 0, maxZoom: 16.5, essential: true, easing: ease });
+      }
     } else if (pts.length === 1) {
-      map.flyTo({ center: pts[0], zoom: 15.5, duration: 600 });
+      map.easeTo({ center: pts[0], zoom: 15.5, duration: animate ? 800 : 0, easing: ease, essential: true });
     }
-  }, [ready, pickup?.lat, pickup?.lng, dropoff?.lat, dropoff?.lng, driverLocation?.lat, driverLocation?.lng, routeGeometry, stops]);
+  }, [pickup?.lat, pickup?.lng, dropoff?.lat, dropoff?.lng, driverLocation?.lat, driverLocation?.lng, routeGeometry, stops]);
+
+  useEffect(() => {
+    if (!ready) return;
+    fitToContent({ animate: true });
+  }, [ready, fitToContent]);
+
+  // ── Autocomplete suggestion preview pins ──
+  useEffect(() => {
+    if (!ready || !mapRef.current) return;
+    const map = mapRef.current;
+    suggestionMarkersRef.current.forEach((m) => m.remove());
+    suggestionMarkersRef.current = [];
+    if (!suggestions?.length) return;
+
+    const top = suggestions.slice(0, 5).filter((s) => s.lat != null && s.lng != null);
+    const pts: [number, number][] = [];
+    top.forEach((s, i) => {
+      const wrap = document.createElement('div');
+      wrap.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:2px;pointer-events:none;';
+      const pin = document.createElement('div');
+      pin.style.cssText = 'width:18px;height:18px;border-radius:50%;background:#7c3aed;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.25);color:#fff;font:600 10px/18px Inter,system-ui,sans-serif;text-align:center;';
+      pin.textContent = String(i + 1);
+      const label = document.createElement('div');
+      label.style.cssText = 'max-width:160px;padding:2px 6px;background:rgba(255,255,255,.95);border-radius:6px;font:500 11px/14px Inter,system-ui,sans-serif;color:#111;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-shadow:0 1px 3px rgba(0,0,0,.15);';
+      label.textContent = s.name ?? `Result ${i + 1}`;
+      wrap.appendChild(pin);
+      wrap.appendChild(label);
+      const m = new mapboxgl.Marker({ element: wrap, anchor: 'top' }).setLngLat([s.lng!, s.lat!]).addTo(map);
+      suggestionMarkersRef.current.push(m);
+      pts.push([s.lng!, s.lat!]);
+    });
+
+    // Frame the suggestions so the user can see all of them.
+    if (pts.length >= 2) {
+      const bounds = pts.reduce(
+        (b, p) => b.extend(p as mapboxgl.LngLatLike),
+        new mapboxgl.LngLatBounds(pts[0] as mapboxgl.LngLatLike, pts[0] as mapboxgl.LngLatLike),
+      );
+      const padding = { top: 80, bottom: 320, left: 48, right: 48 };
+      const cam = map.cameraForBounds(bounds, { padding, maxZoom: 15 });
+      if (cam) {
+        const z = Math.max(LABEL_FRIENDLY_MIN_FIT_ZOOM, Math.min(MAX_ZOOM, (cam.zoom as number) ?? 13));
+        map.easeTo({ center: cam.center as mapboxgl.LngLatLike, zoom: z, duration: 700, essential: true });
+      }
+    } else if (pts.length === 1) {
+      map.easeTo({ center: pts[0], zoom: 14.5, duration: 700, essential: true });
+    }
+  }, [ready, suggestions]);
 
   // ── Render ──
   if (loadError) {
@@ -255,6 +337,8 @@ function MapboxMapInner({
     );
   }
 
+  const hasContent = !!(pickup || dropoff || driverLocation || (stops && stops.length) || routeGeometry);
+
   return (
     <div className={`relative ${className}`} style={{ height, minHeight: height === '100%' ? undefined : 260 }}>
       {!ready && (
@@ -269,6 +353,16 @@ function MapboxMapInner({
         </div>
       )}
       <div ref={containerRef} className="absolute inset-0 w-full h-full" />
+      {ready && showFitButton && hasContent && (
+        <button
+          type="button"
+          onClick={() => fitToContent({ animate: true })}
+          className="absolute bottom-4 right-3 z-20 flex items-center gap-1.5 rounded-full bg-card/95 backdrop-blur px-3 py-2 text-xs font-semibold text-foreground shadow-lg border border-border hover:bg-card transition"
+          aria-label="Fit map to route"
+        >
+          <Maximize2 className="w-3.5 h-3.5" /> Fit map
+        </button>
+      )}
     </div>
   );
 }

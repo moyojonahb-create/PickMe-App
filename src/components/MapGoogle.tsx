@@ -32,6 +32,8 @@ interface MapGoogleProps {
   etaMinutes?: number;
   /** Intermediate ride stops to show as numbered markers */
   stops?: Array<{ id: string; address: string; lat: number; lng: number }>;
+  /** Top autocomplete suggestions to preview on the map (Mapbox path only). */
+  suggestions?: Array<{ id?: string; name?: string; lat?: number; lng?: number }>;
 }
 
 const ZW_CENTER: Coords = { lat: -19.015, lng: 29.155 };
@@ -339,6 +341,7 @@ function MapGoogle(props: MapGoogleProps) {
         drivers={props.drivers}
         stops={props.stops}
         etaMinutes={props.etaMinutes}
+        suggestions={props.suggestions}
         className={className}
         height={height}
       />
