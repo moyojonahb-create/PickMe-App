@@ -1108,7 +1108,7 @@ export default function RideView() {
                   setPaymentMethod('cash');
                   const fare = showPaymentPrompt.fare;
                   setShowPaymentPrompt({ open: false, fare: 0 });
-                  setTimeout(() => handleSendOffer(fare), 50);
+                  handleSendOffer(fare, 'cash');
                 }}
                 className="flex flex-col items-center justify-center gap-2 p-5 rounded-2xl border-2 border-border hover:border-primary hover:bg-primary/5 active:scale-95 transition-all">
                 <Banknote className="w-7 h-7 text-primary" />
