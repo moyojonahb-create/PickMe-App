@@ -350,7 +350,7 @@ export default function RideView() {
     const method = methodOverride ?? paymentMethod;
     if (!user) {setAuthMode('login');setAuthModalOpen(true);return;}
     if (!pickupLocation || !dropoffLocation || !fareEstimate) {toast({ title: 'Select pickup and destination', variant: 'destructive' });return;}
-    if (paymentMethod === 'wallet' && walletBalance < customFare) {
+    if (method === 'wallet' && walletBalance < customFare) {
       toast({
         title: 'Insufficient wallet balance',
         description: `You need $${customFare.toFixed(2)} but only have $${walletBalance.toFixed(2)}. Please top up or select Cash Payment.`,
