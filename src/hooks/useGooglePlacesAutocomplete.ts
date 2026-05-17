@@ -45,7 +45,7 @@ export function useGooglePlacesAutocomplete() {
       abortRef.current = controller;
 
       try {
-        const base = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/google-places-search`;
+        const base = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/mapbox-search`;
         const url = new URL(base);
         url.searchParams.set('q', query.trim());
 
@@ -95,7 +95,7 @@ export function useGooglePlacesAutocomplete() {
       }
 
       try {
-        const base = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/google-places-search`;
+        const base = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/mapbox-search`;
         const url = new URL(base);
         url.searchParams.set('placeId', placeId);
 

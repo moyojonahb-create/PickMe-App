@@ -29,11 +29,11 @@ export default function MapProviderToggle({ compact = false }: { compact?: boole
           {googleOn ? <Satellite className="w-4 h-4 text-primary shrink-0" /> : <Map className="w-4 h-4 text-primary shrink-0" />}
           <div className="min-w-0">
             <p className="text-sm font-semibold text-foreground truncate">
-              {googleOn ? 'Google Maps' : 'OpenStreetMap'}
+              {googleOn ? 'Google Maps' : 'Mapbox'}
             </p>
             {!compact && (
               <p className="text-xs text-muted-foreground truncate">
-                {googleOn ? 'Premium tiles + Places' : 'Free tiles + Nominatim search'}
+                {googleOn ? 'Google tiles + Places' : 'Mapbox tiles + Geocoding (default)'}
               </p>
             )}
           </div>
