@@ -1096,22 +1096,22 @@ export default function RideView() {
           onClick={() => setShowPaymentPrompt({ open: false, fare: 0 })}>
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-[calc(100%-24px)] max-w-[380px] mb-[calc(env(safe-area-inset-bottom)+24px)] bg-background rounded-3xl shadow-2xl border border-border/60 overflow-hidden animate-in slide-in-from-bottom-4">
+            className="w-[calc(100%-48px)] max-w-[300px] mb-[calc(env(safe-area-inset-bottom)+16px)] bg-background rounded-2xl shadow-xl border border-border/60 overflow-hidden animate-in slide-in-from-bottom-4">
             {/* Header */}
-            <div className="flex items-center justify-between px-5 pt-4 pb-3">
+            <div className="flex items-center justify-between px-4 pt-3 pb-2">
               <div>
-                <h3 className="text-[15px] font-semibold text-foreground leading-tight">Choose payment</h3>
-                <p className="text-[11px] text-muted-foreground mt-0.5">Fare ${showPaymentPrompt.fare.toFixed(2)}</p>
+                <h3 className="text-[13px] font-semibold text-foreground leading-tight">Choose payment</h3>
+                <p className="text-[10px] text-muted-foreground mt-0">Fare ${showPaymentPrompt.fare.toFixed(2)}</p>
               </div>
               <button
                 onClick={() => setShowPaymentPrompt({ open: false, fare: 0 })}
-                className="w-7 h-7 flex items-center justify-center rounded-full bg-muted text-muted-foreground active:scale-90 transition-transform">
-                <X className="w-3.5 h-3.5" />
+                className="w-6 h-6 flex items-center justify-center rounded-full bg-muted text-muted-foreground active:scale-90 transition-transform">
+                <X className="w-3 h-3" />
               </button>
             </div>
 
             {/* Options */}
-            <div className="px-3 pb-3 grid grid-cols-2 gap-1.5">
+            <div className="px-2.5 pb-2.5 grid grid-cols-2 gap-1">
               <button
                 onClick={() => {
                   const fare = showPaymentPrompt.fare;
@@ -1119,12 +1119,12 @@ export default function RideView() {
                   setShowPaymentPrompt({ open: false, fare: 0 });
                   handleSendOffer(fare, 'cash');
                 }}
-                className="group flex flex-col items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-primary text-primary-foreground active:scale-[0.97] transition-transform shadow-sm">
-                <span className="w-7 h-7 flex items-center justify-center rounded-full bg-white/20">
-                  <Banknote className="w-3.5 h-3.5" strokeWidth={2.2} />
+                className="group flex flex-col items-center justify-center gap-1 py-2 px-2 rounded-lg bg-primary text-primary-foreground active:scale-[0.97] transition-transform shadow-sm">
+                <span className="w-6 h-6 flex items-center justify-center rounded-full bg-white/20">
+                  <Banknote className="w-3 h-3" strokeWidth={2.2} />
                 </span>
                 <div className="text-center">
-                  <div className="text-[12px] font-semibold leading-tight">Cash</div>
+                  <div className="text-[11px] font-semibold leading-tight">Cash</div>
                   <div className="text-[9px] opacity-80 mt-0">Pay driver</div>
                 </div>
               </button>
@@ -1144,12 +1144,12 @@ export default function RideView() {
                   setShowPaymentPrompt({ open: false, fare: 0 });
                   handleSendOffer(fare, 'wallet');
                 }}
-                className="group flex flex-col items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-accent text-accent-foreground active:scale-[0.97] transition-transform shadow-sm">
-                <span className="w-7 h-7 flex items-center justify-center rounded-full bg-black/10">
-                  <Wallet className="w-3.5 h-3.5" strokeWidth={2.2} />
+                className="group flex flex-col items-center justify-center gap-1 py-2 px-2 rounded-lg bg-accent text-accent-foreground active:scale-[0.97] transition-transform shadow-sm">
+                <span className="w-6 h-6 flex items-center justify-center rounded-full bg-black/10">
+                  <Wallet className="w-3 h-3" strokeWidth={2.2} />
                 </span>
                 <div className="text-center">
-                  <div className="text-[12px] font-semibold leading-tight">Wallet</div>
+                  <div className="text-[11px] font-semibold leading-tight">Wallet</div>
                   <div className="text-[9px] opacity-80 mt-0">Balance ${walletBalance.toFixed(2)}</div>
                 </div>
               </button>
