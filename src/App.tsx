@@ -54,6 +54,7 @@ const AdminPromos = lazy(() => import("./pages/admin/AdminPromos"));
 const AdminRatePage = lazy(() => import("./pages/admin/AdminRatePage"));
 const AdminReports = lazy(() => import("./pages/admin/AdminReports"));
 const AdminTrips = lazy(() => import("./pages/admin/AdminTrips"));
+const AdminMapsQA = lazy(() => import("./pages/admin/AdminMapsQA"));
 const AdminDepositsPage = lazy(() => import("./pages/admin/AdminDepositsPage"));
 const AdminRiderDepositsPage = lazy(() => import("./pages/admin/AdminRiderDepositsPage"));
 const AdminSettings = lazy(() => import("./pages/admin/AdminSettings"));
@@ -215,6 +216,7 @@ export default function App() {
           <Route path="/admin/withdrawals" element={<SuspenseWrap variant="admin"><AdminGuard><AdminWithdrawalsPage /></AdminGuard></SuspenseWrap>} />
           <Route path="/admin/wallet" element={<SuspenseWrap variant="admin"><AdminGuard><AdminWalletDashboard /></AdminGuard></SuspenseWrap>} />
           <Route path="/admin/rls" element={<SuspenseWrap variant="admin"><AdminGuard><AdminRlsViewer /></AdminGuard></SuspenseWrap>} />
+          <Route path="/admin/maps-qa" element={<SuspenseWrap variant="admin"><AdminGuard><AdminMapsQA /></AdminGuard></SuspenseWrap>} />
           <Route path="/student-verification" element={<SuspenseWrap><AuthGuard><StudentVerificationPage /></AuthGuard></SuspenseWrap>} />
 
           <Route path="*" element={<MarketingShell><NotFound /></MarketingShell>} />
