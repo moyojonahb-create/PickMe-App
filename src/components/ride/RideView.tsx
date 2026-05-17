@@ -21,7 +21,7 @@ import { useStudentDiscountAvailable } from '@/hooks/useStudentProfile';
 
 import BottomNavBar from '@/components/BottomNavBar';
 import { useWallet } from '@/hooks/useWallet';
-import PaymentMethodSelector from './PaymentMethodSelector';
+// import PaymentMethodSelector from './PaymentMethodSelector'; // Hidden on ride view — kept in profile
 import { Button } from '@/components/ui/button';
 import {
   Loader2, MapPin, Navigation, Crosshair, ArrowLeft, User, X, Search,
