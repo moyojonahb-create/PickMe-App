@@ -38,6 +38,7 @@ import OffersModal, { type DriverViewing, type DriverOffer } from '@/components/
 import AuthModalWrapper from '@/components/auth/AuthModalWrapper';
 import PickMeLogo from '@/components/PickMeLogo';
 import { GlassSheet } from '@/components/ui/glass-sheet';
+import PaymentSheet from './PaymentSheet';
 import { SecondaryButton } from '@/components/ui/secondary-button';
 import { PrimaryButton } from '@/components/ui/primary-button';
 import { InputField } from '@/components/ui/input-field';
