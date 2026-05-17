@@ -928,6 +928,9 @@ export default function AdminSystemHealth() {
             </CardContent>
           </Card>
 
+          {/* Ramz One — AI code scan */}
+          <RamzCodeScanPanel />
+
           {/* Metrics */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {metrics.map(m => (
