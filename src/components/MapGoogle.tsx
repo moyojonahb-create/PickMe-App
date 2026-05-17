@@ -225,7 +225,12 @@ function InnerMapGoogle({
     if (pts.length >= 2) {
       const bounds = new google.maps.LatLngBounds();
       pts.forEach((p) => bounds.extend(p));
-      map.fitBounds(bounds, { top: 60, bottom: 320, left: 48, right: 48 });
+      // Dynamic padding: reserve ~55% of viewport height for the bottom sheet,
+      // 80px up top for floating header buttons. Keeps the full route visible
+      // above the sheet on any device size.
+      const vh = typeof window !== 'undefined' ? window.innerHeight : 800;
+      const bottomPad = Math.min(380, Math.max(240, Math.round(vh * 0.55)));
+      map.fitBounds(bounds, { top: 80, bottom: bottomPad, left: 56, right: 56 });
     } else if (pts.length === 1) {
       map.panTo(pts[0]);
       map.setZoom(15);
