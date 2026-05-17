@@ -104,6 +104,7 @@ export default function RideView() {
   const [reverseGeoLoading, setReverseGeoLoading] = useState(false);
   const [selectedTier, setSelectedTier] = useState<VehicleTier>('standard');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
+  const [showPaymentPrompt, setShowPaymentPrompt] = useState<{ open: boolean; fare: number }>({ open: false, fare: 0 });
   const { balance: walletBalance } = useWallet();
   const [passengerCount, setPassengerCount] = useState(1);
   const [bookForSomeoneElse, setBookForSomeoneElse] = useState(false);
@@ -345,10 +346,11 @@ export default function RideView() {
     toast({ title: '✅ Contact selected', description: `${name} — ${phone}` });
   };
 
-  const handleSendOffer = async (customFare: number) => {
+  const handleSendOffer = async (customFare: number, methodOverride?: PaymentMethod) => {
+    const method = methodOverride ?? paymentMethod;
     if (!user) {setAuthMode('login');setAuthModalOpen(true);return;}
     if (!pickupLocation || !dropoffLocation || !fareEstimate) {toast({ title: 'Select pickup and destination', variant: 'destructive' });return;}
-    if (paymentMethod === 'wallet' && walletBalance < customFare) {
+    if (method === 'wallet' && walletBalance < customFare) {
       toast({
         title: 'Insufficient wallet balance',
         description: `You need $${customFare.toFixed(2)} but only have $${walletBalance.toFixed(2)}. Please top up or select Cash Payment.`,
@@ -385,7 +387,7 @@ export default function RideView() {
         distance_km: fareEstimate.distanceKm, duration_minutes: fareEstimate.durationMinutes,
         fare: customFare,
         route_polyline: routeData?.geometry || null, passenger_count: passengerCount,
-        payment_method: paymentMethod, vehicle_type: selectedTier,
+        payment_method: method, vehicle_type: selectedTier,
         town_id: selectedTown?.id ?? null,
         gender_preference: genderPreference,
         ...(bookForSomeoneElse && passengerName.trim() ? { passenger_name: passengerName.trim() } : {}),
@@ -1059,7 +1061,7 @@ export default function RideView() {
                   />
                 </div> */}
                 <PrimaryButton
-                  onClick={() => sheetExpanded ? handleSendOffer(totalFare) : setSheetExpanded(true)}
+                  onClick={() => setShowPaymentPrompt({ open: true, fare: totalFare })}
                   disabled={isRequesting}
                   className="w-full h-[48px] text-[15px] font-semibold rounded-2xl gap-2 inline-flex items-center justify-center active:scale-[0.97] transition-transform">
 
@@ -1071,7 +1073,7 @@ export default function RideView() {
                   ) : (
                     <>
                       <Car className="w-4 h-4" />
-                      {sheetExpanded ? `Send Offer • ${fmt(totalFare)}` : `Find Drivers • ${fmt(totalFare)}`}
+                      {`Find Drivers • ${fmt(totalFare)}`}
                     </>
                   )}
                 </PrimaryButton>
@@ -1086,6 +1088,61 @@ export default function RideView() {
           }
         </div>
       </GlassSheet>
+
+      {/* ═══ PAYMENT METHOD PROMPT ═══ */}
+      {showPaymentPrompt.open && (
+        <div
+          className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in"
+          onClick={() => setShowPaymentPrompt({ open: false, fare: 0 })}>
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full sm:max-w-md bg-background rounded-t-3xl sm:rounded-3xl p-6 pb-[calc(env(safe-area-inset-bottom)+24px)] shadow-2xl animate-in slide-in-from-bottom">
+            <div className="w-12 h-1.5 bg-muted rounded-full mx-auto mb-4 sm:hidden" />
+            <h3 className="text-xl font-bold text-foreground text-center mb-1">How are you paying?</h3>
+            <p className="text-sm text-muted-foreground text-center mb-5">
+              Fare: ${showPaymentPrompt.fare.toFixed(2)}
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => {
+                  setPaymentMethod('cash');
+                  const fare = showPaymentPrompt.fare;
+                  setShowPaymentPrompt({ open: false, fare: 0 });
+                  handleSendOffer(fare, 'cash');
+                }}
+                className="flex flex-col items-center justify-center gap-2 p-5 rounded-2xl border-2 border-border hover:border-primary hover:bg-primary/5 active:scale-95 transition-all">
+                <Banknote className="w-7 h-7 text-primary" />
+                <span className="text-[15px] font-semibold text-foreground">Cash</span>
+              </button>
+              <button
+                onClick={() => {
+                  const fare = showPaymentPrompt.fare;
+                  if (walletBalance < fare) {
+                    toast({
+                      title: 'Insufficient wallet balance',
+                      description: `You need $${fare.toFixed(2)} but only have $${walletBalance.toFixed(2)}. Top up or choose Cash.`,
+                      variant: 'destructive',
+                    });
+                    return;
+                  }
+                  setPaymentMethod('wallet');
+                  setShowPaymentPrompt({ open: false, fare: 0 });
+                  handleSendOffer(fare, 'wallet');
+                }}
+                className="flex flex-col items-center justify-center gap-2 p-5 rounded-2xl border-2 border-border hover:border-primary hover:bg-primary/5 active:scale-95 transition-all">
+                <Wallet className="w-7 h-7 text-primary" />
+                <span className="text-[15px] font-semibold text-foreground">Wallet</span>
+                <span className="text-[11px] text-muted-foreground">${walletBalance.toFixed(2)}</span>
+              </button>
+            </div>
+            <button
+              onClick={() => setShowPaymentPrompt({ open: false, fare: 0 })}
+              className="w-full mt-4 py-3 text-sm text-muted-foreground font-medium hover:text-foreground transition-colors">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
 
       {/* ═══ SEARCH OVERLAY ═══ */}
