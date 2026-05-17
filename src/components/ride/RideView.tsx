@@ -104,6 +104,7 @@ export default function RideView() {
   const [reverseGeoLoading, setReverseGeoLoading] = useState(false);
   const [selectedTier, setSelectedTier] = useState<VehicleTier>('standard');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
+  const [showPaymentPrompt, setShowPaymentPrompt] = useState<{ open: boolean; fare: number }>({ open: false, fare: 0 });
   const { balance: walletBalance } = useWallet();
   const [passengerCount, setPassengerCount] = useState(1);
   const [bookForSomeoneElse, setBookForSomeoneElse] = useState(false);
