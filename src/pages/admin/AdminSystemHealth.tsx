@@ -58,7 +58,28 @@ const STAT_FINDING_IDS = new Set<string>([
   'pending-deposits',
   'rider-pending-deposits',
   'pending-documents',
+  'stale-driver-locations',
+  'stale-live-locations',
+  'fraud-flags',
+  'message-cleanup',
 ]);
+
+// Title patterns to hide from the error log (legacy rows from before these
+// became "stats" instead of errors). Matches lowercase substring.
+const STAT_TITLE_PATTERNS = [
+  'stale gps',
+  'stale pending rides',
+  'fraud flag',
+  'low-balance',
+  'low balance',
+  'pending driver',
+  'pending document',
+  'pending deposit',
+  'old dispute',
+  'cancel rate',
+  'no driver response',
+  'stuck accepted',
+];
 
 interface PerformanceMetric {
   label: string;
