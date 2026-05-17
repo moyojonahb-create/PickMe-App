@@ -52,7 +52,7 @@ function buildMarkerEl(color: string, label: string, dark = false): HTMLDivEleme
 
 function MapboxMapInner({
   pickup, dropoff, driverLocation, routeGeometry, secondaryRouteGeometry,
-  onMapClick, className = '', height = '100%', drivers, defaultCenter, defaultZoom = 13, stops,
+  onMapClick, className = '', height = '100%', drivers, defaultCenter, defaultZoom = 14.5, stops,
 }: MapboxMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
