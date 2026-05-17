@@ -206,7 +206,7 @@ function InnerMapGoogle({
       map.panTo(defaultCenter);
       map.setZoom(defaultZoom);
     }
-  }, [defaultCenter?.lat, defaultCenter?.lng]);
+  }, [defaultCenter?.lat, defaultCenter?.lng, pickup?.lat, pickup?.lng, dropoff?.lat, dropoff?.lng, driverLocation?.lat, driverLocation?.lng]);
 
   // Auto-fit bounds: include all markers AND route path points so nothing is clipped
   useEffect(() => {
