@@ -838,6 +838,20 @@ export default function AdminSystemHealth() {
     loadErrorLogs(logTab);
   };
 
+  const clearAllLogs = async () => {
+    const unresolved = errorLogs.filter(l => !l.resolved);
+    if (unresolved.length === 0) {
+      toast.info('Nothing to clear');
+      return;
+    }
+    const ids = unresolved.map(l => l.id);
+    await supabase.from('system_error_logs').update({
+      resolved: true, resolved_at: new Date().toISOString(),
+    } as any).in('id', ids);
+    toast.success(`Cleared ${ids.length} ${ids.length === 1 ? 'entry' : 'entries'}`);
+    loadErrorLogs(logTab);
+  };
+
   return (
     <AdminGuard>
       <AdminLayout>
