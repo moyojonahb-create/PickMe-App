@@ -63,11 +63,13 @@ function buildMarkerEl(color: string, label: string, dark = false): HTMLDivEleme
 function MapboxMapInner({
   pickup, dropoff, driverLocation, routeGeometry, secondaryRouteGeometry,
   onMapClick, className = '', height = '100%', drivers, defaultCenter, defaultZoom = 14.5, stops,
+  suggestions, showFitButton = true,
 }: MapboxMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const markersRef = useRef<Record<string, mapboxgl.Marker>>({});
   const driverMarkersRef = useRef<Map<string, mapboxgl.Marker>>(new Map());
+  const suggestionMarkersRef = useRef<mapboxgl.Marker[]>([]);
   const [ready, setReady] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -91,7 +93,9 @@ function MapboxMapInner({
           container: containerRef.current!,
           style: 'mapbox://styles/mapbox/streets-v12',
           center: [startCenter.lng, startCenter.lat],
-          zoom: defaultZoom,
+          zoom: Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, defaultZoom)),
+          minZoom: MIN_ZOOM,
+          maxZoom: MAX_ZOOM,
           attributionControl: true,
           cooperativeGestures: false,
         });
