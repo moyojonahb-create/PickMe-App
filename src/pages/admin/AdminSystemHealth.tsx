@@ -154,9 +154,9 @@ export default function AdminSystemHealth() {
       .eq('period', 'today')
       .lt('created_at', todayStart.toISOString());
 
-    // Insert new findings
+    // Insert new findings — operational stats are NOT persisted as errors.
     const rows = findings
-      .filter(f => f.severity !== 'info')
+      .filter(f => f.severity !== 'info' && !f.isStat)
       .map(f => ({
         error_type: f.category,
         severity: f.severity,
