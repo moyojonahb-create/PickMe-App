@@ -346,7 +346,8 @@ export default function RideView() {
     toast({ title: '✅ Contact selected', description: `${name} — ${phone}` });
   };
 
-  const handleSendOffer = async (customFare: number) => {
+  const handleSendOffer = async (customFare: number, methodOverride?: PaymentMethod) => {
+    const method = methodOverride ?? paymentMethod;
     if (!user) {setAuthMode('login');setAuthModalOpen(true);return;}
     if (!pickupLocation || !dropoffLocation || !fareEstimate) {toast({ title: 'Select pickup and destination', variant: 'destructive' });return;}
     if (paymentMethod === 'wallet' && walletBalance < customFare) {
