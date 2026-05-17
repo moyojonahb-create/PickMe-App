@@ -939,6 +939,57 @@ export default function AdminSystemHealth() {
             </Card>
           )}
 
+          {/* PickMe Daily Stats — operational counts (pending drivers/riders/rides,
+              cancellations, deposits awaiting approval). These are NOT system errors. */}
+          <div>
+            <h2 className="font-bold text-lg flex items-center gap-2 mb-3">
+              <Activity className="h-5 w-5 text-primary" />
+              PickMe Daily Stats
+              <Badge variant="outline" className="text-[10px] font-mono bg-primary/10 text-primary border-primary/20">
+                OPERATIONAL
+              </Badge>
+            </h2>
+            {dailyStats.length === 0 ? (
+              <Card>
+                <CardContent className="pt-6 pb-6 text-center">
+                  <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
+                  <p className="font-bold text-sm text-foreground">No pending operational items right now</p>
+                  <p className="text-xs text-muted-foreground">Drivers, riders, rides and deposits are all up to date.</p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {dailyStats.map(stat => {
+                  const Icon = CATEGORY_ICONS[stat.category] || Activity;
+                  return (
+                    <Card key={stat.id} className="border-primary/10">
+                      <CardContent className="pt-4">
+                        <div className="flex items-start gap-3">
+                          <div className="p-2 rounded-xl shrink-0 bg-primary/10">
+                            <Icon className="h-5 w-5 text-primary" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap mb-1">
+                              <p className="font-bold text-sm text-foreground">{stat.title}</p>
+                              {stat.affectedUsers !== undefined && (
+                                <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
+                                  <Users className="w-3 h-3" /> {stat.affectedUsers}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-muted-foreground mb-2">{stat.description}</p>
+                            <p className="text-[11px] text-foreground/80">{stat.suggestion}</p>
+                            <FixNowButton check={stat} onFix={runFix} />
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
           {/* Live Scan Findings */}
           <div>
             <h2 className="font-bold text-lg flex items-center gap-2 mb-3">
