@@ -337,6 +337,8 @@ function MapboxMapInner({
     );
   }
 
+  const hasContent = !!(pickup || dropoff || driverLocation || (stops && stops.length) || routeGeometry);
+
   return (
     <div className={`relative ${className}`} style={{ height, minHeight: height === '100%' ? undefined : 260 }}>
       {!ready && (
@@ -351,6 +353,16 @@ function MapboxMapInner({
         </div>
       )}
       <div ref={containerRef} className="absolute inset-0 w-full h-full" />
+      {ready && showFitButton && hasContent && (
+        <button
+          type="button"
+          onClick={() => fitToContent({ animate: true })}
+          className="absolute bottom-4 right-3 z-20 flex items-center gap-1.5 rounded-full bg-card/95 backdrop-blur px-3 py-2 text-xs font-semibold text-foreground shadow-lg border border-border hover:bg-card transition"
+          aria-label="Fit map to route"
+        >
+          <Maximize2 className="w-3.5 h-3.5" /> Fit map
+        </button>
+      )}
     </div>
   );
 }
