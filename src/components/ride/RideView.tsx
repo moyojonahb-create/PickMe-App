@@ -1127,7 +1127,7 @@ export default function RideView() {
                   }
                   setPaymentMethod('wallet');
                   setShowPaymentPrompt({ open: false, fare: 0 });
-                  setTimeout(() => handleSendOffer(fare), 50);
+                  handleSendOffer(fare, 'wallet');
                 }}
                 className="flex flex-col items-center justify-center gap-2 p-5 rounded-2xl border-2 border-border hover:border-primary hover:bg-primary/5 active:scale-95 transition-all">
                 <Wallet className="w-7 h-7 text-primary" />
