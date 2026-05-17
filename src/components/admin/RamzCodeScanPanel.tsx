@@ -464,9 +464,6 @@ export default function RamzCodeScanPanel() {
         </CardContent>
       </Card>
 
-      <RollbackPanel entries={rollbacks} loading={auditLoading} onRollback={handleRollback} onRefresh={refreshAudit} />
-      <AuditPanel entries={audit} loading={auditLoading} onRefresh={refreshAudit} />
-
       {/* Batch review dialog — surfaces the diff per item and waits for a decision. */}
       <Dialog open={!!batchPatch} onOpenChange={(v) => { if (!v && batchDecisionResolver) batchDecisionResolver('cancel'); }}>
         <DialogContent className="max-w-3xl">
