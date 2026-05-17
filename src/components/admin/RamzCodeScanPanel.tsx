@@ -46,6 +46,12 @@ const CAT_COLORS: Record<CodeFinding['category'], string> = {
   performance: 'bg-amber-500/5 text-amber-700 border-amber-500/20',
   accessibility: 'bg-pink-500/5 text-pink-700 border-pink-500/20',
   'type-safety': 'bg-slate-500/5 text-slate-700 border-slate-500/20',
+  scalability: 'bg-indigo-500/5 text-indigo-700 border-indigo-500/20',
+  mobile: 'bg-teal-500/5 text-teal-700 border-teal-500/20',
+  realtime: 'bg-cyan-500/5 text-cyan-700 border-cyan-500/20',
+  database: 'bg-lime-500/5 text-lime-700 border-lime-500/20',
+  ux: 'bg-fuchsia-500/5 text-fuchsia-700 border-fuchsia-500/20',
+  reliability: 'bg-rose-500/5 text-rose-700 border-rose-500/20',
 };
 
 function findingKey(f: CodeFinding) {
@@ -549,9 +555,46 @@ function FindingCard({
               <FileCode2 className="w-3 h-3" /> {f.file}:{f.line}
             </p>
             <p className="text-xs text-foreground/80 mt-1.5">{f.description}</p>
+            {(f.rootCause || f.userImpact || f.scalabilityImpact || f.performanceImpact || f.securityImpact) && (
+              <div className="grid sm:grid-cols-2 gap-1.5 mt-2">
+                {f.rootCause && (
+                  <div className="rounded-md border border-border bg-muted/30 px-2 py-1.5">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Root cause</p>
+                    <p className="text-[11px] text-foreground/80">{f.rootCause}</p>
+                  </div>
+                )}
+                {f.userImpact && (
+                  <div className="rounded-md border border-border bg-muted/30 px-2 py-1.5">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">User impact</p>
+                    <p className="text-[11px] text-foreground/80">{f.userImpact}</p>
+                  </div>
+                )}
+                {f.scalabilityImpact && (
+                  <div className="rounded-md border border-indigo-500/20 bg-indigo-500/5 px-2 py-1.5">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-indigo-700">Scalability</p>
+                    <p className="text-[11px] text-foreground/80">{f.scalabilityImpact}</p>
+                  </div>
+                )}
+                {f.performanceImpact && (
+                  <div className="rounded-md border border-amber-500/20 bg-amber-500/5 px-2 py-1.5">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-amber-700">Performance</p>
+                    <p className="text-[11px] text-foreground/80">{f.performanceImpact}</p>
+                  </div>
+                )}
+                {f.securityImpact && (
+                  <div className="rounded-md border border-purple-500/20 bg-purple-500/5 px-2 py-1.5 sm:col-span-2">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-purple-700">Security</p>
+                    <p className="text-[11px] text-foreground/80">{f.securityImpact}</p>
+                  </div>
+                )}
+              </div>
+            )}
             <div className="bg-primary/5 border border-primary/10 rounded-lg p-2 mt-2">
-              <p className="text-[11px] font-semibold text-primary mb-0.5">Suggested fix</p>
+              <p className="text-[11px] font-semibold text-primary mb-0.5">Required fix</p>
               <p className="text-xs text-foreground/80">{f.suggestion}</p>
+              {f.expectedResult && (
+                <p className="text-[11px] text-foreground/70 mt-1"><span className="font-semibold">Expected result:</span> {f.expectedResult}</p>
+              )}
             </div>
             <div className="flex items-center gap-2 mt-2 flex-wrap">
               <Button size="sm" onClick={generateFix} disabled={generating || disabled} className="h-7 gap-1 text-[11px] font-bold">

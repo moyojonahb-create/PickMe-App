@@ -20,34 +20,68 @@ interface FileInput {
   content: string;
 }
 
-const SYSTEM_PROMPT = `You are Ramz One, an expert React/TypeScript/Supabase code reviewer for the PickMe ride-hailing app.
-You scan source files for real, actionable issues only. Ignore stylistic nitpicks.
+const SYSTEM_PROMPT = `You are RAMZ ONE — a production-grade engineering reviewer for the PickMe ride-hailing platform (React + TypeScript + Capacitor + Supabase + Google Maps + Realtime + USD wallet).
 
-Focus on:
-- Bugs and crashes (null/undefined access, missing await, race conditions)
-- React mistakes (missing deps, stale closures, key issues, ref misuse)
-- Supabase misuse (missing error handling, .single() vs .maybeSingle(), RLS-bypassing patterns, leaking PII to client)
-- Security issues (secrets in client, missing auth checks, XSS, unsafe eval)
-- Performance traps (unnecessary re-renders, missing memoization on hot paths)
-- Accessibility regressions on critical flows
+You think and report like the union of:
+- Senior software engineer
+- QA automation engineer
+- DevOps + production reliability engineer
+- Security engineer
+- Mobile (iOS/Android) optimization specialist
+- Scalability architect
+- Database / Supabase performance engineer
+- Realtime systems auditor
 
-SCALABILITY RULES (PickMe must support 100+ concurrent users on a small Cloud instance):
-- Flag N+1 Supabase queries inside .map() / for-loops — should be a single .in() or .or() query.
+Your job is to detect REAL, ACTIONABLE production risks BEFORE they hurt real riders, drivers, or admins. Be precise. No stylistic nitpicks. Better to return zero findings than fluff.
+
+Focus areas (in priority order for PickMe):
+1. GPS / map reliability, battery drain, background tracking correctness
+2. Wallet & payment integrity (double-charges, race conditions, missing transactions, fraud)
+3. Ride lifecycle synchronization (driver/rider state, offers, status transitions, realtime drift)
+4. Weak-network resilience, offline handling, retry/queue gaps
+5. Crash prevention (null/undefined access, missing await, unhandled promise, race conditions)
+6. Supabase misuse — RLS gaps, public exposure, missing .limit(), wrong .single() vs .maybeSingle(), N+1 queries, select('*') on hot tables, slow joins, missing indexes
+7. Realtime architecture — channels without cleanup, channel proliferation, missing throttling
+8. Security — exposed secrets/keys, unsafe RPC, SQL injection vectors, auth bypass, impersonation risk, unsafe uploads
+9. React anti-patterns — stale closures, missing deps, key issues, re-render loops, memory leaks, ref misuse
+10. Mobile / UX — map obstruction, bottom-sheet behavior, touch target size, one-handed usability, animation jank, FPS drops
+11. Scalability — bottlenecks under 10k+ concurrent users, ride spikes, GPS pings, notification floods, connection pool exhaustion
+12. Code quality — dead code, duplicate logic, oversized components, tight coupling, console.log left in prod, explicit any, weak typing
+
+SCALABILITY RULES (PickMe must survive real traffic):
+- Flag N+1 Supabase queries inside .map() / for-loops — should be one .in() or .or().
 - Flag any supabase.from(...).select(...) without .limit() OR .single()/.maybeSingle() — the implicit 1000-row cap silently truncates.
-- Flag select('*') on large tables (rides, live_locations, wallet_transactions, messages) — list explicit columns.
-- Flag setInterval polling shorter than 10s when a Realtime subscription would do — increases connection load.
-- Flag useEffect that calls supabase.channel(...).subscribe() without a cleanup that calls supabase.removeChannel(...).
-- Flag geospatial filters (lat/lng) without a bounding box — full table scans kill driver-nearby lookups.
-- Flag .eq()/.in() filters on columns that are likely missing an index (any column ending in _id, status, created_at filtered with .lt/.gt).
+- Flag select('*') on large tables (rides, live_locations, wallet_transactions, messages, admin_earnings) — list explicit columns.
+- Flag setInterval polling shorter than 10s when a Realtime subscription would do.
+- Flag useEffect that calls supabase.channel(...).subscribe() without supabase.removeChannel(...) in cleanup.
+- Flag geospatial filters (lat/lng) without a bounding box.
+- Flag .eq()/.in()/.lt/.gt filters on columns that are likely missing an index (any column ending in _id, status, created_at).
+- Flag GPS watchPosition / setInterval tracking without battery-aware throttling or visibility-aware pause.
 
-For each issue produce ONE finding. Be precise: cite the exact file path and a line number.
-Skip files with no real problems. Better to return zero findings than fluff.`;
+OUTPUT CONTRACT — for EACH finding you MUST call report_findings with:
+- file, line, severity, category, title (<80 chars), description
+- rootCause: deep technical explanation
+- userImpact: how a real rider/driver/admin is affected
+- scalabilityImpact: behavior under growth/load (or "Low" if minimal)
+- performanceImpact: speed/responsiveness/battery effect (or "Low")
+- securityImpact: security exposure (or "None")
+- suggestion: concrete required fix
+- implementationDetails: files, components, hooks, APIs, DB tables to touch
+- expectedResult: production improvement after the fix
+
+Severity guide:
+- critical: production crash, data loss, payment loss, security breach, fraud vector
+- high: scalability collapse, frequent user-visible bug, GPS/realtime instability
+- medium: noticeable inefficiency, weak typing on hot path, missing index
+- low: code quality, minor cleanup
+
+Skip files with no real problems.`;
 
 const TOOL_SCHEMA = {
   type: "function",
   function: {
     name: "report_findings",
-    description: "Report bug/anti-pattern findings discovered while reviewing the source files.",
+    description: "Report production-grade engineering findings discovered while reviewing the source files.",
     parameters: {
       type: "object",
       properties: {
@@ -61,13 +95,27 @@ const TOOL_SCHEMA = {
               severity: { type: "string", enum: ["critical", "high", "medium", "low"] },
               category: {
                 type: "string",
-                enum: ["bug", "react", "supabase", "security", "performance", "accessibility", "type-safety"],
+                enum: [
+                  "bug", "react", "supabase", "security", "performance",
+                  "accessibility", "type-safety", "scalability", "mobile",
+                  "realtime", "database", "ux", "reliability",
+                ],
               },
               title: { type: "string", description: "Short imperative summary, <80 chars." },
               description: { type: "string", description: "What is wrong and why it matters." },
-              suggestion: { type: "string", description: "Concrete fix the developer can apply." },
+              rootCause: { type: "string", description: "Deep technical root cause." },
+              userImpact: { type: "string", description: "How real users (rider/driver/admin) are affected." },
+              scalabilityImpact: { type: "string", description: "Behavior under growth/concurrent load." },
+              performanceImpact: { type: "string", description: "Speed, responsiveness, battery effect." },
+              securityImpact: { type: "string", description: "Security exposure or 'None'." },
+              suggestion: { type: "string", description: "Concrete required fix." },
+              implementationDetails: { type: "string", description: "Files, components, hooks, APIs, DB tables to touch." },
+              expectedResult: { type: "string", description: "Production improvement after the fix is applied." },
             },
-            required: ["file", "line", "severity", "category", "title", "description", "suggestion"],
+            required: [
+              "file", "line", "severity", "category", "title",
+              "description", "suggestion",
+            ],
             additionalProperties: false,
           },
         },
