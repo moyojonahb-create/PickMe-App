@@ -123,9 +123,10 @@ export default function RamzCodeScanPanel() {
   };
   const clearSelection = () => setSelected(new Set());
 
-  const runBatch = async () => {
-    if (!findings || selected.size === 0) return;
-    const queue = findings.filter((f) => selected.has(findingKey(f)));
+  const runBatch = async (opts: { autoApprove?: boolean; queueOverride?: CodeFinding[] } = {}) => {
+    const queue = opts.queueOverride
+      ?? (findings ? findings.filter((f) => selected.has(findingKey(f))) : []);
+    if (queue.length === 0) return;
     setBatchRunning(true);
     let applied = 0, skipped = 0, failed = 0;
 
@@ -141,13 +142,16 @@ export default function RamzCodeScanPanel() {
             skipped++;
             continue;
           }
-          // Surface the diff for admin review and wait for their decision.
-          setBatchPatch({ patch, finding: f });
-          const decision = await new Promise<'apply' | 'skip' | 'cancel'>((resolve) => {
-            setBatchDecisionResolver(() => resolve);
-          });
-          setBatchPatch(null);
-          setBatchDecisionResolver(null);
+          let decision: 'apply' | 'skip' | 'cancel' = 'apply';
+          if (!opts.autoApprove) {
+            // Surface the diff for admin review and wait for their decision.
+            setBatchPatch({ patch, finding: f });
+            decision = await new Promise<'apply' | 'skip' | 'cancel'>((resolve) => {
+              setBatchDecisionResolver(() => resolve);
+            });
+            setBatchPatch(null);
+            setBatchDecisionResolver(null);
+          }
           if (decision === 'cancel') break;
           if (decision === 'skip') {
             await logAudit(patch, f, 'skipped');
@@ -174,6 +178,40 @@ export default function RamzCodeScanPanel() {
       await refreshAudit();
       toast.success(`Batch complete — ${applied} applied, ${skipped} skipped${failed ? `, ${failed} failed` : ''}.`);
     }
+  };
+
+  /** One-click: full scan, then auto-apply every generated patch without per-item prompts. */
+  const runFullScanAndFix = async () => {
+    setScanning(true);
+    setFindings(null);
+    setSelected(new Set());
+    setProgress({ scanned: 0, total: 0 });
+    let scanResult: Awaited<ReturnType<typeof runCodeScan>> | null = null;
+    try {
+      scanResult = await runCodeScan({
+        onProgress: (p) => {
+          setProgress({ scanned: p.scanned, total: p.total });
+          setCurrentBatch(p.currentBatch);
+        },
+      });
+      setFindings(scanResult.findings);
+      setScannedCount(scanResult.scannedFiles.length);
+    } catch (e) {
+      console.error(e);
+      toast.error('Full scan failed — see console.');
+      setScanning(false);
+      setCurrentBatch([]);
+      return;
+    }
+    setScanning(false);
+    setCurrentBatch([]);
+
+    if (!scanResult || scanResult.findings.length === 0) {
+      toast.success(`Full scan complete — ${scanResult?.scannedFiles.length ?? 0} files clean.`);
+      return;
+    }
+    toast.info(`Auto-fixing ${scanResult.findings.length} finding${scanResult.findings.length > 1 ? 's' : ''}…`);
+    await runBatch({ autoApprove: true, queueOverride: scanResult.findings });
   };
 
   const handleRollback = async (entry: AuditEntry) => {
