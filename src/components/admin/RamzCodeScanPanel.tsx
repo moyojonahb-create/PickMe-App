@@ -18,9 +18,10 @@ import {
 import { toast } from 'sonner';
 import {
   ScanSearch, Loader2, Bot, Copy, Check, FileCode2, AlertTriangle, CheckCircle2,
-  Wand2, Download, ListChecks, Undo2, History, ShieldCheck, ShieldAlert,
+  Wand2, Download, ListChecks, Undo2, History, ShieldCheck, ShieldAlert, ClipboardCopy,
+  Power,
 } from 'lucide-react';
-import { runCodeScan, findingToLovablePrompt, type CodeFinding } from '@/lib/ramzCodeScan';
+import { runCodeScan, findingToLovablePrompt, findingsToCombinedLovablePrompt, type CodeFinding } from '@/lib/ramzCodeScan';
 import {
   generatePatchForFinding, computeLineDiff, downloadPatchedFile,
   buildLovableApplyPrompt, type PatchResult,
@@ -70,6 +71,43 @@ export default function RamzCodeScanPanel() {
   const [rollbacks, setRollbacks] = useState<AuditEntry[]>([]);
   const [auditLoading, setAuditLoading] = useState(false);
 
+  // Auto-scan (every 12 hours) + status indicator.
+  const AUTO_KEY = 'ramz.autoScan.enabled';
+  const LAST_KEY = 'ramz.autoScan.lastAt';
+  const [autoScan, setAutoScan] = useState<boolean>(() => {
+    try { return localStorage.getItem(AUTO_KEY) === '1'; } catch { return false; }
+  });
+  const [lastScanAt, setLastScanAt] = useState<number | null>(() => {
+    try { const v = localStorage.getItem(LAST_KEY); return v ? Number(v) : null; } catch { return null; }
+  });
+  const hasErrors = !!findings && findings.some((f) => f.severity === 'critical' || f.severity === 'high');
+  const statusColor = !autoScan ? 'bg-muted-foreground' : hasErrors ? 'bg-red-500' : 'bg-emerald-500';
+
+  // Beep loop while errors are present and auto-scan is on.
+  useEffect(() => {
+    if (!autoScan || !hasErrors) return;
+    let stopped = false;
+    const beep = () => {
+      if (stopped) return;
+      try {
+        const Ctx = (window.AudioContext || (window as any).webkitAudioContext);
+        if (!Ctx) return;
+        const ctx = new Ctx();
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.type = 'square';
+        o.frequency.value = 880;
+        g.gain.value = 0.08;
+        o.connect(g); g.connect(ctx.destination);
+        o.start();
+        setTimeout(() => { o.stop(); ctx.close().catch(() => {}); }, 180);
+      } catch { /* ignore */ }
+    };
+    beep();
+    const id = window.setInterval(beep, 1500);
+    return () => { stopped = true; window.clearInterval(id); };
+  }, [autoScan, hasErrors]);
+
   const refreshAudit = async () => {
     setAuditLoading(true);
     const [a, r] = await Promise.all([listRecentAudit(20), listRollbackable(10)]);
@@ -105,6 +143,49 @@ export default function RamzCodeScanPanel() {
     } finally {
       setScanning(false);
       setCurrentBatch([]);
+      const now = Date.now();
+      setLastScanAt(now);
+      try { localStorage.setItem(LAST_KEY, String(now)); } catch { /* ignore */ }
+    }
+  };
+
+  // Schedule a scan every 12 hours while auto-scan is enabled.
+  useEffect(() => {
+    if (!autoScan) return;
+    const TWELVE_H = 12 * 60 * 60 * 1000;
+    const tick = () => {
+      if (scanning || batchRunning) return;
+      const last = lastScanAt ?? 0;
+      if (Date.now() - last >= TWELVE_H) {
+        start();
+      }
+    };
+    // Run once shortly after enable if overdue, then poll every minute.
+    const t0 = window.setTimeout(tick, 2000);
+    const id = window.setInterval(tick, 60_000);
+    return () => { window.clearTimeout(t0); window.clearInterval(id); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoScan, lastScanAt, scanning, batchRunning]);
+
+  const toggleAutoScan = () => {
+    setAutoScan((prev) => {
+      const next = !prev;
+      try { localStorage.setItem(AUTO_KEY, next ? '1' : '0'); } catch { /* ignore */ }
+      toast.success(next ? 'Auto-scan enabled — every 12 hours.' : 'Auto-scan disabled.');
+      return next;
+    });
+  };
+
+  const copyCombinedPrompt = async () => {
+    if (!findings || findings.length === 0) {
+      toast.message('Nothing to copy — run a scan first or no findings detected.');
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(findingsToCombinedLovablePrompt(findings));
+      toast.success(`Combined prompt copied — ${findings.length} fix${findings.length > 1 ? 'es' : ''}. Paste into Lovable chat.`);
+    } catch {
+      toast.error('Could not copy — clipboard blocked.');
     }
   };
 
@@ -249,7 +330,26 @@ export default function RamzCodeScanPanel() {
                 Scans run in batches; results stream in as each batch completes.
               </p>
             </div>
-            <div className="flex flex-col sm:flex-row gap-2 shrink-0">
+            <div className="flex flex-col sm:flex-row gap-2 shrink-0 items-stretch sm:items-center">
+              <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-border bg-muted/30">
+                <span
+                  aria-label={`Status: ${!autoScan ? 'off' : hasErrors ? 'errors detected' : 'healthy'}`}
+                  className={`inline-block w-2.5 h-2.5 rounded-full ${statusColor} ${autoScan ? 'animate-pulse' : ''} ${autoScan && hasErrors ? 'shadow-[0_0_8px_rgba(239,68,68,0.9)]' : autoScan ? 'shadow-[0_0_8px_rgba(16,185,129,0.7)]' : ''}`}
+                />
+                <span className="text-[11px] font-semibold">
+                  {!autoScan ? 'Auto-scan off' : hasErrors ? 'Errors detected' : 'Healthy'}
+                </span>
+                <Button
+                  size="sm"
+                  variant={autoScan ? 'default' : 'outline'}
+                  onClick={toggleAutoScan}
+                  className="h-6 px-2 text-[10px] gap-1"
+                  title="Auto-scan every 12 hours"
+                >
+                  <Power className="w-3 h-3" />
+                  {autoScan ? 'On' : 'Off'}
+                </Button>
+              </div>
               <Button onClick={start} disabled={scanning || batchRunning} variant="outline" className="font-bold gap-2">
                 {scanning ? <Loader2 className="w-4 h-4 animate-spin" /> : <ScanSearch className="w-4 h-4" />}
                 {scanning ? 'Scanning…' : 'Scan only'}
@@ -265,6 +365,23 @@ export default function RamzCodeScanPanel() {
               </Button>
             </div>
           </div>
+
+          {findings !== null && !scanning && findings.length > 0 && (
+            <div className="flex items-center gap-2 flex-wrap rounded-md border border-primary/20 bg-primary/5 px-3 py-2">
+              <ClipboardCopy className="w-4 h-4 text-primary" />
+              <span className="text-xs font-semibold text-primary">
+                One combined Lovable prompt covers all {findings.length} finding{findings.length > 1 ? 's' : ''}.
+              </span>
+              <Button
+                size="sm"
+                onClick={copyCombinedPrompt}
+                className="ml-auto h-7 gap-1 text-[11px] font-bold"
+              >
+                <Copy className="w-3 h-3" />
+                Copy combined prompt
+              </Button>
+            </div>
+          )}
 
           {scanning && (
             <div className="space-y-2">

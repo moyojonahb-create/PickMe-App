@@ -164,3 +164,57 @@ export function findingToLovablePrompt(f: CodeFinding): string {
     'Re-running Ramz One code scan reports no finding for this location.',
   ].join('\n');
 }
+
+/**
+ * Combine every finding into ONE Lovable prompt that an admin can paste into
+ * Lovable chat to fix the entire system in a single turn.
+ */
+export function findingsToCombinedLovablePrompt(findings: CodeFinding[]): string {
+  if (findings.length === 0) {
+    return 'Ramz One full system scan: no issues detected. Nothing to fix.';
+  }
+  const sevRank = { critical: 0, high: 1, medium: 2, low: 3 } as const;
+  const sorted = [...findings].sort(
+    (a, b) => sevRank[a.severity] - sevRank[b.severity] || a.file.localeCompare(b.file),
+  );
+
+  const byFile = new Map<string, CodeFinding[]>();
+  for (const f of sorted) {
+    if (!byFile.has(f.file)) byFile.set(f.file, []);
+    byFile.get(f.file)!.push(f);
+  }
+
+  const counts = sorted.reduce(
+    (acc, f) => ({ ...acc, [f.severity]: (acc[f.severity] ?? 0) + 1 }),
+    {} as Record<string, number>,
+  );
+
+  const lines: string[] = [];
+  lines.push('FULL SYSTEM FIX — Ramz One AI scan results');
+  lines.push('');
+  lines.push(`Total findings: ${sorted.length} (critical: ${counts.critical ?? 0}, high: ${counts.high ?? 0}, medium: ${counts.medium ?? 0}, low: ${counts.low ?? 0})`);
+  lines.push('');
+  lines.push('GOAL:');
+  lines.push('Apply every fix below in a single pass. Do not regress surrounding behavior. After applying, the next Ramz One scan must report zero findings for these locations.');
+  lines.push('');
+  lines.push('FIXES BY FILE:');
+  lines.push('');
+
+  let idx = 1;
+  for (const [file, items] of byFile) {
+    lines.push(`### ${file}`);
+    for (const f of items) {
+      lines.push(`${idx}. [${f.severity.toUpperCase()} · ${f.category}] ${f.title} (line ${f.line})`);
+      lines.push(`   - Problem: ${f.description}`);
+      lines.push(`   - Required fix: ${f.suggestion}`);
+      lines.push('');
+      idx++;
+    }
+  }
+
+  lines.push('ACCEPTANCE CRITERIA:');
+  lines.push('- All listed issues resolved.');
+  lines.push('- No new TypeScript or runtime errors.');
+  lines.push('- Existing tests still pass.');
+  return lines.join('\n');
+}
