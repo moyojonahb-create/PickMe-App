@@ -18,9 +18,10 @@ import {
 import { toast } from 'sonner';
 import {
   ScanSearch, Loader2, Bot, Copy, Check, FileCode2, AlertTriangle, CheckCircle2,
-  Wand2, Download, ListChecks, Undo2, History, ShieldCheck, ShieldAlert,
+  Wand2, Download, ListChecks, Undo2, History, ShieldCheck, ShieldAlert, ClipboardCopy,
+  Power,
 } from 'lucide-react';
-import { runCodeScan, findingToLovablePrompt, type CodeFinding } from '@/lib/ramzCodeScan';
+import { runCodeScan, findingToLovablePrompt, findingsToCombinedLovablePrompt, type CodeFinding } from '@/lib/ramzCodeScan';
 import {
   generatePatchForFinding, computeLineDiff, downloadPatchedFile,
   buildLovableApplyPrompt, type PatchResult,
