@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import PremiumTrackingMap from '@/components/map/PremiumTrackingMap';
 import StaticMapFallback from '@/components/map/StaticMapFallback';
-import OSMMap from '@/components/OSMMap';
+import MapboxMap from '@/components/MapboxMap';
 import { isGoogleMapsDisabled } from '@/lib/mapsKillSwitch';
 
 // ── Types ──
@@ -316,23 +316,29 @@ function InnerMapGoogle({
 }
 
 // ── Outer wrapper ──
+// Default provider is now Mapbox. Google can be opted into via
+// `localStorage.enableGoogleMaps = '1'` or `VITE_ENABLE_GOOGLE_MAPS=true`.
 function MapGoogle(props: MapGoogleProps) {
   const [retryKey, setRetryKey] = useState(0);
   const googleDisabled = isGoogleMapsDisabled();
   const { isLoaded, loadError, apiKey } = useGoogleMaps(googleDisabled ? -1 : retryKey);
   const { className = '', height = '100%' } = props;
 
-  // Kill switch: render OSM map instead of Google (billing down / key missing)
+  // Default path: Mapbox (replaces OSM + Google).
   if (googleDisabled) {
     return (
-      <OSMMap
-        pickup={props.pickup ?? null}
-        dropoff={props.dropoff ?? null}
-        driverLocation={props.driverLocation ?? null}
-        routeGeometry={props.routeGeometry ?? null}
+      <MapboxMap
+        pickup={props.pickup}
+        dropoff={props.dropoff}
+        driverLocation={props.driverLocation}
+        routeGeometry={props.routeGeometry}
+        secondaryRouteGeometry={props.secondaryRouteGeometry}
         onMapClick={props.onMapClick}
-        center={props.defaultCenter}
-        zoom={props.defaultZoom}
+        defaultCenter={props.defaultCenter}
+        defaultZoom={props.defaultZoom}
+        drivers={props.drivers}
+        stops={props.stops}
+        etaMinutes={props.etaMinutes}
         className={className}
         height={height}
       />
@@ -350,14 +356,10 @@ function MapGoogle(props: MapGoogleProps) {
         <div className="text-center p-6 space-y-3">
           <AlertTriangle className="w-10 h-10 mx-auto text-destructive" />
           <p className="font-semibold text-foreground">Google Maps API key missing</p>
-          <p className="text-sm text-muted-foreground">
-            Set <code className="bg-muted-foreground/10 px-1.5 py-0.5 rounded text-xs">VITE_GOOGLE_MAPS_API_KEY</code> in your environment.
-          </p>
         </div>
       </div>
     );
   }
-
   if (loadError) {
     return (
       <StaticMapFallback
@@ -370,7 +372,6 @@ function MapGoogle(props: MapGoogleProps) {
       />
     );
   }
-
   if (!isLoaded) {
     return (
       <div className={`relative ${className}`} style={{ height, minHeight: 260 }}>
@@ -384,7 +385,6 @@ function MapGoogle(props: MapGoogleProps) {
       </div>
     );
   }
-
   return <InnerMapGoogle {...props} />;
 }
 
