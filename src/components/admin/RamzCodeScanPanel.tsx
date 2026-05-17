@@ -46,6 +46,12 @@ const CAT_COLORS: Record<CodeFinding['category'], string> = {
   performance: 'bg-amber-500/5 text-amber-700 border-amber-500/20',
   accessibility: 'bg-pink-500/5 text-pink-700 border-pink-500/20',
   'type-safety': 'bg-slate-500/5 text-slate-700 border-slate-500/20',
+  scalability: 'bg-indigo-500/5 text-indigo-700 border-indigo-500/20',
+  mobile: 'bg-teal-500/5 text-teal-700 border-teal-500/20',
+  realtime: 'bg-cyan-500/5 text-cyan-700 border-cyan-500/20',
+  database: 'bg-lime-500/5 text-lime-700 border-lime-500/20',
+  ux: 'bg-fuchsia-500/5 text-fuchsia-700 border-fuchsia-500/20',
+  reliability: 'bg-rose-500/5 text-rose-700 border-rose-500/20',
 };
 
 function findingKey(f: CodeFinding) {
