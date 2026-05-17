@@ -574,6 +574,60 @@ export default function RamzCodeScanPanel() {
           )}
         </DialogContent>
       </Dialog>
+
+      <Dialog open={aiOpen} onOpenChange={setAiOpen}>
+        <DialogContent className="max-w-4xl max-h-[85vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-violet-600" />
+              AI Engineering Report
+              {aiMeta?.model && (
+                <Badge variant="outline" className="text-[10px] font-mono">{aiMeta.model}</Badge>
+              )}
+            </DialogTitle>
+            <DialogDescription>
+              {aiLoading
+                ? 'OpenAI is analyzing the sanitized scan payload — secrets, tokens, emails and phone numbers are stripped before sending.'
+                : aiMeta
+                  ? `${aiMeta.findingsAnalyzed} finding${(aiMeta.findingsAnalyzed ?? 0) === 1 ? '' : 's'} analyzed · ${new Date(aiMeta.generatedAt ?? Date.now()).toLocaleString()}`
+                  : 'Deep root-cause, security, scalability and mobile reliability analysis.'}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-y-auto rounded-md border border-border bg-muted/30 p-4">
+            {aiLoading && !aiReport ? (
+              <div className="flex flex-col items-center justify-center py-12 gap-3">
+                <Loader2 className="w-8 h-8 animate-spin text-violet-600" />
+                <p className="text-sm text-muted-foreground">Generating engineering report…</p>
+              </div>
+            ) : (
+              <pre className="text-xs whitespace-pre-wrap font-mono leading-relaxed text-foreground">
+                {aiReport || 'No report yet.'}
+              </pre>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button variant="ghost" onClick={() => setAiOpen(false)}>Close</Button>
+            <Button
+              variant="outline"
+              onClick={() => analyzeWithAi(aiMode === 'deep' ? 'fast' : 'deep')}
+              disabled={aiLoading || !findings || findings.length === 0}
+              className="gap-1.5"
+              title="Switch between deep (gpt-5.5) and fast (gpt-5.5-mini)"
+            >
+              <Brain className="w-4 h-4" />
+              Re-run as {aiMode === 'deep' ? 'fast' : 'deep'}
+            </Button>
+            <Button variant="outline" onClick={copyAiReport} disabled={!aiReport || aiLoading} className="gap-1.5">
+              <Copy className="w-4 h-4" /> Copy
+            </Button>
+            <Button onClick={downloadAiReport} disabled={!aiReport || aiLoading} className="gap-1.5 font-bold">
+              <Download className="w-4 h-4" /> Download .md
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
