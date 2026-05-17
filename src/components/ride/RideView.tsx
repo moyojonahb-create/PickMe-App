@@ -1092,12 +1092,12 @@ export default function RideView() {
       {/* ═══ PAYMENT METHOD PROMPT — compact floating pill ═══ */}
       {showPaymentPrompt.open && (
         <div
-          className="fixed inset-0 z-[80] bg-black/30 backdrop-blur-[2px] animate-in fade-in"
+          className="fixed inset-0 z-[80] bg-black/20 backdrop-blur-[2px] animate-in fade-in"
           onClick={() => setShowPaymentPrompt({ open: false, fare: 0 })}>
           <div
             onClick={(e) => e.stopPropagation()}
-            className="absolute left-1/2 -translate-x-1/2 bottom-[calc(env(safe-area-inset-bottom)+96px)] flex items-center gap-2 px-3 py-2 rounded-full bg-background shadow-2xl border border-border animate-in slide-in-from-bottom-2">
-            <span className="pl-2 pr-1 text-[12px] font-semibold text-muted-foreground whitespace-nowrap">Pay with</span>
+            className="absolute left-1/2 -translate-x-1/2 bottom-[calc(env(safe-area-inset-bottom)+96px)] flex items-center gap-2.5 px-2.5 py-2 rounded-full bg-background shadow-2xl border border-border animate-in slide-in-from-bottom-2">
+            <span className="pl-1.5 text-[12px] font-medium text-muted-foreground whitespace-nowrap">Pay with</span>
             <button
               onClick={() => {
                 const fare = showPaymentPrompt.fare;
@@ -1105,8 +1105,10 @@ export default function RideView() {
                 setShowPaymentPrompt({ open: false, fare: 0 });
                 handleSendOffer(fare, 'cash');
               }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary text-primary-foreground text-[13px] font-semibold active:scale-95 transition-transform">
-              <Banknote className="w-3.5 h-3.5" />
+              className="flex items-center gap-2 pl-1 pr-3.5 py-1.5 rounded-full bg-primary text-primary-foreground text-[13px] font-semibold active:scale-95 transition-transform">
+              <span className="w-6 h-6 flex items-center justify-center rounded-full bg-white/20 shrink-0">
+                <Banknote className="w-3.5 h-3.5" />
+              </span>
               Cash
             </button>
             <button
@@ -1124,15 +1126,17 @@ export default function RideView() {
                 setShowPaymentPrompt({ open: false, fare: 0 });
                 handleSendOffer(fare, 'wallet');
               }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-foreground text-background text-[13px] font-semibold active:scale-95 transition-transform">
-              <Wallet className="w-3.5 h-3.5" />
-              Wallet
-              <span className="text-[10px] opacity-70">${walletBalance.toFixed(0)}</span>
+              className="flex items-center gap-2 pl-1 pr-3.5 py-1.5 rounded-full bg-accent text-accent-foreground text-[13px] font-semibold active:scale-95 transition-transform">
+              <span className="w-6 h-6 flex items-center justify-center rounded-full bg-white/25 shrink-0">
+                <Wallet className="w-3.5 h-3.5" />
+              </span>
+              <span>Wallet</span>
+              <span className="text-[10px] opacity-80 font-medium">${walletBalance.toFixed(0)}</span>
             </button>
             <button
               onClick={() => setShowPaymentPrompt({ open: false, fare: 0 })}
-              className="w-7 h-7 flex items-center justify-center rounded-full text-muted-foreground hover:bg-muted transition-colors">
-              <X className="w-4 h-4" />
+              className="w-7 h-7 flex items-center justify-center rounded-full bg-muted text-muted-foreground hover:bg-muted/80 active:scale-90 transition-colors">
+              <X className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
