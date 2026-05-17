@@ -164,8 +164,13 @@ serve(async (req: Request) => {
       }))
       .filter((f) => f.path && f.content);
 
+    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) return json({ error: "AI gateway not configured" }, 500);
+    // Prefer OpenAI (workspace is out of Lovable AI credits); fall back to Lovable AI Gateway.
+    const useOpenAI = !!OPENAI_API_KEY;
+    if (!OPENAI_API_KEY && !LOVABLE_API_KEY) {
+      return json({ error: "No AI provider configured (set OPENAI_API_KEY or LOVABLE_API_KEY)" }, 500);
+    }
 
     // Build a single review prompt with all files annotated by line numbers.
     const reviewPayload = trimmed
