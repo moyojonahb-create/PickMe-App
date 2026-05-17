@@ -19,8 +19,9 @@ import { toast } from 'sonner';
 import {
   ScanSearch, Loader2, Bot, Copy, Check, FileCode2, AlertTriangle, CheckCircle2,
   Wand2, Download, ListChecks, Undo2, History, ShieldCheck, ShieldAlert, ClipboardCopy,
-  Power,
+  Power, Sparkles, Brain,
 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 import { runCodeScan, findingToLovablePrompt, findingsToCombinedLovablePrompt, type CodeFinding } from '@/lib/ramzCodeScan';
 import {
   generatePatchForFinding, computeLineDiff, downloadPatchedFile,
@@ -76,6 +77,14 @@ export default function RamzCodeScanPanel() {
   const [audit, setAudit] = useState<AuditEntry[]>([]);
   const [rollbacks, setRollbacks] = useState<AuditEntry[]>([]);
   const [auditLoading, setAuditLoading] = useState(false);
+
+  // AI deep analysis (OpenAI via secure edge function).
+  const [aiOpen, setAiOpen] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiReport, setAiReport] = useState<string>('');
+  const [aiMeta, setAiMeta] = useState<{ model?: string; findingsAnalyzed?: number; generatedAt?: string } | null>(null);
+  const [aiMode, setAiMode] = useState<'deep' | 'fast'>('deep');
+  const [aiCacheKey, setAiCacheKey] = useState<string>('');
 
   // Auto-scan (every 12 hours) + status indicator.
   const AUTO_KEY = 'ramz.autoScan.enabled';
