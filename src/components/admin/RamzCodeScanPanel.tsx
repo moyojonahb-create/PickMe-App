@@ -249,10 +249,21 @@ export default function RamzCodeScanPanel() {
                 Scans run in batches; results stream in as each batch completes.
               </p>
             </div>
-            <Button onClick={start} disabled={scanning || batchRunning} className="font-bold gap-2 shrink-0">
-              {scanning ? <Loader2 className="w-4 h-4 animate-spin" /> : <ScanSearch className="w-4 h-4" />}
-              {scanning ? 'Scanning…' : 'Scan code now'}
-            </Button>
+            <div className="flex flex-col sm:flex-row gap-2 shrink-0">
+              <Button onClick={start} disabled={scanning || batchRunning} variant="outline" className="font-bold gap-2">
+                {scanning ? <Loader2 className="w-4 h-4 animate-spin" /> : <ScanSearch className="w-4 h-4" />}
+                {scanning ? 'Scanning…' : 'Scan only'}
+              </Button>
+              <Button
+                onClick={runFullScanAndFix}
+                disabled={scanning || batchRunning}
+                className="font-bold gap-2 bg-gradient-to-r from-primary to-primary/80"
+                title="Run a full AI scan and auto-apply every generated patch"
+              >
+                {(scanning || batchRunning) ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
+                Full Scan & Auto-Fix
+              </Button>
+            </div>
           </div>
 
           {scanning && (
