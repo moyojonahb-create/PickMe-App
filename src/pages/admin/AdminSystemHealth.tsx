@@ -41,7 +41,25 @@ interface HealthCheck {
   timestamp: string;
   affectedUsers?: number;
   context?: string;
+  /** When true, this is an operational stat (pending/incomplete counts), not a technical error. */
+  isStat?: boolean;
 }
+
+// IDs that represent everyday operational counts (pending drivers/riders/rides,
+// approvals, deposits, cancellations) — these are NOT system errors. They are
+// surfaced in the "PickMe Daily Stats" section instead.
+const STAT_FINDING_IDS = new Set<string>([
+  'stale-rides',
+  'low-balance-drivers',
+  'old-disputes',
+  'pending-drivers',
+  'high-cancel-rate',
+  'no-driver-response',
+  'stuck-accepted-rides',
+  'pending-deposits',
+  'rider-pending-deposits',
+  'pending-documents',
+]);
 
 interface PerformanceMetric {
   label: string;
@@ -136,9 +154,9 @@ export default function AdminSystemHealth() {
       .eq('period', 'today')
       .lt('created_at', todayStart.toISOString());
 
-    // Insert new findings
+    // Insert new findings — operational stats are NOT persisted as errors.
     const rows = findings
-      .filter(f => f.severity !== 'info')
+      .filter(f => f.severity !== 'info' && !f.isStat)
       .map(f => ({
         error_type: f.category,
         severity: f.severity,
@@ -663,6 +681,13 @@ export default function AdminSystemHealth() {
         timeline.push({ hour: format(hourEnd, 'HH:mm'), errors: cancelledH || 0, completed: completedH || 0 });
       }
 
+      // Tag operational stat findings (not technical errors).
+      for (const f of findings) {
+        if (STAT_FINDING_IDS.has(f.id)) {
+          f.isStat = true;
+        }
+      }
+
       // Sort by severity
       findings.sort((a, b) => {
         const order = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
@@ -678,8 +703,8 @@ export default function AdminSystemHealth() {
       await persistFindings(findings);
       await loadErrorLogs(logTab);
 
-      // Alert for critical issues
-      const criticals = findings.filter(f => f.severity === 'critical');
+      // Alert for critical issues (operational stats are excluded — they're not errors).
+      const criticals = findings.filter(f => f.severity === 'critical' && !f.isStat);
       if (criticals.length > 0) {
         toast.error(`🤖 Ramz One: ${criticals.length} CRITICAL issue${criticals.length > 1 ? 's' : ''} found!`, {
           description: criticals[0].title,
@@ -767,10 +792,14 @@ export default function AdminSystemHealth() {
   }, [navigate, runSystemScan]);
 
 
-  const filteredChecks = filter === 'all' ? checks : checks.filter(c => c.category === filter);
-  const criticalCount = checks.filter(c => c.severity === 'critical').length;
-  const highCount = checks.filter(c => c.severity === 'high').length;
-  const totalIssues = checks.filter(c => c.severity !== 'info').length;
+  // Split operational stats from technical errors so pending/incomplete
+  // counts don't appear as "errors" in the system health view.
+  const dailyStats = checks.filter(c => c.isStat);
+  const issueChecks = checks.filter(c => !c.isStat);
+  const filteredChecks = filter === 'all' ? issueChecks : issueChecks.filter(c => c.category === filter);
+  const criticalCount = issueChecks.filter(c => c.severity === 'critical').length;
+  const highCount = issueChecks.filter(c => c.severity === 'high').length;
+  const totalIssues = issueChecks.filter(c => c.severity !== 'info').length;
 
   const STATUS_COLORS = { good: 'text-emerald-600', warn: 'text-amber-600', critical: 'text-red-600' };
   const STATUS_BG = { good: 'bg-emerald-500/10', warn: 'bg-amber-500/10', critical: 'bg-red-500/10' };
@@ -910,6 +939,57 @@ export default function AdminSystemHealth() {
             </Card>
           )}
 
+          {/* PickMe Daily Stats — operational counts (pending drivers/riders/rides,
+              cancellations, deposits awaiting approval). These are NOT system errors. */}
+          <div>
+            <h2 className="font-bold text-lg flex items-center gap-2 mb-3">
+              <Activity className="h-5 w-5 text-primary" />
+              PickMe Daily Stats
+              <Badge variant="outline" className="text-[10px] font-mono bg-primary/10 text-primary border-primary/20">
+                OPERATIONAL
+              </Badge>
+            </h2>
+            {dailyStats.length === 0 ? (
+              <Card>
+                <CardContent className="pt-6 pb-6 text-center">
+                  <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
+                  <p className="font-bold text-sm text-foreground">No pending operational items right now</p>
+                  <p className="text-xs text-muted-foreground">Drivers, riders, rides and deposits are all up to date.</p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {dailyStats.map(stat => {
+                  const Icon = CATEGORY_ICONS[stat.category] || Activity;
+                  return (
+                    <Card key={stat.id} className="border-primary/10">
+                      <CardContent className="pt-4">
+                        <div className="flex items-start gap-3">
+                          <div className="p-2 rounded-xl shrink-0 bg-primary/10">
+                            <Icon className="h-5 w-5 text-primary" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap mb-1">
+                              <p className="font-bold text-sm text-foreground">{stat.title}</p>
+                              {stat.affectedUsers !== undefined && (
+                                <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
+                                  <Users className="w-3 h-3" /> {stat.affectedUsers}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-muted-foreground mb-2">{stat.description}</p>
+                            <p className="text-[11px] text-foreground/80">{stat.suggestion}</p>
+                            <FixNowButton check={stat} onFix={runFix} />
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
           {/* Live Scan Findings */}
           <div>
             <h2 className="font-bold text-lg flex items-center gap-2 mb-3">
@@ -926,7 +1006,7 @@ export default function AdminSystemHealth() {
                   onClick={() => setFilter(cat)}
                   className="capitalize font-semibold text-xs"
                 >
-                  {cat === 'all' ? `All (${checks.length})` : `${cat} (${checks.filter(c => c.category === cat).length})`}
+                  {cat === 'all' ? `All (${issueChecks.length})` : `${cat} (${issueChecks.filter(c => c.category === cat).length})`}
                 </Button>
               ))}
             </div>
