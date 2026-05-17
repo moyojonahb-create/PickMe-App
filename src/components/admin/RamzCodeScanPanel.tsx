@@ -143,6 +143,49 @@ export default function RamzCodeScanPanel() {
     } finally {
       setScanning(false);
       setCurrentBatch([]);
+      const now = Date.now();
+      setLastScanAt(now);
+      try { localStorage.setItem(LAST_KEY, String(now)); } catch { /* ignore */ }
+    }
+  };
+
+  // Schedule a scan every 12 hours while auto-scan is enabled.
+  useEffect(() => {
+    if (!autoScan) return;
+    const TWELVE_H = 12 * 60 * 60 * 1000;
+    const tick = () => {
+      if (scanning || batchRunning) return;
+      const last = lastScanAt ?? 0;
+      if (Date.now() - last >= TWELVE_H) {
+        start();
+      }
+    };
+    // Run once shortly after enable if overdue, then poll every minute.
+    const t0 = window.setTimeout(tick, 2000);
+    const id = window.setInterval(tick, 60_000);
+    return () => { window.clearTimeout(t0); window.clearInterval(id); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoScan, lastScanAt, scanning, batchRunning]);
+
+  const toggleAutoScan = () => {
+    setAutoScan((prev) => {
+      const next = !prev;
+      try { localStorage.setItem(AUTO_KEY, next ? '1' : '0'); } catch { /* ignore */ }
+      toast.success(next ? 'Auto-scan enabled — every 12 hours.' : 'Auto-scan disabled.');
+      return next;
+    });
+  };
+
+  const copyCombinedPrompt = async () => {
+    if (!findings || findings.length === 0) {
+      toast.message('Nothing to copy — run a scan first or no findings detected.');
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(findingsToCombinedLovablePrompt(findings));
+      toast.success(`Combined prompt copied — ${findings.length} fix${findings.length > 1 ? 'es' : ''}. Paste into Lovable chat.`);
+    } catch {
+      toast.error('Could not copy — clipboard blocked.');
     }
   };
 
