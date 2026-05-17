@@ -52,7 +52,7 @@ function buildMarkerEl(color: string, label: string, dark = false): HTMLDivEleme
 
 function MapboxMapInner({
   pickup, dropoff, driverLocation, routeGeometry, secondaryRouteGeometry,
-  onMapClick, className = '', height = '100%', drivers, defaultCenter, defaultZoom = 13, stops,
+  onMapClick, className = '', height = '100%', drivers, defaultCenter, defaultZoom = 14.5, stops,
 }: MapboxMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
@@ -218,14 +218,24 @@ function MapboxMapInner({
     stops?.forEach((s) => { if (s.lat && s.lng) pts.push([s.lng, s.lat]); });
     if (routeGeometry) decodePolyline(routeGeometry).forEach((p) => pts.push(p));
 
+    // Adaptive padding: don't let the bottom sheet eat the map on short viewports.
+    const h = map.getContainer().clientHeight || 600;
+    const w = map.getContainer().clientWidth || 600;
+    const padding = {
+      top: Math.max(40, Math.min(80, h * 0.1)),
+      bottom: Math.max(80, Math.min(280, h * 0.32)),
+      left: Math.max(32, Math.min(64, w * 0.08)),
+      right: Math.max(32, Math.min(64, w * 0.08)),
+    };
+
     if (pts.length >= 2) {
       const bounds = pts.reduce(
         (b, p) => b.extend(p as mapboxgl.LngLatLike),
         new mapboxgl.LngLatBounds(pts[0] as mapboxgl.LngLatLike, pts[0] as mapboxgl.LngLatLike),
       );
-      map.fitBounds(bounds, { padding: { top: 60, bottom: 320, left: 48, right: 48 }, duration: 600, maxZoom: 16 });
+      map.fitBounds(bounds, { padding, duration: 600, maxZoom: 16.5 });
     } else if (pts.length === 1) {
-      map.flyTo({ center: pts[0], zoom: 15, duration: 600 });
+      map.flyTo({ center: pts[0], zoom: 15.5, duration: 600 });
     }
   }, [ready, pickup?.lat, pickup?.lng, dropoff?.lat, dropoff?.lng, driverLocation?.lat, driverLocation?.lng, routeGeometry, stops]);
 
