@@ -1090,113 +1090,17 @@ export default function RideView() {
       </GlassSheet>
 
       {/* ═══ PAYMENT METHOD PROMPT — refined card ═══ */}
-      {showPaymentPrompt.open && (() => {
-        const closeSheet = () => setShowPaymentPrompt({ open: false, fare: 0 });
-        let startY = 0;
-        let currentY = 0;
-        let dragging = false;
-        const onTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
-          startY = e.touches[0].clientY;
-          currentY = startY;
-          dragging = true;
-        };
-        const onTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
-          if (!dragging) return;
-          currentY = e.touches[0].clientY;
-          const dy = Math.max(0, currentY - startY);
-          (e.currentTarget as HTMLDivElement).style.transform = `translateY(${dy}px)`;
-          (e.currentTarget as HTMLDivElement).style.transition = 'none';
-        };
-        const onTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
-          dragging = false;
-          const dy = currentY - startY;
-          const el = e.currentTarget as HTMLDivElement;
-          el.style.transition = 'transform 220ms cubic-bezier(0.22, 1, 0.36, 1)';
-          if (dy > 60) {
-            el.style.transform = 'translateY(120%)';
-            window.setTimeout(closeSheet, 180);
-          } else {
-            el.style.transform = 'translateY(0)';
-          }
-        };
-        return (
-          <div
-            className="fixed inset-0 z-[80] bg-black/45 backdrop-blur-md animate-in fade-in duration-200 flex items-end justify-center"
-            onClick={closeSheet}>
-            <div
-              onClick={(e) => e.stopPropagation()}
-              onTouchStart={onTouchStart}
-              onTouchMove={onTouchMove}
-              onTouchEnd={onTouchEnd}
-              style={{ willChange: 'transform' }}
-              className="w-[calc(100%-56px)] max-w-[290px] mb-[calc(env(safe-area-inset-bottom)+8px)] bg-background rounded-2xl shadow-xl border border-border/60 overflow-hidden animate-in slide-in-from-bottom-6 fade-in duration-300 ease-out">
-              {/* Drag handle */}
-              <div className="flex justify-center pt-1.5 pb-0.5 cursor-grab active:cursor-grabbing">
-                <span className="w-9 h-1 rounded-full bg-muted-foreground/30" />
-              </div>
-
-              {/* Header */}
-              <div className="flex items-center justify-between px-3 pt-1 pb-2 gap-3">
-                <div className="min-w-0">
-                  <h3 className="text-[13px] font-semibold text-foreground leading-tight">Choose payment</h3>
-                  <p className="text-[10px] text-muted-foreground mt-0">Fare ${showPaymentPrompt.fare.toFixed(2)}</p>
-                </div>
-                <button
-                  onClick={closeSheet}
-                  aria-label="Close"
-                  className="shrink-0 ml-2 w-7 h-7 flex items-center justify-center rounded-full bg-muted text-muted-foreground hover:bg-muted/80 active:scale-90 transition-all">
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </div>
-
-              {/* Options */}
-              <div className="px-2 pb-2 pt-1 grid grid-cols-2 gap-1.5">
-                <button
-                  onClick={() => {
-                    const fare = showPaymentPrompt.fare;
-                    setPaymentMethod('cash');
-                    closeSheet();
-                    handleSendOffer(fare, 'cash');
-                  }}
-                  className="group flex flex-col items-center justify-center gap-1 py-2 px-2 rounded-lg bg-primary text-primary-foreground shadow-sm hover:brightness-105 hover:shadow-md active:scale-[0.96] active:brightness-95 transition-[transform,filter,box-shadow] duration-150 ease-out">
-                  <span className="w-6 h-6 flex items-center justify-center rounded-full bg-white/20 group-active:bg-white/30 transition-colors">
-                    <Banknote className="w-3 h-3" strokeWidth={2.2} />
-                  </span>
-                  <div className="text-center">
-                    <div className="text-[11px] font-semibold leading-tight">Cash</div>
-                    <div className="text-[9px] opacity-80 mt-0">Pay driver</div>
-                  </div>
-                </button>
-
-                <button
-                  onClick={() => {
-                    const fare = showPaymentPrompt.fare;
-                    if (walletBalance < fare) {
-                      toast({
-                        title: 'Insufficient wallet',
-                        description: `Need $${fare.toFixed(2)}, have $${walletBalance.toFixed(2)}.`,
-                        variant: 'destructive',
-                      });
-                      return;
-                    }
-                    setPaymentMethod('wallet');
-                    closeSheet();
-                    handleSendOffer(fare, 'wallet');
-                  }}
-                  className="group flex flex-col items-center justify-center gap-1 py-2 px-2 rounded-lg bg-accent text-accent-foreground shadow-sm hover:brightness-105 hover:shadow-md active:scale-[0.96] active:brightness-95 transition-[transform,filter,box-shadow] duration-150 ease-out">
-                  <span className="w-6 h-6 flex items-center justify-center rounded-full bg-black/10 group-active:bg-black/20 transition-colors">
-                    <Wallet className="w-3 h-3" strokeWidth={2.2} />
-                  </span>
-                  <div className="text-center">
-                    <div className="text-[11px] font-semibold leading-tight">Wallet</div>
-                    <div className="text-[9px] opacity-80 mt-0">Balance ${walletBalance.toFixed(2)}</div>
-                  </div>
-                </button>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
+      <PaymentSheet
+        open={showPaymentPrompt.open}
+        fare={showPaymentPrompt.fare}
+        walletBalance={walletBalance}
+        onClose={() => setShowPaymentPrompt({ open: false, fare: 0 })}
+        onSelect={(method, fare) => {
+          setPaymentMethod(method);
+          setShowPaymentPrompt({ open: false, fare: 0 });
+          handleSendOffer(fare, method);
+        }}
+      />
 
 
       {/* ═══ SEARCH OVERLAY ═══ */}
