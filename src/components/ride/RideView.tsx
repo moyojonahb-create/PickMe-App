@@ -1049,15 +1049,15 @@ export default function RideView() {
             const fmt = (v: number) => `${sym}${v.toFixed(2)}`;
             return (
               <>
-                {/* Student discount banner intentionally hidden on the ride view — surfaced on the profile instead. Discount still applies to the fare. */}
-                <div className="mb-2">
+                {/* Payment method selector hidden on ride view — kept in profile instead. Default to cash for ride requests. */}
+                {/* <div className="mb-2">
                   <PaymentMethodSelector
                     selected={paymentMethod}
                     onSelect={setPaymentMethod}
                     walletBalance={walletBalance}
                     estimatedFare={totalFare}
                   />
-                </div>
+                </div> */}
                 <PrimaryButton
                   onClick={() => sheetExpanded ? handleSendOffer(totalFare) : setSheetExpanded(true)}
                   disabled={isRequesting}
