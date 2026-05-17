@@ -58,7 +58,28 @@ const STAT_FINDING_IDS = new Set<string>([
   'pending-deposits',
   'rider-pending-deposits',
   'pending-documents',
+  'stale-driver-locations',
+  'stale-live-locations',
+  'fraud-flags',
+  'message-cleanup',
 ]);
+
+// Title patterns to hide from the error log (legacy rows from before these
+// became "stats" instead of errors). Matches lowercase substring.
+const STAT_TITLE_PATTERNS = [
+  'stale gps',
+  'stale pending rides',
+  'fraud flag',
+  'low-balance',
+  'low balance',
+  'pending driver',
+  'pending document',
+  'pending deposit',
+  'old dispute',
+  'cancel rate',
+  'no driver response',
+  'stuck accepted',
+];
 
 interface PerformanceMetric {
   label: string;
@@ -126,8 +147,12 @@ export default function AdminSystemHealth() {
         .select('*')
         .eq('period', period)
         .order('created_at', { ascending: false })
-        .limit(100);
-      setErrorLogs((data as ErrorLog[]) || []);
+        .limit(200);
+      const filtered = ((data as ErrorLog[]) || []).filter(log => {
+        const t = (log.title || '').toLowerCase();
+        return !STAT_TITLE_PATTERNS.some(p => t.includes(p));
+      });
+      setErrorLogs(filtered.slice(0, 100));
     } catch {
       setErrorLogs([]);
     } finally {
@@ -813,6 +838,20 @@ export default function AdminSystemHealth() {
     loadErrorLogs(logTab);
   };
 
+  const clearAllLogs = async () => {
+    const unresolved = errorLogs.filter(l => !l.resolved);
+    if (unresolved.length === 0) {
+      toast.info('Nothing to clear');
+      return;
+    }
+    const ids = unresolved.map(l => l.id);
+    await supabase.from('system_error_logs').update({
+      resolved: true, resolved_at: new Date().toISOString(),
+    } as any).in('id', ids);
+    toast.success(`Cleared ${ids.length} ${ids.length === 1 ? 'entry' : 'entries'}`);
+    loadErrorLogs(logTab);
+  };
+
   return (
     <AdminGuard>
       <AdminLayout>
@@ -1089,10 +1128,17 @@ export default function AdminSystemHealth() {
 
           {/* Error Logs — Today / Week */}
           <div>
-            <h2 className="font-bold text-lg flex items-center gap-2 mb-3">
-              <Archive className="h-5 w-5 text-primary" />
-              Error Log History
-            </h2>
+            <div className="flex items-center justify-between mb-3 gap-2">
+              <h2 className="font-bold text-lg flex items-center gap-2">
+                <Archive className="h-5 w-5 text-primary" />
+                Error Log History
+              </h2>
+              {errorLogs.some(l => !l.resolved) && (
+                <Button size="sm" variant="outline" className="text-xs" onClick={clearAllLogs}>
+                  <CheckCircle2 className="w-3 h-3 mr-1" /> Clear all
+                </Button>
+              )}
+            </div>
 
             <Tabs value={logTab} onValueChange={setLogTab}>
               <TabsList className="mb-4">
