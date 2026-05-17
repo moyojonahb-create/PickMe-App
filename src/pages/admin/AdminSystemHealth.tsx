@@ -41,7 +41,25 @@ interface HealthCheck {
   timestamp: string;
   affectedUsers?: number;
   context?: string;
+  /** When true, this is an operational stat (pending/incomplete counts), not a technical error. */
+  isStat?: boolean;
 }
+
+// IDs that represent everyday operational counts (pending drivers/riders/rides,
+// approvals, deposits, cancellations) — these are NOT system errors. They are
+// surfaced in the "PickMe Daily Stats" section instead.
+const STAT_FINDING_IDS = new Set<string>([
+  'stale-rides',
+  'low-balance-drivers',
+  'old-disputes',
+  'pending-drivers',
+  'high-cancel-rate',
+  'no-driver-response',
+  'stuck-accepted-rides',
+  'pending-deposits',
+  'rider-pending-deposits',
+  'pending-documents',
+]);
 
 interface PerformanceMetric {
   label: string;
