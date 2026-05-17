@@ -1088,6 +1088,61 @@ export default function RideView() {
         </div>
       </GlassSheet>
 
+      {/* ═══ PAYMENT METHOD PROMPT ═══ */}
+      {showPaymentPrompt.open && (
+        <div
+          className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in"
+          onClick={() => setShowPaymentPrompt({ open: false, fare: 0 })}>
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full sm:max-w-md bg-background rounded-t-3xl sm:rounded-3xl p-6 pb-[calc(env(safe-area-inset-bottom)+24px)] shadow-2xl animate-in slide-in-from-bottom">
+            <div className="w-12 h-1.5 bg-muted rounded-full mx-auto mb-4 sm:hidden" />
+            <h3 className="text-xl font-bold text-foreground text-center mb-1">How are you paying?</h3>
+            <p className="text-sm text-muted-foreground text-center mb-5">
+              Fare: ${showPaymentPrompt.fare.toFixed(2)}
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => {
+                  setPaymentMethod('cash');
+                  const fare = showPaymentPrompt.fare;
+                  setShowPaymentPrompt({ open: false, fare: 0 });
+                  setTimeout(() => handleSendOffer(fare), 50);
+                }}
+                className="flex flex-col items-center justify-center gap-2 p-5 rounded-2xl border-2 border-border hover:border-primary hover:bg-primary/5 active:scale-95 transition-all">
+                <Banknote className="w-7 h-7 text-primary" />
+                <span className="text-[15px] font-semibold text-foreground">Cash</span>
+              </button>
+              <button
+                onClick={() => {
+                  const fare = showPaymentPrompt.fare;
+                  if (walletBalance < fare) {
+                    toast({
+                      title: 'Insufficient wallet balance',
+                      description: `You need $${fare.toFixed(2)} but only have $${walletBalance.toFixed(2)}. Top up or choose Cash.`,
+                      variant: 'destructive',
+                    });
+                    return;
+                  }
+                  setPaymentMethod('wallet');
+                  setShowPaymentPrompt({ open: false, fare: 0 });
+                  setTimeout(() => handleSendOffer(fare), 50);
+                }}
+                className="flex flex-col items-center justify-center gap-2 p-5 rounded-2xl border-2 border-border hover:border-primary hover:bg-primary/5 active:scale-95 transition-all">
+                <Wallet className="w-7 h-7 text-primary" />
+                <span className="text-[15px] font-semibold text-foreground">Wallet</span>
+                <span className="text-[11px] text-muted-foreground">${walletBalance.toFixed(2)}</span>
+              </button>
+            </div>
+            <button
+              onClick={() => setShowPaymentPrompt({ open: false, fare: 0 })}
+              className="w-full mt-4 py-3 text-sm text-muted-foreground font-medium hover:text-foreground transition-colors">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
 
       {/* ═══ SEARCH OVERLAY ═══ */}
       {activeField &&
