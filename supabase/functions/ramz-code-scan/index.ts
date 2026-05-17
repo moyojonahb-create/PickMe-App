@@ -183,14 +183,20 @@ serve(async (req: Request) => {
       })
       .join("\n\n");
 
-    const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const aiUrl = useOpenAI
+      ? "https://api.openai.com/v1/chat/completions"
+      : "https://ai.gateway.lovable.dev/v1/chat/completions";
+    const aiKey = useOpenAI ? OPENAI_API_KEY! : LOVABLE_API_KEY!;
+    const aiModel = useOpenAI ? "gpt-4o-mini" : "google/gemini-3-flash-preview";
+
+    const aiResp = await fetch(aiUrl, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        Authorization: `Bearer ${aiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
+        model: aiModel,
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
           {
@@ -207,10 +213,10 @@ serve(async (req: Request) => {
     });
 
     if (aiResp.status === 429) {
-      return json({ error: "AI rate limit — try again shortly.", fallback: true, findings: [], scannedFiles: [] }, 200);
+      return json({ error: `${useOpenAI ? "OpenAI" : "AI"} rate limit — try again shortly.`, fallback: true, findings: [], scannedFiles: [] }, 200);
     }
     if (aiResp.status === 402) {
-      return json({ error: "AI credits exhausted — top up your workspace.", fallback: true, findings: [], scannedFiles: [] }, 200);
+      return json({ error: `${useOpenAI ? "OpenAI quota exhausted" : "AI credits exhausted"} — top up your account.`, fallback: true, findings: [], scannedFiles: [] }, 200);
     }
     if (!aiResp.ok) {
       const text = await aiResp.text();
