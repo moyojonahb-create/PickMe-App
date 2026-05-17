@@ -285,7 +285,7 @@ export default function RamzCodeScanPanel() {
                 )}
                 <Button
                   size="sm"
-                  onClick={runBatch}
+                  onClick={() => runBatch()}
                   disabled={batchRunning || selected.size === 0}
                   className="h-7 gap-1 text-[11px] font-bold"
                 >
