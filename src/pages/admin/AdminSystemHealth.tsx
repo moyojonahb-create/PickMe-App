@@ -823,9 +823,6 @@ export default function AdminSystemHealth() {
           {/* Named user incidents in the last 24h */}
           <UserIncidentsPanel />
 
-          {/* Maps integration debug panel */}
-          <MapsDebugPanel />
-
           {/* Ramz One Header */}
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div className="flex items-center gap-3">
