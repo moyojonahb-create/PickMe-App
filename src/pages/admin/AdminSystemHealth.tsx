@@ -147,8 +147,12 @@ export default function AdminSystemHealth() {
         .select('*')
         .eq('period', period)
         .order('created_at', { ascending: false })
-        .limit(100);
-      setErrorLogs((data as ErrorLog[]) || []);
+        .limit(200);
+      const filtered = ((data as ErrorLog[]) || []).filter(log => {
+        const t = (log.title || '').toLowerCase();
+        return !STAT_TITLE_PATTERNS.some(p => t.includes(p));
+      });
+      setErrorLogs(filtered.slice(0, 100));
     } catch {
       setErrorLogs([]);
     } finally {
