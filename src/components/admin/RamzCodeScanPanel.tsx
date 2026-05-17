@@ -330,7 +330,26 @@ export default function RamzCodeScanPanel() {
                 Scans run in batches; results stream in as each batch completes.
               </p>
             </div>
-            <div className="flex flex-col sm:flex-row gap-2 shrink-0">
+            <div className="flex flex-col sm:flex-row gap-2 shrink-0 items-stretch sm:items-center">
+              <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-border bg-muted/30">
+                <span
+                  aria-label={`Status: ${!autoScan ? 'off' : hasErrors ? 'errors detected' : 'healthy'}`}
+                  className={`inline-block w-2.5 h-2.5 rounded-full ${statusColor} ${autoScan ? 'animate-pulse' : ''} ${autoScan && hasErrors ? 'shadow-[0_0_8px_rgba(239,68,68,0.9)]' : autoScan ? 'shadow-[0_0_8px_rgba(16,185,129,0.7)]' : ''}`}
+                />
+                <span className="text-[11px] font-semibold">
+                  {!autoScan ? 'Auto-scan off' : hasErrors ? 'Errors detected' : 'Healthy'}
+                </span>
+                <Button
+                  size="sm"
+                  variant={autoScan ? 'default' : 'outline'}
+                  onClick={toggleAutoScan}
+                  className="h-6 px-2 text-[10px] gap-1"
+                  title="Auto-scan every 12 hours"
+                >
+                  <Power className="w-3 h-3" />
+                  {autoScan ? 'On' : 'Off'}
+                </Button>
+              </div>
               <Button onClick={start} disabled={scanning || batchRunning} variant="outline" className="font-bold gap-2">
                 {scanning ? <Loader2 className="w-4 h-4 animate-spin" /> : <ScanSearch className="w-4 h-4" />}
                 {scanning ? 'Scanning…' : 'Scan only'}
@@ -346,6 +365,23 @@ export default function RamzCodeScanPanel() {
               </Button>
             </div>
           </div>
+
+          {findings !== null && !scanning && findings.length > 0 && (
+            <div className="flex items-center gap-2 flex-wrap rounded-md border border-primary/20 bg-primary/5 px-3 py-2">
+              <ClipboardCopy className="w-4 h-4 text-primary" />
+              <span className="text-xs font-semibold text-primary">
+                One combined Lovable prompt covers all {findings.length} finding{findings.length > 1 ? 's' : ''}.
+              </span>
+              <Button
+                size="sm"
+                onClick={copyCombinedPrompt}
+                className="ml-auto h-7 gap-1 text-[11px] font-bold"
+              >
+                <Copy className="w-3 h-3" />
+                Copy combined prompt
+              </Button>
+            </div>
+          )}
 
           {scanning && (
             <div className="space-y-2">
