@@ -86,15 +86,29 @@ serve(async (req: Request) => {
     }
     const lat = url.searchParams.get("lat");
     const lng = url.searchParams.get("lng");
+    const radiusKm = parseFloat(url.searchParams.get("radiusKm") || "0");
+    const viewbox = url.searchParams.get("viewbox"); // "left,top,right,bottom" (minLng,maxLat,maxLng,minLat)
 
     const params = new URLSearchParams({
       access_token: TOKEN,
       autocomplete: "true",
-      limit: "8",
+      limit: "10",
       country: "zw", // Zimbabwe focus
       language: "en",
     });
     if (lat && lng) params.set("proximity", `${lng},${lat}`);
+
+    // Convert Nominatim viewbox -> Mapbox bbox (minLng,minLat,maxLng,maxLat)
+    if (viewbox) {
+      const [left, top, right, bottom] = viewbox.split(",").map(Number);
+      if ([left, top, right, bottom].every((n) => Number.isFinite(n))) {
+        const minLng = Math.min(left, right);
+        const maxLng = Math.max(left, right);
+        const minLat = Math.min(top, bottom);
+        const maxLat = Math.max(top, bottom);
+        params.set("bbox", `${minLng},${minLat},${maxLng},${maxLat}`);
+      }
+    }
 
     const r = await fetch(
       `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(q)}.json?${params}`,
@@ -106,7 +120,7 @@ serve(async (req: Request) => {
       });
     }
     const data = await r.json();
-    const results = (data.features as MapboxFeature[] | undefined ?? []).map((f) => ({
+    let results = (data.features as MapboxFeature[] | undefined ?? []).map((f) => ({
       placeId: f.id,
       name: f.text,
       description: f.place_name,
@@ -115,6 +129,24 @@ serve(async (req: Request) => {
       lng: f.center[0],
       source: "mapbox" as const,
     }));
+
+    // Strict radius filter — drop anything outside the town's radius.
+    // Belt-and-braces because Mapbox bbox is a soft hint, not a hard filter.
+    if (lat && lng && radiusKm > 0) {
+      const centerLat = parseFloat(lat);
+      const centerLng = parseFloat(lng);
+      const toRad = (d: number) => (d * Math.PI) / 180;
+      const distKm = (la: number, lo: number) => {
+        const R = 6371;
+        const dLat = toRad(la - centerLat);
+        const dLng = toRad(lo - centerLng);
+        const a =
+          Math.sin(dLat / 2) ** 2 +
+          Math.cos(toRad(centerLat)) * Math.cos(toRad(la)) * Math.sin(dLng / 2) ** 2;
+        return 2 * R * Math.asin(Math.sqrt(a));
+      };
+      results = results.filter((p) => distKm(p.lat, p.lng) <= radiusKm);
+    }
 
     return new Response(JSON.stringify(results), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
