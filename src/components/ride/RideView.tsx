@@ -959,8 +959,8 @@ export default function RideView() {
             }
           </div>
 
-          {/* Preferences set in Profile Settings — shown as tags */}
-          {(quietRide || coolTemp || wavRequired || hearingImpaired || genderPreference !== 'any') && (
+          {/* Preferences hidden on ride view — kept in Profile → Ride Preferences */}
+          {/* {(quietRide || coolTemp || wavRequired || hearingImpaired || genderPreference !== 'any') && (
             <div className="glass-card rounded-2xl px-3 py-2">
               <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-1">Your Preferences</p>
               <div className="flex flex-wrap gap-1">
@@ -972,7 +972,7 @@ export default function RideView() {
               </div>
               <p className="text-[9px] text-muted-foreground mt-1">Change in Profile → Ride Preferences</p>
             </div>
-          )}
+          )} */}
 
           {/* ── Fare breakdown + Negotiation (expanded) ── */}
           {pickupLocation && dropoffLocation && fareEstimate && (() => {
