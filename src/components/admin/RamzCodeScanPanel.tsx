@@ -333,6 +333,78 @@ export default function RamzCodeScanPanel() {
     }
   };
 
+  const analyzeWithAi = async (mode: 'deep' | 'fast' = 'deep') => {
+    if (!findings || findings.length === 0) {
+      toast.info('Run a scan first — there are no findings to analyze.');
+      return;
+    }
+    // Cheap cache: same findings + same mode → reuse last report.
+    const cacheKey = `${mode}:${findings.length}:${findings.map((f) => `${f.file}:${f.line}:${f.severity}`).join('|')}`;
+    if (cacheKey === aiCacheKey && aiReport) {
+      setAiOpen(true);
+      return;
+    }
+    setAiMode(mode);
+    setAiLoading(true);
+    setAiOpen(true);
+    setAiReport('');
+    setAiMeta(null);
+    try {
+      const summary = findings.reduce(
+        (acc, f) => {
+          acc.total++;
+          acc[f.severity] = (acc[f.severity] ?? 0) + 1;
+          return acc;
+        },
+        { total: 0, critical: 0, high: 0, medium: 0, low: 0 } as Record<string, number>,
+      );
+      const { data, error } = await supabase.functions.invoke('analyze-code-scan', {
+        body: {
+          mode,
+          appStack: 'PickMe — React + TypeScript + Capacitor + Supabase + Google Maps',
+          scanSummary: summary,
+          findings: findings.map((f) => ({
+            file: f.file, line: f.line, severity: f.severity, category: f.category,
+            title: f.title, description: f.description, suggestion: f.suggestion,
+            rootCause: f.rootCause, userImpact: f.userImpact,
+            scalabilityImpact: f.scalabilityImpact, performanceImpact: f.performanceImpact,
+            securityImpact: f.securityImpact, expectedResult: f.expectedResult,
+          })),
+          affectedFiles: Array.from(new Set(findings.map((f) => f.file))),
+        },
+      });
+      if (error) throw new Error(error.message || 'AI analysis failed');
+      if (!data?.report) throw new Error('AI returned an empty report');
+      setAiReport(data.report);
+      setAiMeta({ model: data.model, findingsAnalyzed: data.findingsAnalyzed, generatedAt: data.generatedAt });
+      setAiCacheKey(cacheKey);
+      toast.success(`AI report ready (${data.model})`);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'AI analysis failed';
+      toast.error(msg);
+      setAiReport(`# Analysis failed\n\n${msg}\n`);
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const copyAiReport = async () => {
+    if (!aiReport) return;
+    await navigator.clipboard.writeText(aiReport);
+    toast.success('Report copied');
+  };
+
+  const downloadAiReport = () => {
+    if (!aiReport) return;
+    const blob = new Blob([aiReport], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `ramz-ai-report-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div>
       <h2 className="font-bold text-lg flex items-center gap-2 mb-3">
