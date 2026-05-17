@@ -154,36 +154,26 @@ export async function runCodeScan(
 }
 
 export function findingToLovablePrompt(f: CodeFinding): string {
-  return [
-    'PROBLEM:',
-    `${f.title} (${f.file}:${f.line}) — ${f.description}`,
+  const sections: string[] = [
+    `# ${f.title}`,
+    `Location: ${f.file}:${f.line}`,
+    `Severity: ${f.severity.toUpperCase()} · Category: ${f.category}`,
     '',
-    'ROOT CAUSE:',
+    '## PROBLEM',
     f.description,
-    '',
-    'FIX TYPE:',
-    f.category,
-    '',
-    'LOVABLE PROMPT:',
-    `Fix ${f.title} in ${f.file} (line ${f.line}).`,
-    '',
-    'GOAL:',
-    'Eliminate the issue without regressing surrounding behavior.',
-    '',
-    '1. PROBLEM DESCRIPTION',
-    f.description,
-    '',
-    '2. REQUIRED FIX',
-    `- ${f.suggestion}`,
-    '',
-    '3. IMPLEMENTATION DETAILS',
-    `- File: ${f.file}`,
-    `- Line: ${f.line}`,
-    `- Severity: ${f.severity}`,
-    '',
-    '4. FINAL RESULT',
-    'Re-running Ramz One code scan reports no finding for this location.',
-  ].join('\n');
+  ];
+  if (f.rootCause) sections.push('', '## ROOT CAUSE', f.rootCause);
+  if (f.userImpact) sections.push('', '## USER IMPACT', f.userImpact);
+  sections.push('', '## SEVERITY', f.severity);
+  if (f.scalabilityImpact) sections.push('', '## SCALABILITY IMPACT', f.scalabilityImpact);
+  if (f.performanceImpact) sections.push('', '## PERFORMANCE IMPACT', f.performanceImpact);
+  if (f.securityImpact) sections.push('', '## SECURITY IMPACT', f.securityImpact);
+  sections.push('', '## REQUIRED FIX', f.suggestion);
+  if (f.implementationDetails) sections.push('', '## IMPLEMENTATION DETAILS', f.implementationDetails);
+  else sections.push('', '## IMPLEMENTATION DETAILS', `- File: ${f.file}`, `- Line: ${f.line}`);
+  if (f.expectedResult) sections.push('', '## EXPECTED RESULT', f.expectedResult);
+  else sections.push('', '## EXPECTED RESULT', 'Re-running Ramz One reports no finding for this location and no regression in surrounding behavior.');
+  return sections.join('\n');
 }
 
 /**
@@ -211,12 +201,12 @@ export function findingsToCombinedLovablePrompt(findings: CodeFinding[]): string
   );
 
   const lines: string[] = [];
-  lines.push('FULL SYSTEM FIX — Ramz One AI scan results');
+  lines.push('FULL SYSTEM FIX — Ramz One production engineering scan');
   lines.push('');
   lines.push(`Total findings: ${sorted.length} (critical: ${counts.critical ?? 0}, high: ${counts.high ?? 0}, medium: ${counts.medium ?? 0}, low: ${counts.low ?? 0})`);
   lines.push('');
   lines.push('GOAL:');
-  lines.push('Apply every fix below in a single pass. Do not regress surrounding behavior. After applying, the next Ramz One scan must report zero findings for these locations.');
+  lines.push('Apply every fix below in a single pass. Preserve surrounding behavior. After applying, the next Ramz One scan must report zero findings for these locations.');
   lines.push('');
   lines.push('FIXES BY FILE:');
   lines.push('');
@@ -227,7 +217,13 @@ export function findingsToCombinedLovablePrompt(findings: CodeFinding[]): string
     for (const f of items) {
       lines.push(`${idx}. [${f.severity.toUpperCase()} · ${f.category}] ${f.title} (line ${f.line})`);
       lines.push(`   - Problem: ${f.description}`);
+      if (f.rootCause) lines.push(`   - Root cause: ${f.rootCause}`);
+      if (f.userImpact) lines.push(`   - User impact: ${f.userImpact}`);
+      if (f.scalabilityImpact) lines.push(`   - Scalability: ${f.scalabilityImpact}`);
+      if (f.performanceImpact) lines.push(`   - Performance: ${f.performanceImpact}`);
+      if (f.securityImpact) lines.push(`   - Security: ${f.securityImpact}`);
       lines.push(`   - Required fix: ${f.suggestion}`);
+      if (f.expectedResult) lines.push(`   - Expected result: ${f.expectedResult}`);
       lines.push('');
       idx++;
     }
@@ -237,5 +233,6 @@ export function findingsToCombinedLovablePrompt(findings: CodeFinding[]): string
   lines.push('- All listed issues resolved.');
   lines.push('- No new TypeScript or runtime errors.');
   lines.push('- Existing tests still pass.');
+  lines.push('- Mobile, realtime, wallet, and GPS flows remain stable under production load.');
   return lines.join('\n');
 }
