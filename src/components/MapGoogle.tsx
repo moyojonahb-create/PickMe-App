@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import PremiumTrackingMap from '@/components/map/PremiumTrackingMap';
 import StaticMapFallback from '@/components/map/StaticMapFallback';
+import OSMMap from '@/components/OSMMap';
+import { isGoogleMapsDisabled } from '@/lib/mapsKillSwitch';
 
 // ── Types ──
 interface Coords {
@@ -316,8 +318,26 @@ function InnerMapGoogle({
 // ── Outer wrapper ──
 function MapGoogle(props: MapGoogleProps) {
   const [retryKey, setRetryKey] = useState(0);
-  const { isLoaded, loadError, apiKey } = useGoogleMaps(retryKey);
+  const googleDisabled = isGoogleMapsDisabled();
+  const { isLoaded, loadError, apiKey } = useGoogleMaps(googleDisabled ? -1 : retryKey);
   const { className = '', height = '100%' } = props;
+
+  // Kill switch: render OSM map instead of Google (billing down / key missing)
+  if (googleDisabled) {
+    return (
+      <OSMMap
+        pickup={props.pickup ?? null}
+        dropoff={props.dropoff ?? null}
+        driverLocation={props.driverLocation ?? null}
+        routeGeometry={props.routeGeometry ?? null}
+        onMapClick={props.onMapClick}
+        center={props.defaultCenter}
+        zoom={props.defaultZoom}
+        className={className}
+        height={height}
+      />
+    );
+  }
 
   const handleRetry = useCallback(() => {
     resetGoogleMapsLoader();
