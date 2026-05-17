@@ -1126,9 +1126,6 @@ export default function AdminSystemHealth() {
             </div>
           </div>
 
-          {/* Ramz One — AI code scan */}
-          <RamzCodeScanPanel />
-
           {/* Error Logs — Today / Week */}
           <div>
             <div className="flex items-center justify-between mb-3 gap-2">
