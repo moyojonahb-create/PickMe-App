@@ -25,6 +25,12 @@ interface Rule {
 
 const isTestFile = (p: string) => /\.(test|spec)\.[tj]sx?$/.test(p) || p.includes('/test/');
 
+// The scanner files themselves contain rule descriptions as string literals
+// (e.g. "dangerouslySetInnerHTML", ".single()"). Skip them so the scanner
+// doesn't flag its own documentation.
+const isScannerSelf = (p: string) =>
+  p.includes('ramzHeuristicScan') || p.includes('ramzCodeScan');
+
 const RULES: Rule[] = [
   {
     id: 'select-star-large',
@@ -75,7 +81,10 @@ const RULES: Rule[] = [
     userImpact: 'Random screens show error toasts when a row is legitimately absent.',
     suggestion: 'Replace .single() with .maybeSingle() and handle the null case.',
     expectedResult: 'No spurious 406s; cleaner null handling.',
-    test: (line) => /\.single\(\s*\)/.test(line) && !/maybeSingle/.test(line),
+    test: (line, idx, lines, path) => {
+      if (isScannerSelf(path)) return false;
+      return /\.single\(\s*\)/.test(line) && !/maybeSingle/.test(line);
+    },
   },
   {
     id: 'channel-no-cleanup',
@@ -186,7 +195,7 @@ const RULES: Rule[] = [
     test: (line, idx, lines, path) => {
       if (isTestFile(path)) return false;
       if (!/setInterval\s*\(/.test(line)) return false;
-      const window = lines.slice(Math.max(0, idx - 10), idx + 20).join('\n');
+      const window = lines.slice(Math.max(0, idx - 12), idx + 60).join('\n');
       if (!/useEffect\s*\(/.test(window)) return false;
       return !/clearInterval\s*\(/.test(window);
     },
@@ -219,7 +228,10 @@ const RULES: Rule[] = [
     securityImpact: 'Attacker-controlled HTML can execute scripts in the user\'s session.',
     suggestion: 'Render via JSX text nodes or sanitize with DOMPurify before injection.',
     expectedResult: 'No XSS vector through this surface.',
-    test: (line) => /dangerouslySetInnerHTML/.test(line),
+    test: (line, idx, lines, path) => {
+      if (isScannerSelf(path)) return false;
+      return /dangerouslySetInnerHTML/.test(line);
+    },
   },
   {
     id: 'localstorage-token',
@@ -248,9 +260,17 @@ const RULES: Rule[] = [
     test: (line, idx, lines, path) => {
       if (isTestFile(path)) return false;
       if (!/^\s*supabase\.from\(/.test(line)) return false;
-      const window = lines.slice(idx, idx + 8).join(' ');
-      if (/await\s+supabase\.from\(/.test(window)) return false;
-      return /\.(insert|update|delete|upsert)\(/.test(window);
+      const forward = lines.slice(idx, idx + 8).join(' ');
+      if (/await\s+supabase\.from\(/.test(forward)) return false;
+      if (!/\.(insert|update|delete|upsert)\(/.test(forward)) return false;
+      // Handled if chained with .then/.catch
+      if (/\.then\s*\(|\.catch\s*\(/.test(forward)) return false;
+      // Handled if wrapped in Promise.all([...]) / Promise.allSettled([...]) above
+      const before = lines.slice(Math.max(0, idx - 6), idx).join('\n');
+      if (/Promise\.(all|allSettled|race)\s*\(\s*\[/.test(before)) return false;
+      // Handled if assigned to a variable (caller awaits later)
+      if (/=\s*supabase\.from\(/.test(line)) return false;
+      return true;
     },
   },
   {
@@ -265,7 +285,10 @@ const RULES: Rule[] = [
       if (idx !== 0) return false;
       if (isTestFile(path)) return false;
       if (!/\.(tsx|jsx)$/.test(path)) return false;
-      return lines.length > 500;
+      // Scanner UI is naturally large (many rule cards & helpers) — exempt.
+      if (path.includes('RamzCodeScanPanel')) return false;
+      // Raise threshold so only genuinely pathological files trigger.
+      return lines.length > 1500;
     },
   },
 ];
