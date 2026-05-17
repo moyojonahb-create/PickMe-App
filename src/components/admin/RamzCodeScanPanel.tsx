@@ -71,6 +71,43 @@ export default function RamzCodeScanPanel() {
   const [rollbacks, setRollbacks] = useState<AuditEntry[]>([]);
   const [auditLoading, setAuditLoading] = useState(false);
 
+  // Auto-scan (every 12 hours) + status indicator.
+  const AUTO_KEY = 'ramz.autoScan.enabled';
+  const LAST_KEY = 'ramz.autoScan.lastAt';
+  const [autoScan, setAutoScan] = useState<boolean>(() => {
+    try { return localStorage.getItem(AUTO_KEY) === '1'; } catch { return false; }
+  });
+  const [lastScanAt, setLastScanAt] = useState<number | null>(() => {
+    try { const v = localStorage.getItem(LAST_KEY); return v ? Number(v) : null; } catch { return null; }
+  });
+  const hasErrors = !!findings && findings.some((f) => f.severity === 'critical' || f.severity === 'high');
+  const statusColor = !autoScan ? 'bg-muted-foreground' : hasErrors ? 'bg-red-500' : 'bg-emerald-500';
+
+  // Beep loop while errors are present and auto-scan is on.
+  useEffect(() => {
+    if (!autoScan || !hasErrors) return;
+    let stopped = false;
+    const beep = () => {
+      if (stopped) return;
+      try {
+        const Ctx = (window.AudioContext || (window as any).webkitAudioContext);
+        if (!Ctx) return;
+        const ctx = new Ctx();
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.type = 'square';
+        o.frequency.value = 880;
+        g.gain.value = 0.08;
+        o.connect(g); g.connect(ctx.destination);
+        o.start();
+        setTimeout(() => { o.stop(); ctx.close().catch(() => {}); }, 180);
+      } catch { /* ignore */ }
+    };
+    beep();
+    const id = window.setInterval(beep, 1500);
+    return () => { stopped = true; window.clearInterval(id); };
+  }, [autoScan, hasErrors]);
+
   const refreshAudit = async () => {
     setAuditLoading(true);
     const [a, r] = await Promise.all([listRecentAudit(20), listRollbackable(10)]);
