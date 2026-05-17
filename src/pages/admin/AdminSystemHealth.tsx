@@ -955,7 +955,7 @@ export default function AdminSystemHealth() {
                   onClick={() => setFilter(cat)}
                   className="capitalize font-semibold text-xs"
                 >
-                  {cat === 'all' ? `All (${checks.length})` : `${cat} (${checks.filter(c => c.category === cat).length})`}
+                  {cat === 'all' ? `All (${issueChecks.length})` : `${cat} (${issueChecks.filter(c => c.category === cat).length})`}
                 </Button>
               ))}
             </div>
