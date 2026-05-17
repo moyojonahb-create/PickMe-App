@@ -19,8 +19,9 @@ import { toast } from 'sonner';
 import {
   ScanSearch, Loader2, Bot, Copy, Check, FileCode2, AlertTriangle, CheckCircle2,
   Wand2, Download, ListChecks, Undo2, History, ShieldCheck, ShieldAlert, ClipboardCopy,
-  Power,
+  Power, Sparkles, Brain,
 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 import { runCodeScan, findingToLovablePrompt, findingsToCombinedLovablePrompt, type CodeFinding } from '@/lib/ramzCodeScan';
 import {
   generatePatchForFinding, computeLineDiff, downloadPatchedFile,
@@ -76,6 +77,14 @@ export default function RamzCodeScanPanel() {
   const [audit, setAudit] = useState<AuditEntry[]>([]);
   const [rollbacks, setRollbacks] = useState<AuditEntry[]>([]);
   const [auditLoading, setAuditLoading] = useState(false);
+
+  // AI deep analysis (OpenAI via secure edge function).
+  const [aiOpen, setAiOpen] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiReport, setAiReport] = useState<string>('');
+  const [aiMeta, setAiMeta] = useState<{ model?: string; findingsAnalyzed?: number; generatedAt?: string } | null>(null);
+  const [aiMode, setAiMode] = useState<'deep' | 'fast'>('deep');
+  const [aiCacheKey, setAiCacheKey] = useState<string>('');
 
   // Auto-scan (every 12 hours) + status indicator.
   const AUTO_KEY = 'ramz.autoScan.enabled';
@@ -324,6 +333,78 @@ export default function RamzCodeScanPanel() {
     }
   };
 
+  const analyzeWithAi = async (mode: 'deep' | 'fast' = 'deep') => {
+    if (!findings || findings.length === 0) {
+      toast.info('Run a scan first — there are no findings to analyze.');
+      return;
+    }
+    // Cheap cache: same findings + same mode → reuse last report.
+    const cacheKey = `${mode}:${findings.length}:${findings.map((f) => `${f.file}:${f.line}:${f.severity}`).join('|')}`;
+    if (cacheKey === aiCacheKey && aiReport) {
+      setAiOpen(true);
+      return;
+    }
+    setAiMode(mode);
+    setAiLoading(true);
+    setAiOpen(true);
+    setAiReport('');
+    setAiMeta(null);
+    try {
+      const summary = findings.reduce(
+        (acc, f) => {
+          acc.total++;
+          acc[f.severity] = (acc[f.severity] ?? 0) + 1;
+          return acc;
+        },
+        { total: 0, critical: 0, high: 0, medium: 0, low: 0 } as Record<string, number>,
+      );
+      const { data, error } = await supabase.functions.invoke('analyze-code-scan', {
+        body: {
+          mode,
+          appStack: 'PickMe — React + TypeScript + Capacitor + Supabase + Google Maps',
+          scanSummary: summary,
+          findings: findings.map((f) => ({
+            file: f.file, line: f.line, severity: f.severity, category: f.category,
+            title: f.title, description: f.description, suggestion: f.suggestion,
+            rootCause: f.rootCause, userImpact: f.userImpact,
+            scalabilityImpact: f.scalabilityImpact, performanceImpact: f.performanceImpact,
+            securityImpact: f.securityImpact, expectedResult: f.expectedResult,
+          })),
+          affectedFiles: Array.from(new Set(findings.map((f) => f.file))),
+        },
+      });
+      if (error) throw new Error(error.message || 'AI analysis failed');
+      if (!data?.report) throw new Error('AI returned an empty report');
+      setAiReport(data.report);
+      setAiMeta({ model: data.model, findingsAnalyzed: data.findingsAnalyzed, generatedAt: data.generatedAt });
+      setAiCacheKey(cacheKey);
+      toast.success(`AI report ready (${data.model})`);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'AI analysis failed';
+      toast.error(msg);
+      setAiReport(`# Analysis failed\n\n${msg}\n`);
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const copyAiReport = async () => {
+    if (!aiReport) return;
+    await navigator.clipboard.writeText(aiReport);
+    toast.success('Report copied');
+  };
+
+  const downloadAiReport = () => {
+    if (!aiReport) return;
+    const blob = new Blob([aiReport], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `ramz-ai-report-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div>
       <h2 className="font-bold text-lg flex items-center gap-2 mb-3">
@@ -378,6 +459,16 @@ export default function RamzCodeScanPanel() {
               >
                 {(scanning || batchRunning) ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
                 Full Scan & Auto-Fix
+              </Button>
+              <Button
+                onClick={() => analyzeWithAi('deep')}
+                disabled={aiLoading || !findings || findings.length === 0}
+                variant="outline"
+                className="font-bold gap-2 border-violet-500/40 text-violet-700 hover:bg-violet-500/10"
+                title="Send sanitized findings to OpenAI for deep root-cause analysis"
+              >
+                {aiLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Brain className="w-4 h-4" />}
+                Analyze with AI
               </Button>
             </div>
           </div>
@@ -481,6 +572,60 @@ export default function RamzCodeScanPanel() {
               onDecision={(d) => batchDecisionResolver?.(d)}
             />
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={aiOpen} onOpenChange={setAiOpen}>
+        <DialogContent className="max-w-4xl max-h-[85vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-violet-600" />
+              AI Engineering Report
+              {aiMeta?.model && (
+                <Badge variant="outline" className="text-[10px] font-mono">{aiMeta.model}</Badge>
+              )}
+            </DialogTitle>
+            <DialogDescription>
+              {aiLoading
+                ? 'OpenAI is analyzing the sanitized scan payload — secrets, tokens, emails and phone numbers are stripped before sending.'
+                : aiMeta
+                  ? `${aiMeta.findingsAnalyzed} finding${(aiMeta.findingsAnalyzed ?? 0) === 1 ? '' : 's'} analyzed · ${new Date(aiMeta.generatedAt ?? Date.now()).toLocaleString()}`
+                  : 'Deep root-cause, security, scalability and mobile reliability analysis.'}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-y-auto rounded-md border border-border bg-muted/30 p-4">
+            {aiLoading && !aiReport ? (
+              <div className="flex flex-col items-center justify-center py-12 gap-3">
+                <Loader2 className="w-8 h-8 animate-spin text-violet-600" />
+                <p className="text-sm text-muted-foreground">Generating engineering report…</p>
+              </div>
+            ) : (
+              <pre className="text-xs whitespace-pre-wrap font-mono leading-relaxed text-foreground">
+                {aiReport || 'No report yet.'}
+              </pre>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button variant="ghost" onClick={() => setAiOpen(false)}>Close</Button>
+            <Button
+              variant="outline"
+              onClick={() => analyzeWithAi(aiMode === 'deep' ? 'fast' : 'deep')}
+              disabled={aiLoading || !findings || findings.length === 0}
+              className="gap-1.5"
+              title="Switch between deep (gpt-5.5) and fast (gpt-5.5-mini)"
+            >
+              <Brain className="w-4 h-4" />
+              Re-run as {aiMode === 'deep' ? 'fast' : 'deep'}
+            </Button>
+            <Button variant="outline" onClick={copyAiReport} disabled={!aiReport || aiLoading} className="gap-1.5">
+              <Copy className="w-4 h-4" /> Copy
+            </Button>
+            <Button onClick={downloadAiReport} disabled={!aiReport || aiLoading} className="gap-1.5 font-bold">
+              <Download className="w-4 h-4" /> Download .md
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
