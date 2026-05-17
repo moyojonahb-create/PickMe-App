@@ -792,10 +792,14 @@ export default function AdminSystemHealth() {
   }, [navigate, runSystemScan]);
 
 
-  const filteredChecks = filter === 'all' ? checks : checks.filter(c => c.category === filter);
-  const criticalCount = checks.filter(c => c.severity === 'critical').length;
-  const highCount = checks.filter(c => c.severity === 'high').length;
-  const totalIssues = checks.filter(c => c.severity !== 'info').length;
+  // Split operational stats from technical errors so pending/incomplete
+  // counts don't appear as "errors" in the system health view.
+  const dailyStats = checks.filter(c => c.isStat);
+  const issueChecks = checks.filter(c => !c.isStat);
+  const filteredChecks = filter === 'all' ? issueChecks : issueChecks.filter(c => c.category === filter);
+  const criticalCount = issueChecks.filter(c => c.severity === 'critical').length;
+  const highCount = issueChecks.filter(c => c.severity === 'high').length;
+  const totalIssues = issueChecks.filter(c => c.severity !== 'info').length;
 
   const STATUS_COLORS = { good: 'text-emerald-600', warn: 'text-amber-600', critical: 'text-red-600' };
   const STATUS_BG = { good: 'bg-emerald-500/10', warn: 'bg-amber-500/10', critical: 'bg-red-500/10' };
