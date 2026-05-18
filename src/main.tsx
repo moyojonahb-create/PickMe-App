@@ -12,6 +12,7 @@ import { FemaleThemeProvider } from "./hooks/useFemaleTheme";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { initNativePlatform } from "./lib/nativeBridge";
 import { initDatadog } from './rum';
+import { installRuntimeBreadcrumbs } from './lib/runtimeBreadcrumbs';
 import "./index.css";
 
 // Initialize Sentry before anything else
@@ -54,6 +55,11 @@ initNativePlatform();
 
 // Initialize telemetry as early as possible (before rendering)
 initDatadog();
+
+// Install breadcrumb capture — records clicks, navigations, console.error
+// and 5xx fetches, then attaches the trail to every Sentry event so we can
+// see exactly which button / route / request led to a crash.
+installRuntimeBreadcrumbs();
 
 window.addEventListener('unhandledrejection', (event) => {
   Sentry.captureException(event.reason);
