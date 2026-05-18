@@ -9,17 +9,21 @@
  * Heavier end-to-end UI tests live alongside the components they cover.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
-import { roundFare, calculateFare } from '@/lib/pricing';
+import { roundToR5, calculateCommission } from '@/lib/pricing';
 import { isGoogleMapsDisabled } from '@/lib/mapsKillSwitch';
 import { installRuntimeBreadcrumbs, getBreadcrumbs, noteBreadcrumb } from '@/lib/runtimeBreadcrumbs';
 
 describe('smoke: pricing — ride request input math', () => {
-  it('rounds fares to the nearest $0.50 and never below the minimum', () => {
-    expect(roundFare(1.23)).toBeGreaterThanOrEqual(0.5);
-    // Standard rate: base $1.50 + $1.00/km, $0.50 min, rounded to $0.50.
-    const fare = calculateFare(5);
-    expect(fare).toBeGreaterThanOrEqual(0.5);
-    expect((fare * 2) % 1).toBe(0); // multiple of 0.5
+  it('rounds amounts to the nearest R5 with a minimum of R5', () => {
+    expect(roundToR5(1)).toBe(5);
+    expect(roundToR5(7)).toBe(5);
+    expect(roundToR5(8)).toBe(10);
+  });
+
+  it('computes commission tiers correctly', () => {
+    expect(calculateCommission(15)).toBe(3);
+    expect(calculateCommission(40)).toBe(6);
+    expect(calculateCommission(100)).toBe(11);
   });
 });
 
