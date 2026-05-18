@@ -92,9 +92,11 @@ serve(async (req: Request) => {
     const params = new URLSearchParams({
       access_token: TOKEN,
       autocomplete: "true",
-      limit: "10",
+      limit: "10", // Mapbox hard-caps autocomplete at 10
       country: "zw", // Zimbabwe focus
       language: "en",
+      fuzzyMatch: "true",
+      types: "poi,address,place,locality,neighborhood,postcode",
     });
     if (lat && lng) params.set("proximity", `${lng},${lat}`);
 
