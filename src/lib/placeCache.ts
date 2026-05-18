@@ -57,34 +57,50 @@ export async function searchCachedPlaces(query: string, limit = 10) {
   return data ?? [];
 }
 
+export interface TownBBox {
+  /** min longitude */ left: number;
+  /** max latitude  */ top: number;
+  /** max longitude */ right: number;
+  /** min latitude  */ bottom: number;
+}
+
 /**
  * Prefix-first cached search for fast rider suggestions.
  * Prioritizes names/display names that start with the typed text,
  * then falls back to contains matches across cached Zimbabwe places.
+ *
+ * When `bbox` is supplied results are restricted to that bounding box
+ * so a search in Harare only returns Harare places.
  */
-export async function searchCachedPlacesPrefix(query: string, limit = 12) {
+export async function searchCachedPlacesPrefix(
+  query: string,
+  limit = 20,
+  bbox?: TownBBox,
+) {
   const trimmed = query.trim();
   if (!trimmed) return [];
 
   const prefix = `${trimmed}%`;
   const contains = `%${trimmed}%`;
 
+  const applyBbox = <T extends { gte: (col: string, v: number) => T; lte: (col: string, v: number) => T }>(q: T): T => {
+    if (!bbox) return q;
+    const minLng = Math.min(bbox.left, bbox.right);
+    const maxLng = Math.max(bbox.left, bbox.right);
+    const minLat = Math.min(bbox.top, bbox.bottom);
+    const maxLat = Math.max(bbox.top, bbox.bottom);
+    return q.gte('lat', minLat).lte('lat', maxLat).gte('lon', minLng).lte('lon', maxLng);
+  };
+
   const [{ data: namePrefix }, { data: displayPrefix }, { data: containsMatches }] = await Promise.all([
-    supabase
-      .from('places_cache')
-      .select('*')
-      .ilike('name', prefix)
-      .limit(limit),
-    supabase
-      .from('places_cache')
-      .select('*')
-      .ilike('display_name', prefix)
-      .limit(limit),
-    supabase
-      .from('places_cache')
-      .select('*')
-      .or(`name.ilike.${contains},display_name.ilike.${contains}`)
-      .limit(limit),
+    applyBbox(supabase.from('places_cache').select('*').ilike('name', prefix)).limit(limit),
+    applyBbox(supabase.from('places_cache').select('*').ilike('display_name', prefix)).limit(limit),
+    applyBbox(
+      supabase
+        .from('places_cache')
+        .select('*')
+        .or(`name.ilike.${contains},display_name.ilike.${contains}`),
+    ).limit(limit),
   ]);
 
   const merged = [...(namePrefix ?? []), ...(displayPrefix ?? []), ...(containsMatches ?? [])];
