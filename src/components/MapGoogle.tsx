@@ -331,6 +331,11 @@ function MapGoogle(props: MapGoogleProps) {
   const { isLoaded, loadError, apiKey } = useGoogleMaps(googleDisabled ? -1 : retryKey);
   const { className = '', height = '100%' } = props;
 
+  const handleRetry = useCallback(() => {
+    resetGoogleMapsLoader();
+    setRetryKey((k) => k + 1);
+  }, []);
+
   // Default path: Mapbox (replaces OSM + Google).
   if (googleDisabled) {
     return (
@@ -352,11 +357,6 @@ function MapGoogle(props: MapGoogleProps) {
       />
     );
   }
-
-  const handleRetry = useCallback(() => {
-    resetGoogleMapsLoader();
-    setRetryKey((k) => k + 1);
-  }, []);
 
   if (!apiKey) {
     return (

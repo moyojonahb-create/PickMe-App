@@ -149,8 +149,6 @@ export async function runCodeScan(
   unique.sort((a, b) => sevRank[a.severity] - sevRank[b.severity] || a.file.localeCompare(b.file));
 
   return { findings: unique, scannedFiles: Array.from(new Set(scannedFiles)), batches: Math.ceil(allPaths.length / BATCH_SIZE) };
-
-  return { findings, scannedFiles, batches: Math.ceil(allPaths.length / BATCH_SIZE) };
 }
 
 export function findingToLovablePrompt(f: CodeFinding): string {
