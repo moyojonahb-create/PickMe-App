@@ -308,7 +308,7 @@ export default function RideView() {
     }
 
     setCachedPlacesLoading(true);
-    searchCachedPlacesPrefix(trimmed, 12)
+    searchCachedPlacesPrefix(trimmed, 20, selectedTown.nominatimViewbox)
       .then((results) => {
         setCachedPlaceResults(results.map((row) => ({
           name: row.name || row.display_name.split(',')[0],
@@ -319,7 +319,7 @@ export default function RideView() {
       })
       .catch(() => setCachedPlaceResults([]))
       .finally(() => setCachedPlacesLoading(false));
-  }, []);
+  }, [selectedTown]);
 
   const handleMapClick = useCallback(async (coords: {lat: number;lng: number;}) => {
     if (!activeField) return;
