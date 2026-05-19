@@ -243,12 +243,20 @@ function InnerMapGoogle({
     if (pts.length >= 2) {
       const bounds = new google.maps.LatLngBounds();
       pts.forEach((p) => bounds.extend(p));
-      // Dynamic padding: reserve ~55% of viewport height for the bottom sheet,
-      // 80px up top for floating header buttons. Keeps the full route visible
-      // above the sheet on any device size.
+      // Premium Uber/Bolt-style asymmetric padding. Bottom is much larger to
+      // reserve space for the blue booking card; top leaves room for floating
+      // header pills. Clamped responsively so it adapts across devices.
       const vh = typeof window !== 'undefined' ? window.innerHeight : 800;
-      const bottomPad = Math.min(380, Math.max(240, Math.round(vh * 0.55)));
-      map.fitBounds(bounds, { top: 80, bottom: bottomPad, left: 56, right: 56 });
+      const vw = typeof window !== 'undefined' ? window.innerWidth : 400;
+      const top = Math.round(Math.max(96, Math.min(160, vh * 0.14)));
+      const bottom = Math.round(Math.max(260, Math.min(360, vh * 0.42)));
+      const side = Math.round(Math.max(48, Math.min(72, vw * 0.08)));
+      map.fitBounds(bounds, { top, bottom, left: side, right: side });
+      // Clamp zoom after fit so very short trips don't over-zoom.
+      google.maps.event.addListenerOnce(map, 'idle', () => {
+        const z = map.getZoom();
+        if (typeof z === 'number' && z > 16.5) map.setZoom(16.5);
+      });
     } else if (pts.length === 1) {
       map.panTo(pts[0]);
       map.setZoom(15);

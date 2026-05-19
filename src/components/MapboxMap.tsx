@@ -234,25 +234,28 @@ function MapboxMapInner({
     stops?.forEach((s) => { if (s.lat && s.lng) pts.push([s.lng, s.lat]); });
     if (routeGeometry) decodePolyline(routeGeometry).forEach((p) => pts.push(p));
 
-    // Adaptive padding keeps labels readable when the bottom sheet is open.
+    // Premium Uber/Bolt-style asymmetric padding. Bottom is much larger to
+    // reserve space for the blue booking card; top leaves room for floating
+    // header pills. Clamped by viewport so it adapts to phones/tablets.
     const h = map.getContainer().clientHeight || 600;
     const w = map.getContainer().clientWidth || 600;
     const padding = {
-      top: Math.max(40, Math.min(80, h * 0.1)),
-      bottom: Math.max(80, Math.min(280, h * 0.32)),
-      left: Math.max(32, Math.min(64, w * 0.08)),
-      right: Math.max(32, Math.min(64, w * 0.08)),
+      top: Math.round(Math.max(96, Math.min(160, h * 0.14))),
+      bottom: Math.round(Math.max(260, Math.min(360, h * 0.42))),
+      left: Math.round(Math.max(48, Math.min(72, w * 0.08))),
+      right: Math.round(Math.max(48, Math.min(72, w * 0.08))),
     };
 
     const animate = opts?.animate !== false;
     const ease = (t: number) => 1 - Math.pow(1 - t, 3); // cubic-out
+    const hasRoute = !!(pickup && dropoff);
+    const duration = animate ? (hasRoute ? 1100 : 900) : 0;
 
     if (pts.length >= 2) {
       const bounds = pts.reduce(
         (b, p) => b.extend(p as mapboxgl.LngLatLike),
         new mapboxgl.LngLatBounds(pts[0] as mapboxgl.LngLatLike, pts[0] as mapboxgl.LngLatLike),
       );
-      // Compute the camera the bounds would produce, then clamp zoom for label legibility.
       const cam = map.cameraForBounds(bounds, { padding, maxZoom: 16.5 });
       if (cam) {
         const z = Math.max(LABEL_FRIENDLY_MIN_FIT_ZOOM, Math.min(MAX_ZOOM, (cam.zoom as number) ?? 14));
@@ -260,13 +263,13 @@ function MapboxMapInner({
           center: cam.center as mapboxgl.LngLatLike,
           zoom: z,
           bearing: (cam.bearing as number) ?? 0,
-          pitch: (cam.pitch as number) ?? 0,
-          duration: animate ? 900 : 0,
+          pitch: hasRoute ? 35 : 0,
+          duration,
           easing: ease,
           essential: true,
         });
       } else {
-        map.fitBounds(bounds, { padding, duration: animate ? 900 : 0, maxZoom: 16.5, essential: true, easing: ease });
+        map.fitBounds(bounds, { padding, duration, maxZoom: 16.5, essential: true, easing: ease, pitch: hasRoute ? 35 : 0 });
       }
     } else if (pts.length === 1) {
       map.easeTo({ center: pts[0], zoom: 15.5, duration: animate ? 800 : 0, easing: ease, essential: true });
