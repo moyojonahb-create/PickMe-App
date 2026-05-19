@@ -1056,7 +1056,7 @@ export default function DriverDashboard() {
               className="w-full h-full"
             />
           </div>
-        </motion.div>}
+        </motion.div>
 
         {/* Active Trip — fare + complete */}
         {activeTrip && (
