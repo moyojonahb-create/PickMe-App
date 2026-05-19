@@ -1050,7 +1050,7 @@ export default function DriverDashboard() {
               drivers={!activeTrip ? nearbyDrivers : undefined}
               pickup={activeTrip ? { lat: activeTrip.pickup_lat, lng: activeTrip.pickup_lon } : undefined}
               dropoff={activeTrip ? { lat: activeTrip.dropoff_lat, lng: activeTrip.dropoff_lon } : undefined}
-              routeGeometry={activeTrip?.route_polyline ?? undefined}
+              routeGeometry={(activeTrip as unknown as { route_polyline?: string })?.route_polyline ?? undefined}
               defaultCenter={driverCoords ? { lat: driverCoords.lat, lng: driverCoords.lng } : undefined}
               defaultZoom={15}
               className="w-full h-full"
