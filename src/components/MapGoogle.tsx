@@ -53,9 +53,19 @@ const mapOptions: google.maps.MapOptions = {
   ],
 };
 
-const NEARBY_CAR_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 36 36"><circle cx="18" cy="18" r="15" fill="#22c55e" stroke="white" stroke-width="2.5"/><path d="M25.92 13.01C25.72 12.42 25.16 12 24.5 12h-13c-.66 0-1.21.42-1.42 1.01L8 19v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h14v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM12.5 23c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm11 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM11 18l1.5-4.5h11L25 18H11z" fill="white"/></svg>`;
+// PickMe electric-blue car. `__ROT__` is replaced per driver with the heading angle.
+const NEARBY_CAR_SVG = (rot: number) => `<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36"><circle cx="18" cy="18" r="16" fill="#1B3FA0" stroke="#FBBF24" stroke-width="2"/><g transform="rotate(${rot} 18 18)"><path d="M18 7 L23 16 L20 16 L20 26 L16 26 L16 16 L13 16 Z" fill="#ffffff"/></g></svg>`;
 
 const OFFLINE_CAR_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 36 36"><circle cx="18" cy="18" r="15" fill="#9ca3af" stroke="white" stroke-width="2.5"/><path d="M25.92 13.01C25.72 12.42 25.16 12 24.5 12h-13c-.66 0-1.21.42-1.42 1.01L8 19v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h14v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM12.5 23c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm11 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM11 18l1.5-4.5h11L25 18H11z" fill="white"/></svg>`;
+
+function computeBearing(from: { lat: number; lng: number }, to: { lat: number; lng: number }): number {
+  const dLng = (to.lng - from.lng) * Math.PI / 180;
+  const lat1 = from.lat * Math.PI / 180;
+  const lat2 = to.lat * Math.PI / 180;
+  const y = Math.sin(dLng) * Math.cos(lat2);
+  const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLng);
+  return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+}
 
 function decodePolyline(encoded: string): Coords[] {
   const points: Coords[] = [];
@@ -78,7 +88,8 @@ function lerpVal(a: number, b: number, t: number) { return a + (b - a) * Math.mi
 
 function useSmoothDrivers(drivers?: Array<{ id: string; lat: number; lng: number; isOnline?: boolean }>) {
   const prevRef = useRef<Map<string, Coords>>(new Map());
-  const [smoothed, setSmoothed] = useState<Array<{ id: string; lat: number; lng: number; isOnline?: boolean }>>([]);
+  const headingRef = useRef<Map<string, number>>(new Map());
+  const [smoothed, setSmoothed] = useState<Array<{ id: string; lat: number; lng: number; isOnline?: boolean; heading: number }>>([]);
   const rafRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -89,14 +100,20 @@ function useSmoothDrivers(drivers?: Array<{ id: string; lat: number; lng: number
 
     for (const d of drivers) {
       targets.set(d.id, { lat: d.lat, lng: d.lng, isOnline: d.isOnline });
-      froms.set(d.id, prevRef.current.get(d.id) ?? { lat: d.lat, lng: d.lng });
+      const prev = prevRef.current.get(d.id) ?? { lat: d.lat, lng: d.lng };
+      froms.set(d.id, prev);
+      // Only update bearing when the driver actually moved a meaningful amount
+      const dist = Math.hypot(d.lat - prev.lat, d.lng - prev.lng);
+      if (dist > 1e-5) {
+        headingRef.current.set(d.id, computeBearing(prev, d));
+      }
     }
 
     const start = performance.now();
     const animate = (now: number) => {
       const t = Math.min(1, (now - start) / LERP_MS);
       const eased = 1 - Math.pow(1 - t, 3);
-      const result: Array<{ id: string; lat: number; lng: number; isOnline?: boolean }> = [];
+      const result: Array<{ id: string; lat: number; lng: number; isOnline?: boolean; heading: number }> = [];
 
       for (const d of drivers) {
         const from = froms.get(d.id)!;
@@ -106,6 +123,7 @@ function useSmoothDrivers(drivers?: Array<{ id: string; lat: number; lng: number
           lat: lerpVal(from.lat, to.lat, eased),
           lng: lerpVal(from.lng, to.lng, eased),
           isOnline: to.isOnline,
+          heading: headingRef.current.get(d.id) ?? 0,
         });
       }
       setSmoothed(result);
@@ -285,12 +303,12 @@ function InnerMapGoogle({
           />
         )}
 
-        {/* Nearby drivers as animated car icons */}
+        {/* Nearby drivers as animated, rotated, brand-blue car icons with a soft halo */}
         {smoothDrivers.map((d) => (
           <Marker key={d.id} position={{ lat: d.lat, lng: d.lng }} icon={{
-            url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(d.isOnline ? NEARBY_CAR_SVG : OFFLINE_CAR_SVG),
-            scaledSize: new google.maps.Size(d.isOnline ? 32 : 28, d.isOnline ? 32 : 28),
-            anchor: new google.maps.Point(d.isOnline ? 16 : 14, d.isOnline ? 16 : 14),
+            url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(d.isOnline ? NEARBY_CAR_SVG(d.heading) : OFFLINE_CAR_SVG),
+            scaledSize: new google.maps.Size(d.isOnline ? 36 : 28, d.isOnline ? 36 : 28),
+            anchor: new google.maps.Point(d.isOnline ? 18 : 14, d.isOnline ? 18 : 14),
           }} zIndex={5} />
         ))}
 
