@@ -88,7 +88,8 @@ function lerpVal(a: number, b: number, t: number) { return a + (b - a) * Math.mi
 
 function useSmoothDrivers(drivers?: Array<{ id: string; lat: number; lng: number; isOnline?: boolean }>) {
   const prevRef = useRef<Map<string, Coords>>(new Map());
-  const [smoothed, setSmoothed] = useState<Array<{ id: string; lat: number; lng: number; isOnline?: boolean }>>([]);
+  const headingRef = useRef<Map<string, number>>(new Map());
+  const [smoothed, setSmoothed] = useState<Array<{ id: string; lat: number; lng: number; isOnline?: boolean; heading: number }>>([]);
   const rafRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -99,14 +100,20 @@ function useSmoothDrivers(drivers?: Array<{ id: string; lat: number; lng: number
 
     for (const d of drivers) {
       targets.set(d.id, { lat: d.lat, lng: d.lng, isOnline: d.isOnline });
-      froms.set(d.id, prevRef.current.get(d.id) ?? { lat: d.lat, lng: d.lng });
+      const prev = prevRef.current.get(d.id) ?? { lat: d.lat, lng: d.lng };
+      froms.set(d.id, prev);
+      // Only update bearing when the driver actually moved a meaningful amount
+      const dist = Math.hypot(d.lat - prev.lat, d.lng - prev.lng);
+      if (dist > 1e-5) {
+        headingRef.current.set(d.id, computeBearing(prev, d));
+      }
     }
 
     const start = performance.now();
     const animate = (now: number) => {
       const t = Math.min(1, (now - start) / LERP_MS);
       const eased = 1 - Math.pow(1 - t, 3);
-      const result: Array<{ id: string; lat: number; lng: number; isOnline?: boolean }> = [];
+      const result: Array<{ id: string; lat: number; lng: number; isOnline?: boolean; heading: number }> = [];
 
       for (const d of drivers) {
         const from = froms.get(d.id)!;
@@ -116,6 +123,7 @@ function useSmoothDrivers(drivers?: Array<{ id: string; lat: number; lng: number
           lat: lerpVal(from.lat, to.lat, eased),
           lng: lerpVal(from.lng, to.lng, eased),
           isOnline: to.isOnline,
+          heading: headingRef.current.get(d.id) ?? 0,
         });
       }
       setSmoothed(result);
