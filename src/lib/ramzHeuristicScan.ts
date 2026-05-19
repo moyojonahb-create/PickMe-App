@@ -291,6 +291,67 @@ const RULES: Rule[] = [
       return lines.length > 1500;
     },
   },
+  {
+    id: 'map-conditional-hidden',
+    category: 'ux',
+    severity: 'high',
+    title: 'Map hidden behind a conditional that excludes active trips',
+    description: 'A MapGoogle/TripGoogleMap/MapboxMap is rendered only when there is no active trip, so riders/drivers lose live route visibility once a trip starts.',
+    rootCause: 'Conditional like `{!activeTrip && <MapGoogle ... />}` removes the map exactly when it is most useful.',
+    userImpact: 'Riders and drivers see a blank panel instead of the pickup/dropoff/driver route during the trip.',
+    suggestion: 'Always render the map; switch its props (pickup/dropoff/driverLocation) based on trip state instead of unmounting.',
+    expectedResult: 'Map stays mounted across the full ride lifecycle.',
+    test: (line, idx, lines, path) => {
+      if (isTestFile(path)) return false;
+      const window = lines.slice(Math.max(0, idx - 1), idx + 3).join(' ');
+      return /!\s*activeTrip\s*&&[\s\S]{0,80}<(MapGoogle|TripGoogleMap|MapboxMap)/.test(window);
+    },
+  },
+  {
+    id: 'complete-button-no-refresh',
+    category: 'bug',
+    severity: 'medium',
+    title: 'Complete-trip handler does not await refresh',
+    description: 'After calling completeTrip(), the handler triggers UI changes (setShowRating, navigate) before the ride row is re-fetched, leaving the screen in a stale "in_progress" state.',
+    suggestion: 'await refreshRide()/refresh() before mutating local UI state so the next render reflects the completed ride.',
+    expectedResult: 'After tapping Complete, the UI immediately reflects the completed state with rating prompt.',
+    test: (line, idx, lines, path) => {
+      if (isTestFile(path)) return false;
+      if (!/completeTrip\s*\(/.test(line)) return false;
+      const forward = lines.slice(idx, idx + 12).join('\n');
+      // Has a refresh call, but it is NOT awaited
+      return /refresh(Ride)?\s*\(/.test(forward) && !/await\s+refresh(Ride)?\s*\(/.test(forward);
+    },
+  },
+  {
+    id: 'google-marker-deprecated',
+    category: 'reliability',
+    severity: 'low',
+    title: 'Using deprecated google.maps.Marker',
+    description: 'google.maps.Marker is deprecated; AdvancedMarkerElement is recommended for new code.',
+    suggestion: 'Plan migration to AdvancedMarkerElement; meanwhile suppress noisy console warnings.',
+    expectedResult: 'No deprecation warnings; future-proof marker API.',
+    test: (line, idx, lines, path) => {
+      if (isTestFile(path)) return false;
+      return /new\s+google\.maps\.Marker\s*\(/.test(line);
+    },
+  },
+  {
+    id: 'function-component-ref-no-forward',
+    category: 'react',
+    severity: 'medium',
+    title: 'Function component used inside framer-motion AnimatePresence without forwardRef',
+    description: 'Framer Motion needs to attach a ref to direct children of AnimatePresence/motion.* — function components without React.forwardRef trigger console errors and break exit animations.',
+    suggestion: 'Wrap the inner component with React.forwardRef, or render a motion.div directly.',
+    expectedResult: 'No "Function components cannot be given refs" warnings; exit animations play.',
+    test: (line, idx, lines, path) => {
+      if (isTestFile(path)) return false;
+      if (!/AnimatePresence/.test(line)) return false;
+      const forward = lines.slice(idx, idx + 8).join('\n');
+      // crude: AnimatePresence wrapping a custom component (PascalCase) that is not motion.* or forwardRef
+      return /<[A-Z][A-Za-z0-9]+\b/.test(forward) && !/forwardRef/.test(forward);
+    },
+  },
 ];
 
 export function heuristicScanFile(path: string, content: string): CodeFinding[] {
