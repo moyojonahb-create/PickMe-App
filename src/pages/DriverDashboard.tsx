@@ -1038,24 +1038,25 @@ export default function DriverDashboard() {
           </>
         )}
 
-        {/* Map only shown when no active trip */}
-        {!activeTrip && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.98 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="rounded-2xl overflow-hidden border border-border/30 shadow-sm"
-          >
-            <div className="h-[45vh] min-h-[300px]">
-              <MapGoogle
-                driverLocation={driverCoords ? { lat: driverCoords.lat, lng: driverCoords.lng } : undefined}
-                drivers={nearbyDrivers}
-                defaultCenter={driverCoords ? { lat: driverCoords.lat, lng: driverCoords.lng } : undefined}
-                defaultZoom={15}
-                className="w-full h-full"
-              />
-            </div>
-          </motion.div>
-        )}
+        {/* Live map — always visible. Shows nearby cars when idle, and pickup/dropoff/driver route during active trip */}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.98 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="rounded-2xl overflow-hidden border border-border/30 shadow-sm"
+        >
+          <div className="h-[45vh] min-h-[300px]">
+            <MapGoogle
+              driverLocation={driverCoords ? { lat: driverCoords.lat, lng: driverCoords.lng } : undefined}
+              drivers={!activeTrip ? nearbyDrivers : undefined}
+              pickup={activeTrip ? { lat: activeTrip.pickup_lat, lng: activeTrip.pickup_lon } : undefined}
+              dropoff={activeTrip ? { lat: activeTrip.dropoff_lat, lng: activeTrip.dropoff_lon } : undefined}
+              routeGeometry={activeTrip?.route_polyline ?? undefined}
+              defaultCenter={driverCoords ? { lat: driverCoords.lat, lng: driverCoords.lng } : undefined}
+              defaultZoom={15}
+              className="w-full h-full"
+            />
+          </div>
+        </motion.div>}
 
         {/* Active Trip — fare + complete */}
         {activeTrip && (
