@@ -239,9 +239,11 @@ function MapboxMapInner({
     // header pills. Clamped by viewport so it adapts to phones/tablets.
     const h = map.getContainer().clientHeight || 600;
     const w = map.getContainer().clientWidth || 600;
+    // Push route UP: small top padding pulls D near the top bell icon,
+    // large bottom padding keeps P visible above the blue booking card.
     const padding = {
-      top: Math.round(Math.max(96, Math.min(160, h * 0.14))),
-      bottom: Math.round(Math.max(260, Math.min(360, h * 0.42))),
+      top: Math.round(Math.max(36, Math.min(64, h * 0.07))),
+      bottom: Math.round(Math.max(300, Math.min(420, h * 0.48))),
       left: Math.round(Math.max(48, Math.min(72, w * 0.08))),
       right: Math.round(Math.max(48, Math.min(72, w * 0.08))),
     };
