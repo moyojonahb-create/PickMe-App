@@ -248,8 +248,10 @@ function InnerMapGoogle({
       // header pills. Clamped responsively so it adapts across devices.
       const vh = typeof window !== 'undefined' ? window.innerHeight : 800;
       const vw = typeof window !== 'undefined' ? window.innerWidth : 400;
-      const top = Math.round(Math.max(96, Math.min(160, vh * 0.14)));
-      const bottom = Math.round(Math.max(260, Math.min(360, vh * 0.42)));
+      // Push route UP: small top padding pulls D near the top bell icon,
+      // large bottom padding keeps P clear of the blue booking card.
+      const top = Math.round(Math.max(36, Math.min(64, vh * 0.07)));
+      const bottom = Math.round(Math.max(300, Math.min(420, vh * 0.48)));
       const side = Math.round(Math.max(48, Math.min(72, vw * 0.08)));
       map.fitBounds(bounds, { top, bottom, left: side, right: side });
       // Clamp zoom after fit so very short trips don't over-zoom.
