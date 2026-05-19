@@ -10,13 +10,19 @@
  */
 export function isGoogleMapsDisabled(): boolean {
   try {
+    // Explicit opt-out: localStorage.disableGoogleMaps = '1' or VITE_DISABLE_GOOGLE_MAPS=true
+    if (typeof window !== 'undefined' && window.localStorage?.getItem('disableGoogleMaps') === '1') {
+      return true;
+    }
+    const env = (import.meta as unknown as { env?: Record<string, string> }).env;
+    if (env?.VITE_DISABLE_GOOGLE_MAPS === 'true') return true;
+    // Explicit force-on still honored for backwards compat
     if (typeof window !== 'undefined' && window.localStorage?.getItem('enableGoogleMaps') === '1') {
       return false;
     }
-    const env = (import.meta as unknown as { env?: Record<string, string> }).env;
     if (env?.VITE_ENABLE_GOOGLE_MAPS === 'true') return false;
   } catch {
     /* ignore */
   }
-  return true; // OSM by default
+  return false; // Google Maps enabled by default (key is configured)
 }

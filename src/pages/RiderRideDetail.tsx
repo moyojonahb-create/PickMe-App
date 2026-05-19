@@ -319,7 +319,7 @@ export default function RiderRideDetail() {
     };
   });
 
-  const isAccepted = ride ? ["accepted", "in_progress", "arrived"].includes(ride.status) : false;
+  const isAccepted = ride ? ["accepted", "enroute", "enroute_pickup", "driver_arriving", "arrived", "driver_arrived", "in_progress", "near_destination"].includes(ride.status) : false;
   const isPending = ride?.status === "pending";
   const isInProgress = ride?.status === "in_progress";
   const isArrived = ride?.status === "arrived" || ride?.status === "driver_arrived";
