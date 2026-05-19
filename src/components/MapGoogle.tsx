@@ -303,12 +303,12 @@ function InnerMapGoogle({
           />
         )}
 
-        {/* Nearby drivers as animated car icons */}
+        {/* Nearby drivers as animated, rotated, brand-blue car icons with a soft halo */}
         {smoothDrivers.map((d) => (
           <Marker key={d.id} position={{ lat: d.lat, lng: d.lng }} icon={{
-            url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(d.isOnline ? NEARBY_CAR_SVG : OFFLINE_CAR_SVG),
-            scaledSize: new google.maps.Size(d.isOnline ? 32 : 28, d.isOnline ? 32 : 28),
-            anchor: new google.maps.Point(d.isOnline ? 16 : 14, d.isOnline ? 16 : 14),
+            url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(d.isOnline ? NEARBY_CAR_SVG(d.heading) : OFFLINE_CAR_SVG),
+            scaledSize: new google.maps.Size(d.isOnline ? 36 : 28, d.isOnline ? 36 : 28),
+            anchor: new google.maps.Point(d.isOnline ? 18 : 14, d.isOnline ? 18 : 14),
           }} zIndex={5} />
         ))}
 
