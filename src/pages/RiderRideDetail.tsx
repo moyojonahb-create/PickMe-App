@@ -1018,15 +1018,18 @@ export default function RiderRideDetail() {
                   className="w-full h-[52px] rounded-2xl font-bold text-base bg-amber-500 hover:bg-amber-600 text-white"
                   onClick={async () => {
                     try {
+                      console.info("[CompleteTrip] starting", ride.id);
                       const result = await completeTrip(ride.id);
-                      if (result.ok) {
+                      console.info("[CompleteTrip] result", result);
+                      if (result?.ok) {
                         toast.success(`Trip completed! Fare: $${Number(result.fare_usd).toFixed(2)}`);
+                        await refreshRide();
                         setShowRating(true);
-                        refreshRide();
                       } else {
-                        toast.error(result.reason || "Could not complete trip");
+                        toast.error(result?.reason || "Could not complete trip");
                       }
                     } catch (e: unknown) {
+                      console.error("[CompleteTrip] error", e);
                       toast.error((e as Error)?.message || "Failed to complete trip");
                     }
                   }}
