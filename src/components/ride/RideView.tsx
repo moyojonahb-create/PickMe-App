@@ -136,7 +136,11 @@ export default function RideView() {
   const hearingImpaired = riderPrefs.hearing_impaired;
 
   const { landmarks, loading: landmarksLoading } = useLandmarksSearch({ searchQuery, limit: 30, userLocation: gpsState.coords, radiusKm: proximityRadius, townCenter: selectedTown.center, townRadiusKm: selectedTown.radiusKm });
-  const nearbyDrivers = useNearbyDrivers(rideStatus === 'idle' || rideStatus === 'searching');
+  const nearbyDrivers = useNearbyDrivers(
+    rideStatus === 'idle' || rideStatus === 'searching',
+    gpsState.coords ? { lat: gpsState.coords.lat, lng: gpsState.coords.lng } : (pickupLocation ?? selectedTown.center),
+    1, // 1km radius — Uber/Bolt feel
+  );
   const { suggestions: googleSuggestions, loading: googleLoading, search: searchGoogle, getPlaceDetails, clear: clearGoogleSuggestions, setTownBias } = useGooglePlacesAutocomplete();
 
   // Restrict Google Places to selected town (strict geofence)
