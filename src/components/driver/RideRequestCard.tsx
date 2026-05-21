@@ -1,6 +1,9 @@
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Navigation, Clock, CreditCard, Users } from 'lucide-react';
+import { Navigation, Clock, CreditCard, Users, Briefcase } from 'lucide-react';
 import RidePreferenceTags from '@/components/ride/RidePreferenceTags';
+import LuggagePreviewSheet from '@/components/luggage/LuggagePreviewSheet';
+import { supabase } from '@/integrations/supabase/client';
 
 interface RidePrefs {
   quiet_ride: boolean;
