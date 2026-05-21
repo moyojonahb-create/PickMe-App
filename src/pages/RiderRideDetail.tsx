@@ -20,6 +20,7 @@ import {
 } from "@/lib/offerHelpers";
 import { RideCommunication } from "@/components/ride/RideCommunication";
 import OffersModal from "@/components/OffersModal";
+import FareAdjustmentModal from "@/components/luggage/FareAdjustmentModal";
 import MapGoogle from "@/components/MapGoogle";
 import TripGoogleMap from "@/components/TripGoogleMap";
 import { Button } from "@/components/ui/button";
