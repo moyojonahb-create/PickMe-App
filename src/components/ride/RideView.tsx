@@ -123,6 +123,8 @@ export default function RideView() {
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
   const [sheetExpanded, setSheetExpanded] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [luggageOpen, setLuggageOpen] = useState(false);
+  const [luggageDraft, setLuggageDraft] = useState<import('@/components/luggage/LuggageSheet').LuggageDraft | null>(null);
   const [selectedTown, setSelectedTown] = useState<TownConfig>(DEFAULT_TOWN);
   const [rideStops, setRideStops] = useState<RideStop[]>([]);
   const [scheduledAt, setScheduledAt] = useState<Date | null>(null);
