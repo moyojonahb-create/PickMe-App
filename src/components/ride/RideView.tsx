@@ -1060,6 +1060,12 @@ export default function RideView() {
             const fmt = (v: number) => `${sym}${v.toFixed(2)}`;
             return (
               <>
+                <div className="mb-2 flex justify-start">
+                  <LuggageButton
+                    count={luggageDraft?.image_paths.length || 0}
+                    onClick={() => setLuggageOpen(true)}
+                  />
+                </div>
                 {/* Payment method selector hidden on ride view — kept in profile instead. Default to cash for ride requests. */}
                 {/* <div className="mb-2">
                   <PaymentMethodSelector
