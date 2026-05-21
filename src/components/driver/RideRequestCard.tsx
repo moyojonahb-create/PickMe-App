@@ -35,6 +35,26 @@ interface RideRequestCardProps {
 }
 
 export default function RideRequestCard({ ride, preferences, secsLeft, index, onClick, fmtUSD }: RideRequestCardProps) {
+  const [luggage, setLuggage] = useState<{ count: number; description: string | null } | null>(null);
+  const [luggageOpen, setLuggageOpen] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    supabase
+      .from('luggage_requests')
+      .select('description, image_paths')
+      .eq('ride_id', ride.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!mounted || !data) return;
+        setLuggage({
+          count: (data.image_paths || []).length,
+          description: data.description,
+        });
+      });
+    return () => { mounted = false; };
+  }, [ride.id]);
+
   // Strip gender_preference from driver view — drivers should never see it
   const sanitizedPrefs = preferences ? { ...preferences, gender_preference: undefined } : preferences;
   const hasPrefs = sanitizedPrefs && (
