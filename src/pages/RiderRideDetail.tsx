@@ -390,6 +390,8 @@ export default function RiderRideDetail() {
 
   return (
     <div className="relative h-[100dvh] w-full overflow-hidden bg-background">
+      {rideId && <FareAdjustmentModal rideId={rideId} onAccepted={() => refreshRide()} />}
+
       {/* Active Call Overlay */}
       {callStatus !== "idle" && (
         <ActiveCallOverlay
