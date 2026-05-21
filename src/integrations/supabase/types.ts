@@ -645,6 +645,57 @@ export type Database = {
           },
         ]
       }
+      fare_adjustments: {
+        Row: {
+          created_at: string
+          driver_id: string
+          id: string
+          new_price: number
+          old_price: number
+          reason: string | null
+          ride_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          driver_id: string
+          id?: string
+          new_price: number
+          old_price: number
+          reason?: string | null
+          ride_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          driver_id?: string
+          id?: string
+          new_price?: number
+          old_price?: number
+          reason?: string | null
+          ride_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fare_adjustments_ride_id_fkey"
+            columns: ["ride_id"]
+            isOneToOne: false
+            referencedRelation: "pending_rides_safe"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fare_adjustments_ride_id_fkey"
+            columns: ["ride_id"]
+            isOneToOne: false
+            referencedRelation: "rides"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       favorite_locations: {
         Row: {
           address: string
@@ -869,6 +920,57 @@ export type Database = {
           user_type?: string
         }
         Relationships: []
+      }
+      luggage_requests: {
+        Row: {
+          created_at: string
+          description: string | null
+          estimated_weight: string | null
+          id: string
+          image_paths: string[]
+          item_count: number | null
+          ride_id: string | null
+          rider_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          estimated_weight?: string | null
+          id?: string
+          image_paths?: string[]
+          item_count?: number | null
+          ride_id?: string | null
+          rider_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          estimated_weight?: string | null
+          id?: string
+          image_paths?: string[]
+          item_count?: number | null
+          ride_id?: string | null
+          rider_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "luggage_requests_ride_id_fkey"
+            columns: ["ride_id"]
+            isOneToOne: false
+            referencedRelation: "pending_rides_safe"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "luggage_requests_ride_id_fkey"
+            columns: ["ride_id"]
+            isOneToOne: false
+            referencedRelation: "rides"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       messages: {
         Row: {

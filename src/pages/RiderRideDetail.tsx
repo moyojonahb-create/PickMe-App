@@ -20,6 +20,7 @@ import {
 } from "@/lib/offerHelpers";
 import { RideCommunication } from "@/components/ride/RideCommunication";
 import OffersModal from "@/components/OffersModal";
+import FareAdjustmentModal from "@/components/luggage/FareAdjustmentModal";
 import MapGoogle from "@/components/MapGoogle";
 import TripGoogleMap from "@/components/TripGoogleMap";
 import { Button } from "@/components/ui/button";
@@ -389,6 +390,8 @@ export default function RiderRideDetail() {
 
   return (
     <div className="relative h-[100dvh] w-full overflow-hidden bg-background">
+      {rideId && <FareAdjustmentModal rideId={rideId} onAccepted={() => refreshRide()} />}
+
       {/* Active Call Overlay */}
       {callStatus !== "idle" && (
         <ActiveCallOverlay

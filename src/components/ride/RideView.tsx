@@ -64,6 +64,8 @@ import { type IntercityRoute } from '@/lib/intercityRoutes';
 import { useNearbyDrivers } from '@/hooks/useNearbyDrivers';
 import GenderPreferenceToggle, { type GenderPreference } from './GenderPreferenceToggle';
 import ContactPickerSheet from './ContactPickerSheet';
+import LuggageButton from '@/components/luggage/LuggageButton';
+import LuggageSheet from '@/components/luggage/LuggageSheet';
 
 interface SelectedLocation {name: string;lat: number;lng: number;}
 interface GPSState {status: 'idle' | 'loading' | 'success' | 'denied' | 'unavailable';coords: {lat: number;lng: number;} | null;error: string | null;}
@@ -123,6 +125,8 @@ export default function RideView() {
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
   const [sheetExpanded, setSheetExpanded] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [luggageOpen, setLuggageOpen] = useState(false);
+  const [luggageDraft, setLuggageDraft] = useState<import('@/components/luggage/LuggageSheet').LuggageDraft | null>(null);
   const [selectedTown, setSelectedTown] = useState<TownConfig>(DEFAULT_TOWN);
   const [rideStops, setRideStops] = useState<RideStop[]>([]);
   const [scheduledAt, setScheduledAt] = useState<Date | null>(null);
@@ -495,6 +499,21 @@ export default function RideView() {
       }
 
       setCurrentRideId(result.ride.id);
+
+      // Attach luggage info if set
+      if (luggageDraft && result.ride.id && user?.id) {
+        supabase.from('luggage_requests').insert([{
+          ride_id: result.ride.id,
+          rider_id: user.id,
+          description: luggageDraft.description,
+          estimated_weight: luggageDraft.estimated_weight,
+          item_count: luggageDraft.item_count,
+          image_paths: luggageDraft.image_paths,
+        }] as never).then(({ error }) => {
+          if (error) console.error('Luggage insert failed:', error.message);
+        });
+      }
+
       
       // ⚡ Navigate instantly — the ride detail page renders map immediately
       if (!scheduledAt) {
@@ -1056,6 +1075,12 @@ export default function RideView() {
             const fmt = (v: number) => `${sym}${v.toFixed(2)}`;
             return (
               <>
+                <div className="mb-2 flex justify-start">
+                  <LuggageButton
+                    count={luggageDraft?.image_paths.length || 0}
+                    onClick={() => setLuggageOpen(true)}
+                  />
+                </div>
                 {/* Payment method selector hidden on ride view — kept in profile instead. Default to cash for ride requests. */}
                 {/* <div className="mb-2">
                   <PaymentMethodSelector
@@ -1268,6 +1293,12 @@ export default function RideView() {
       <OffersModal isOpen={offersOpen} tripId={currentRideId || ''} viewing={viewingDrivers} offers={offers} onAcceptOffer={handleAcceptOffer} onDeclineOffer={handleDeclineOffer} onCancelRide={handleCancelRide} onClose={() => setOffersOpen(false)} />
       <AuthModalWrapper isOpen={authModalOpen} onClose={() => setAuthModalOpen(false)} mode={authMode} onSwitchMode={() => setAuthMode((m) => m === 'login' ? 'signup' : 'login')} />
       <ContactPickerSheet open={contactPickerOpen} onClose={() => setContactPickerOpen(false)} onSelect={handleContactSelected} />
+      <LuggageSheet
+        open={luggageOpen}
+        onClose={() => setLuggageOpen(false)}
+        initial={luggageDraft}
+        onSave={setLuggageDraft}
+      />
     </div>);
 
 }
