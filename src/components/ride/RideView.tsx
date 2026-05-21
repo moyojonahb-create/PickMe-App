@@ -499,6 +499,21 @@ export default function RideView() {
       }
 
       setCurrentRideId(result.ride.id);
+
+      // Attach luggage info if set
+      if (luggageDraft && result.ride.id && user?.id) {
+        supabase.from('luggage_requests').insert([{
+          ride_id: result.ride.id,
+          rider_id: user.id,
+          description: luggageDraft.description,
+          estimated_weight: luggageDraft.estimated_weight,
+          item_count: luggageDraft.item_count,
+          image_paths: luggageDraft.image_paths,
+        }] as never).then(({ error }) => {
+          if (error) console.error('Luggage insert failed:', error.message);
+        });
+      }
+
       
       // ⚡ Navigate instantly — the ride detail page renders map immediately
       if (!scheduledAt) {
