@@ -1293,6 +1293,12 @@ export default function RideView() {
       <OffersModal isOpen={offersOpen} tripId={currentRideId || ''} viewing={viewingDrivers} offers={offers} onAcceptOffer={handleAcceptOffer} onDeclineOffer={handleDeclineOffer} onCancelRide={handleCancelRide} onClose={() => setOffersOpen(false)} />
       <AuthModalWrapper isOpen={authModalOpen} onClose={() => setAuthModalOpen(false)} mode={authMode} onSwitchMode={() => setAuthMode((m) => m === 'login' ? 'signup' : 'login')} />
       <ContactPickerSheet open={contactPickerOpen} onClose={() => setContactPickerOpen(false)} onSelect={handleContactSelected} />
+      <LuggageSheet
+        open={luggageOpen}
+        onClose={() => setLuggageOpen(false)}
+        initial={luggageDraft}
+        onSave={setLuggageDraft}
+      />
     </div>);
 
 }
