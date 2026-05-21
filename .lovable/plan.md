@@ -1,72 +1,91 @@
-# Ramz One Enterprise Stabilization Plan
+# Luggage Feature — Implementation Plan
 
-Scope is large. I'll execute in 6 focused phases, verifying with the heuristic scanner between phases. No business-logic changes — only safety, performance, and visibility fixes.
+A premium "Luggage" add-on for rides. Riders attach a description + up to 5 photos to a ride; drivers see this before accepting and can either accept the original fare, propose a higher fare, or decline. Rider gets a popup to accept/decline the new fare.
 
-## Phase 1 — Google Maps Visibility & Loader
+Branding: yellow pill button + badges (luggage), blue stays primary ride color.
 
-**New file:** `src/lib/googleMapsLoader.ts`
-- Singleton `loadGoogleMaps()` that injects the script exactly once
-- Reads key from `import.meta.env.VITE_GOOGLE_MAPS_API_KEY` only
-- Loads libraries: `places, geometry, routes, marker`
-- Resolves when `window.google.maps` is ready; one retry on script error
-- Returns cached promise on subsequent calls
+---
 
-**Refactor:** `src/hooks/useGoogleMaps.ts` to delegate to the loader (no duplicate `<script>` injection, no hardcoded fallback key).
+## 1. Database (one migration)
 
-**Map container hygiene** in `MapGoogle.tsx` / `TripGoogleMap.tsx` / `PremiumTrackingMap.tsx`:
-- Ensure wrapper has `h-full w-full min-h-[100vh]` where appropriate (only where currently broken)
-- Skeleton loader while `loading`, fallback UI on `error` with retry
-- Guard render until coords valid + container mounted
-- Memoize markers, reuse `DirectionsRenderer`, throttle camera updates with rAF
+**Table `luggage_requests`**
+- `id uuid pk`
+- `ride_id uuid` (nullable until ride is created — we attach by ride_id after insert)
+- `rider_id uuid not null`
+- `description text`
+- `image_paths text[]` (storage paths, not public URLs)
+- `estimated_weight text` (small / medium / large / xl)
+- `item_count int`
+- `created_at timestamptz default now()`
 
-## Phase 2 — Supabase Query Safety
+**Table `fare_adjustments`**
+- `id uuid pk`
+- `ride_id uuid not null`
+- `driver_id uuid not null`
+- `old_price numeric`
+- `new_price numeric`
+- `reason text`
+- `status text` ('pending' | 'accepted' | 'declined') default 'pending'
+- `created_at`, `updated_at`
 
-Replace `.single()` → `.maybeSingle()` and handle null in:
-- `src/hooks/useWebRTCCall.ts:391`
-- `src/hooks/useWallet.ts:55,64`
-- `src/hooks/usePricingSettings.ts:73`
-- `src/hooks/useAgoraCall.ts:373`
-- `src/lib/requestRide.ts:132,150`
-- `src/lib/offerHelpers.ts:171,193`
+**Storage bucket `luggage-photos`** (private). RLS:
+- Rider can insert/select their own folder (`{user_id}/...`).
+- Drivers with role `driver` AND assigned/eligible to the ride can SELECT via signed URLs (we'll generate signed URLs server-side on demand from rider-trusted reads; for simplicity, allow authenticated drivers who have an approved `drivers` row to read the bucket — moderation later).
 
-Replace `select("*")` with explicit columns + `.limit()` in:
-- `src/lib/requestRide.ts:124`
-- `src/hooks/useTownPricing.ts:140`
-- `src/lib/offerHelpers.ts:81,82`
-- `src/lib/ramzActions.ts:148`
-- `src/components/admin/LoadPulsePanel.tsx` (8 selects)
+**RLS**
+- `luggage_requests`: rider can insert/select own; approved drivers can select rows whose `ride_id` is in `pending` or assigned to them.
+- `fare_adjustments`: driver inserts own; rider/driver of the ride can select; rider updates status.
 
-## Phase 3 — Polling & Realtime
+**Realtime**: add both tables to `supabase_realtime` publication.
 
-- `PremiumOffersSheet.tsx`: `setInterval(... ,1000)` only drives countdown UI — keep it (UI tick, not network). Bump to `requestAnimationFrame`-style interval guard with cleanup; gate to active offers presence.
-- `DriverETABanner.tsx`: replace 1s tick with single combined timer; ensure cleanup. (UI countdown, not network polling — safe to keep ≥1s for MM:SS display.)
+---
 
-Note: these are display tickers, not network polls, so the heuristic rule is overly strict. I'll consolidate timers and ensure cleanup, which addresses the actual concern.
+## 2. Rider UI
 
-## Phase 4 — Console Log Hygiene
+- New `LuggageButton` (yellow rounded pill, luggage icon) shown on ride request screens (`AppDashboard` ride flow + `RiderRequestScreen` for negotiate). 
+- `LuggageSheet` bottom sheet (Framer Motion):
+  - Textarea description (placeholder example).
+  - Weight chips (Small / Medium / Large / XL).
+  - Item count stepper.
+  - Image grid: up to 5; camera/gallery via `<input capture>`; client-side compression via existing `src/lib/imageCompression.ts`; drag to remove.
+  - Save button → stores draft in local state (attached on ride request) OR upserts `luggage_requests` if ride exists.
+- Yellow "Luggage (N)" badge near pickup/destination once configured.
+- On `RiderRideDetail`, listen for `fare_adjustments` realtime → modal "Driver adjusted fare due to luggage size. $X → $Y" with Accept/Decline; on accept update ride `fare`, set adjustment `accepted`; decline cancels ride or sets `declined`.
 
-Wrap or remove `console.log` in:
-- `useAgoraCall.ts` (14 sites) — wrap in `if (import.meta.env.DEV)`
-- `push.ts` (3 sites) — same
-- `useVoiceNavigation.ts:36` — same
+## 3. Driver UI
 
-Keep `console.warn` / `console.error` as-is (production diagnostics).
+- In `OffersModal` / driver ride card: if luggage exists show yellow "🧳 Luggage (3 photos)" badge + description preview.
+- Tap → `LuggagePreviewSheet`: shows description, weight, count, image gallery (signed URLs, zoomable).
+- Action buttons: **Accept**, **Adjust fare** (number input + reason), **Decline**.
+- Adjust → insert `fare_adjustments` row; wait for rider response (realtime).
 
-## Phase 5 — Type Safety
+## 4. Signed image URLs
 
-Remove explicit `any` in:
-- `ramzHeuristicScan.ts:124`
-- `haptics.ts:18`
-- `useGooglePlacesAutocomplete.ts:79`
+Helper `getLuggageSignedUrls(paths: string[])` using `supabase.storage.from('luggage-photos').createSignedUrls(paths, 600)`. Called by driver sheet only.
 
-## Phase 6 — Security: envPolyfill
+## 5. Files to add/change
 
-`src/lib/envPolyfill.ts`: remove hardcoded Supabase URL + anon key. Replace with no-op (kept as a side-effect entry to preserve existing imports), and rely solely on `import.meta.env`.
+**New**
+- `src/components/luggage/LuggageButton.tsx`
+- `src/components/luggage/LuggageSheet.tsx`
+- `src/components/luggage/LuggagePreviewSheet.tsx`
+- `src/components/luggage/FareAdjustmentModal.tsx` (rider-side popup)
+- `src/hooks/useLuggageRequest.ts` (create/update/fetch by ride_id)
+- `src/hooks/useFareAdjustments.ts` (realtime subscribe)
+- `src/lib/luggageStorage.ts` (upload + signed URL helpers)
 
-## Verification
-After each phase, re-run the Ramz heuristic scan logic mentally against changed files. No DB migrations. No behavior changes to ride/wallet/payment flows.
+**Edited**
+- `src/pages/AppDashboard.tsx` — add LuggageButton to ride flow, pass luggage draft into ride creation.
+- `src/pages/negotiate/RiderRequestScreen.tsx` — add LuggageButton.
+- `src/pages/RiderRideDetail.tsx` — luggage badge + fare-adjustment modal.
+- `src/components/OffersModal.tsx` (and/or driver dashboard offer card) — luggage badge + open preview sheet + adjust-fare action.
 
-## Out of scope (intentional)
-- No changes to RLS, edge functions, Capacitor config, or schema
-- No refactor of pricing/wallet RPCs
-- No rewrites of the Agora call state machine — only log gating
+## 6. Out of scope (noted for later)
+
+- AI image moderation / prohibited-item detection — placeholder hook only.
+- Vehicle-suitability auto-recommendation (just shows weight category for now).
+- Image reordering (drag) — basic remove only.
+
+---
+
+After approval I'll run the migration first (separate call), then implement files in parallel.
