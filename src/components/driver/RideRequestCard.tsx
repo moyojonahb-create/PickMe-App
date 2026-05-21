@@ -65,13 +65,16 @@ export default function RideRequestCard({ ride, preferences, secsLeft, index, on
   const urgentExpiry = secsLeft > 0 && secsLeft <= 15;
 
   return (
-    <motion.button
+    <>
+    <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.06, type: 'spring', stiffness: 400, damping: 30 }}
       whileTap={{ scale: 0.97 }}
       onClick={onClick}
-      className="w-full text-left bg-card rounded-2xl space-y-2.5 border border-border/40 shadow-sm hover:shadow-md hover:border-primary/30 transition-all active:bg-muted/50 overflow-hidden"
+      role="button"
+      tabIndex={0}
+      className="w-full text-left bg-card rounded-2xl space-y-2.5 border border-border/40 shadow-sm hover:shadow-md hover:border-primary/30 transition-all active:bg-muted/50 overflow-hidden cursor-pointer"
     >
       {/* Blue top bar */}
       <div className="px-4 py-1.5 text-center text-[10px] font-bold tracking-wider uppercase bg-primary/10 text-primary">
@@ -102,6 +105,26 @@ export default function RideRequestCard({ ride, preferences, secsLeft, index, on
             Ride for: {ride.passenger_name}
           </span>
         </div>
+      )}
+
+      {/* Luggage badge */}
+      {luggage && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); setLuggageOpen(true); }}
+          className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-yellow-400/15 border border-yellow-400/40 hover:bg-yellow-400/25 transition-colors text-left"
+        >
+          <Briefcase className="w-3.5 h-3.5 text-yellow-600 shrink-0" />
+          <span className="text-[11px] font-bold text-yellow-700 dark:text-yellow-400">
+            Luggage Included{luggage.count > 0 ? ` (${luggage.count} ${luggage.count === 1 ? 'photo' : 'photos'})` : ''}
+          </span>
+          {luggage.description && (
+            <span className="text-[10px] text-muted-foreground truncate flex-1">
+              · {luggage.description}
+            </span>
+          )}
+          <span className="text-[10px] font-bold text-yellow-700 ml-auto shrink-0">View →</span>
+        </button>
       )}
 
       {/* Meta chips */}
@@ -146,7 +169,15 @@ export default function RideRequestCard({ ride, preferences, secsLeft, index, on
         </div>
       )}
       </div>
-    </motion.button>
+    </motion.div>
+    <LuggagePreviewSheet
+      open={luggageOpen}
+      onClose={() => setLuggageOpen(false)}
+      rideId={ride.id}
+      currentFare={Number(ride.fare)}
+      onAccepted={onClick}
+    />
+    </>
   );
 }
 
