@@ -1,22 +1,21 @@
 /**
- * Google Maps kill switch.
+ * Map provider switch.
  *
- * Default: Google Maps is DISABLED (we use OSM/Leaflet + Nominatim) while
- * Google Cloud billing is unavailable.
+ * Default: Mapbox is the PRIMARY map provider. Google Maps is loaded in the
+ * background as a fallback (for routing, places, etc.) but the visible tiles
+ * use Mapbox unless the user opts in.
  *
- * To re-enable Google Maps later:
+ * To force Google Maps as the visible provider:
  *   - Build env:  VITE_ENABLE_GOOGLE_MAPS=true
  *   - Runtime:    localStorage.setItem('enableGoogleMaps', '1')   // then reload
  */
 export function isGoogleMapsDisabled(): boolean {
   try {
-    // Explicit opt-out: localStorage.disableGoogleMaps = '1' or VITE_DISABLE_GOOGLE_MAPS=true
     if (typeof window !== 'undefined' && window.localStorage?.getItem('disableGoogleMaps') === '1') {
       return true;
     }
     const env = (import.meta as unknown as { env?: Record<string, string> }).env;
     if (env?.VITE_DISABLE_GOOGLE_MAPS === 'true') return true;
-    // Explicit force-on still honored for backwards compat
     if (typeof window !== 'undefined' && window.localStorage?.getItem('enableGoogleMaps') === '1') {
       return false;
     }
@@ -24,5 +23,5 @@ export function isGoogleMapsDisabled(): boolean {
   } catch {
     /* ignore */
   }
-  return false; // Google Maps enabled by default (key is configured)
+  return true; // Mapbox primary by default; Google Maps stays available as backup.
 }
