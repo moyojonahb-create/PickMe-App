@@ -8,6 +8,8 @@ import { useGoogleMaps } from "@/hooks/useGoogleMaps";
 import { calculateDistance } from "@/lib/driverLocation";
 import { Loader2 } from "lucide-react";
 import PremiumTrackingMap from "@/components/map/PremiumTrackingMap";
+import MapboxMap from "@/components/MapboxMap";
+import { isGoogleMapsDisabled } from "@/lib/mapsKillSwitch";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -286,6 +288,21 @@ function InnerMap({
 /* ------------------------------------------------------------------ */
 
 export default function TripGoogleMap(props: TripGoogleMapProps) {
+  const googleDisabled = isGoogleMapsDisabled();
+
+  // Default path: Mapbox (Google can be opted into via localStorage/env).
+  if (googleDisabled) {
+    return (
+      <MapboxMap
+        pickup={props.pickup}
+        dropoff={props.dropoff}
+        driverLocation={props.driverLocation}
+        defaultZoom={14}
+        height={props.height ?? '300px'}
+      />
+    );
+  }
+
   const { isLoaded, loadError, apiKey } = useGoogleMaps();
 
   if (!apiKey) {
