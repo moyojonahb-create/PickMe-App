@@ -1116,7 +1116,16 @@ export default function DriverDashboard() {
                 <Button
                   className="w-full bg-blue-600 text-white hover:bg-blue-700 mb-2"
                   size="lg"
-                  onClick={() => setFullNavMode(true)}
+                  onClick={() => {
+                    if (isGoogleMapsDisabled()) {
+                      const target = activeTrip.status === 'in_progress' ? 'dropoff' : 'pickup';
+                      const lat = target === 'dropoff' ? activeTrip.dropoff_lat : activeTrip.pickup_lat;
+                      const lng = target === 'dropoff' ? activeTrip.dropoff_lon : activeTrip.pickup_lon;
+                      openNavTo(lat, lng, activeTrip.id, target);
+                    } else {
+                      setFullNavMode(true);
+                    }
+                  }}
                 >
                   <Navigation className="h-4 w-4 mr-2" />
                   Open Navigation
