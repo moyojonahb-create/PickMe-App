@@ -599,7 +599,14 @@ export default function DriverDashboard() {
 
       setActiveTrip((prev) => prev?.id === activeTrip.id ? { ...prev, status: nextStatus } : prev);
       toast.info(successMessage);
-      if (options?.openNavigation) setFullNavMode(true);
+      if (options?.openNavigation) {
+        if (isGoogleMapsDisabled()) {
+          // Mapbox-primary mode: in-app full nav uses Google APIs, so launch external nav instead.
+          openNavTo(activeTrip.pickup_lat, activeTrip.pickup_lon, activeTrip.id, 'pickup');
+        } else {
+          setFullNavMode(true);
+        }
+      }
 
       if (options?.notifyArrived) {
         supabase.from("notifications").insert({
