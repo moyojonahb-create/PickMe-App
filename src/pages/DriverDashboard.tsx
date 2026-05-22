@@ -73,6 +73,8 @@ import DriverEarningsDashboard from "@/components/driver/DriverEarningsDashboard
 import DriverSelfieCheck from "@/components/driver/DriverSelfieCheck";
 import DemandHeatmap from "@/components/driver/DemandHeatmap";
 import MapGoogle from "@/components/MapGoogle";
+import { isGoogleMapsDisabled } from "@/lib/mapsKillSwitch";
+import { openNavTo } from "@/lib/navigation";
 import { useNearbyDrivers } from "@/hooks/useNearbyDrivers";
 import { useOSRMRoute } from "@/hooks/useOSRMRoute";
 import { runLocationFraudChecks } from "@/lib/fraudDetection";
