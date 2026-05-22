@@ -286,6 +286,21 @@ function InnerMap({
 /* ------------------------------------------------------------------ */
 
 export default function TripGoogleMap(props: TripGoogleMapProps) {
+  const googleDisabled = isGoogleMapsDisabled();
+
+  // Default path: Mapbox (Google can be opted into via localStorage/env).
+  if (googleDisabled) {
+    return (
+      <MapboxMap
+        pickup={props.pickup}
+        dropoff={props.dropoff}
+        driverLocation={props.driverLocation}
+        defaultZoom={14}
+        height={props.height ?? '300px'}
+      />
+    );
+  }
+
   const { isLoaded, loadError, apiKey } = useGoogleMaps();
 
   if (!apiKey) {
