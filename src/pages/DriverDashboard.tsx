@@ -63,6 +63,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { SectionHeader } from "@/components/ui/section-header";
 import DriverNavigationView from "@/components/driver/DriverNavigationView";
 import FullScreenNavigation from "@/components/driver/FullScreenNavigation";
+import DriverLiveNav from "@/components/driver/DriverLiveNav";
 import DriverSettingsSheet from "@/components/driver/DriverSettingsSheet";
 import type { Coordinates } from "@/lib/osrm";
 import { useAgoraCall } from "@/hooks/useAgoraCall";
@@ -600,12 +601,8 @@ export default function DriverDashboard() {
       setActiveTrip((prev) => prev?.id === activeTrip.id ? { ...prev, status: nextStatus } : prev);
       toast.info(successMessage);
       if (options?.openNavigation) {
-        if (isGoogleMapsDisabled()) {
-          // Mapbox-primary mode: in-app full nav uses Google APIs, so launch external nav instead.
-          openNavTo(activeTrip.pickup_lat, activeTrip.pickup_lon, activeTrip.id, 'pickup');
-        } else {
-          setFullNavMode(true);
-        }
+        // Always use the in-app premium live navigation (Mapbox-primary).
+        setFullNavMode(true);
       }
 
       if (options?.notifyArrived) {
@@ -711,8 +708,9 @@ export default function DriverDashboard() {
     );
   }
 
-  // Full-screen navigation mode
+  // Full-screen in-app live navigation mode (Mapbox-primary).
   if (fullNavMode && activeTrip) {
+    const useLegacyGoogleNav = !isGoogleMapsDisabled();
     return (
       <>
         {/* Active Call Overlay */}
@@ -735,24 +733,40 @@ export default function DriverDashboard() {
             onDecline={declineIncomingCall}
           />
         )}
-        <FullScreenNavigation
-          activeTrip={activeTrip}
-          driverCoords={driverCoords}
-          userId={user!.id}
-          riderPhone={riderPhone}
-          onTripUpdate={(trip) => {
-            setActiveTrip(trip);
-          }}
-          onTripComplete={() => {
-            setFullNavMode(false);
-            setActiveTrip(null);
-            fetchDriverBalance();
-            refresh();
-          }}
-          onExit={() => setFullNavMode(false)}
-          onStartCall={startCall}
-          callStatus={callStatus}
-        />
+        {useLegacyGoogleNav ? (
+          <FullScreenNavigation
+            activeTrip={activeTrip}
+            driverCoords={driverCoords}
+            userId={user!.id}
+            riderPhone={riderPhone}
+            onTripUpdate={(trip) => setActiveTrip(trip)}
+            onTripComplete={() => {
+              setFullNavMode(false);
+              setActiveTrip(null);
+              fetchDriverBalance();
+              refresh();
+            }}
+            onExit={() => setFullNavMode(false)}
+            onStartCall={startCall}
+            callStatus={callStatus}
+          />
+        ) : (
+          <DriverLiveNav
+            activeTrip={activeTrip}
+            driverCoords={driverCoords}
+            riderPhone={riderPhone}
+            riderName={activeTrip.passenger_name ?? null}
+            onTripUpdate={(trip) => setActiveTrip(trip)}
+            onTripComplete={() => {
+              setFullNavMode(false);
+              setActiveTrip(null);
+              fetchDriverBalance();
+              refresh();
+            }}
+            onExit={() => setFullNavMode(false)}
+            onStartCall={startCall}
+          />
+        )}
       </>
     );
   }
@@ -1116,16 +1130,7 @@ export default function DriverDashboard() {
                 <Button
                   className="w-full bg-blue-600 text-white hover:bg-blue-700 mb-2"
                   size="lg"
-                  onClick={() => {
-                    if (isGoogleMapsDisabled()) {
-                      const target = activeTrip.status === 'in_progress' ? 'dropoff' : 'pickup';
-                      const lat = target === 'dropoff' ? activeTrip.dropoff_lat : activeTrip.pickup_lat;
-                      const lng = target === 'dropoff' ? activeTrip.dropoff_lon : activeTrip.pickup_lon;
-                      openNavTo(lat, lng, activeTrip.id, target);
-                    } else {
-                      setFullNavMode(true);
-                    }
-                  }}
+                  onClick={() => setFullNavMode(true)}
                 >
                   <Navigation className="h-4 w-4 mr-2" />
                   Open Navigation

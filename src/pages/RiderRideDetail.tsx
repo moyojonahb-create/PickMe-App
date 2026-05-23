@@ -23,6 +23,11 @@ import OffersModal from "@/components/OffersModal";
 import FareAdjustmentModal from "@/components/luggage/FareAdjustmentModal";
 import MapGoogle from "@/components/MapGoogle";
 import TripGoogleMap from "@/components/TripGoogleMap";
+import LiveNavMap from "@/components/map/LiveNavMap";
+import SpeedBadge from "@/components/map/SpeedBadge";
+import DirectionArrow3D from "@/components/map/DirectionArrow3D";
+import { useOSRMRoute } from "@/hooks/useOSRMRoute";
+import { isGoogleMapsDisabled } from "@/lib/mapsKillSwitch";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { ArrowLeft, MapPin, Users, Eye, Minus, Plus, MessageCircle, Phone, Clock, Star, Shield, Navigation, Car, ChevronUp, CheckCircle2 } from "lucide-react";
@@ -344,6 +349,19 @@ export default function RiderRideDetail() {
   const etaMinutes = tripMetrics?.etaMinutes ?? null;
   const distanceLeftKm = tripMetrics?.distanceKm ?? null;
 
+  // Live-nav telemetry (speed + bearing) reported from the embedded map.
+  const [navTele, setNavTele] = useState({ speedKmh: 0, bearing: 0, remainingMeters: 0 });
+
+  // Live route from driver → current target (pickup or dropoff). Recomputes on phase change.
+  const navTarget = ride
+    ? (isInProgress ? { lat: ride.dropoff_lat, lng: ride.dropoff_lon } : { lat: ride.pickup_lat, lng: ride.pickup_lon })
+    : null;
+  const { route: navRoute } = useOSRMRoute(
+    driverLocation && isAccepted ? { lat: driverLocation.lat, lng: driverLocation.lng } : null,
+    navTarget,
+  );
+  const useMapboxLiveNav = isAccepted && isGoogleMapsDisabled();
+
   // Ultra-compact collapsed content — thin floating bar
   const collapsedContent = (
     <div className="flex items-center justify-between h-8">
@@ -406,7 +424,25 @@ export default function RiderRideDetail() {
 
       {/* ═══ FULL-SCREEN MAP ═══ */}
       <div className="absolute inset-0">
-        {pickupCoords && isAccepted ? (
+        {useMapboxLiveNav && pickupCoords ? (
+          <>
+            <LiveNavMap
+              phase={isInProgress ? 'to_dropoff' : 'to_pickup'}
+              driverLocation={driverLocation}
+              pickup={pickupCoords}
+              dropoff={dropoffCoords!}
+              routeGeometry={navRoute?.geometry ?? ride?.route_polyline ?? null}
+              onTelemetry={setNavTele}
+              className="absolute inset-0"
+            />
+            <div className="absolute top-[calc(env(safe-area-inset-top,0px)+80px)] right-3 z-30">
+              <SpeedBadge kmh={navTele.speedKmh} />
+            </div>
+            <div className="absolute bottom-[340px] right-4 z-30">
+              <DirectionArrow3D bearing={navTele.bearing} />
+            </div>
+          </>
+        ) : pickupCoords && isAccepted ? (
           <TripGoogleMap
             driverLocation={driverLocation}
             pickup={pickupCoords}
@@ -434,6 +470,7 @@ export default function RiderRideDetail() {
           />
         )}
       </div>
+
 
       {/* ═══ TOP BAR (floating) ═══ */}
       <div className="absolute top-0 left-0 right-0 z-40 flex items-center justify-between px-4" style={{ paddingTop: 'calc(env(safe-area-inset-top) + 12px)' }}>
