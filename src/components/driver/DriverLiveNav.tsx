@@ -9,9 +9,12 @@ import { completeTrip } from '@/lib/completeTrip';
 import LiveNavMap, { type NavPhase } from '@/components/map/LiveNavMap';
 import SpeedBadge from '@/components/map/SpeedBadge';
 import DirectionArrow3D from '@/components/map/DirectionArrow3D';
+import TurnByTurnStrip from '@/components/map/TurnByTurnStrip';
+import TripTimeline, { statusToPhase } from '@/components/trip/TripTimeline';
 import { useOSRMRoute } from '@/hooks/useOSRMRoute';
 import { haversineMeters } from '@/lib/routeProgress';
 import type { Coordinates } from '@/lib/osrm';
+
 
 interface ActiveTrip {
   id: string;
