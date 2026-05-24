@@ -710,7 +710,10 @@ export default function DriverDashboard() {
 
   // Full-screen in-app live navigation mode (Mapbox-primary).
   if (fullNavMode && activeTrip) {
-    const useLegacyGoogleNav = !isGoogleMapsDisabled();
+    // Always use the Mapbox-based DriverLiveNav. The legacy Google FullScreenNavigation
+    // is kept out because the Google Maps key is unavailable and it would hang loading.
+    const useLegacyGoogleNav = false;
+
     return (
       <>
         {/* Active Call Overlay */}
