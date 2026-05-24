@@ -884,50 +884,64 @@ export default function RideView() {
 
           {/* Pickup & Dropoff — premium cards with swap */}
           <div className="space-y-2 relative">
-            <button
-              onClick={() => {setActiveField('pickup');setSearchQuery('');}}
-              className="w-full min-h-[62px] flex items-center gap-3 px-3 py-3 rounded-2xl active:scale-[0.98] transition-all text-left glass-card">
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={() => { setActiveField('pickup'); setSearchQuery(''); }}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { setActiveField('pickup'); setSearchQuery(''); } }}
+              className="w-full min-h-[62px] flex items-center gap-3 px-3 py-3 rounded-2xl active:scale-[0.98] transition-all text-left glass-card cursor-pointer">
               <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-accent">
                 <MapPin className="w-4 h-4 text-accent-foreground" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-semibold text-primary uppercase tracking-widest">Pickup</p>
-                <p className={cn("text-[14px] font-medium truncate", pickupLocation ? 'text-foreground' : 'text-muted-foreground')}>
+                <p className="text-[10px] font-semibold text-primary uppercase tracking-widest leading-tight">Pickup</p>
+                <p className={cn("text-[14px] font-medium truncate leading-snug", pickupLocation ? 'text-foreground' : 'text-muted-foreground')}>
                   {pickupLocation?.name || 'Where from?'}
                 </p>
               </div>
-              {pickupLocation ?
-              <span onClick={(e) => {e.stopPropagation();setPickupLocation(null);}} className="p-1.5 hover:bg-foreground/5 rounded-full"><X className="w-3.5 h-3.5 text-muted-foreground" /></span> :
-              <button onClick={(e) => {e.stopPropagation();handleUseMyLocation();}} className="p-1.5 hover:bg-foreground/5 rounded-full"><Locate className="w-3.5 h-3.5 text-primary" /></button>
-              }
-            </button>
+              {pickupLocation ? (
+                <button type="button" onClick={(e) => { e.stopPropagation(); setPickupLocation(null); }} className="p-1.5 hover:bg-foreground/5 rounded-full shrink-0" aria-label="Clear pickup">
+                  <X className="w-3.5 h-3.5 text-muted-foreground" />
+                </button>
+              ) : (
+                <button type="button" onClick={(e) => { e.stopPropagation(); handleUseMyLocation(); }} className="p-1.5 hover:bg-foreground/5 rounded-full shrink-0" aria-label="Use my location">
+                  <Locate className="w-3.5 h-3.5 text-primary" />
+                </button>
+              )}
+            </div>
 
-            <button
-              onClick={() => {setActiveField('dropoff');setSearchQuery('');}}
-              className="w-full min-h-[62px] flex items-center gap-3 px-3 py-3 rounded-2xl active:scale-[0.98] transition-all text-left glass-card">
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={() => { setActiveField('dropoff'); setSearchQuery(''); }}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { setActiveField('dropoff'); setSearchQuery(''); } }}
+              className="w-full min-h-[62px] flex items-center gap-3 px-3 py-3 rounded-2xl active:scale-[0.98] transition-all text-left glass-card cursor-pointer">
               <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'var(--gradient-primary)' }}>
                 <MapPin className="w-4 h-4 text-primary-foreground" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-semibold text-primary uppercase tracking-widest">Drop-off</p>
-                <p className={cn("text-[14px] font-medium truncate", dropoffLocation ? 'text-foreground' : 'text-muted-foreground')}>
+                <p className="text-[10px] font-semibold text-primary uppercase tracking-widest leading-tight">Drop-off</p>
+                <p className={cn("text-[14px] font-medium truncate leading-snug", dropoffLocation ? 'text-foreground' : 'text-muted-foreground')}>
                   {dropoffLocation?.name || 'Where to?'}
                 </p>
               </div>
-              {dropoffLocation &&
-              <span onClick={(e) => {e.stopPropagation();setDropoffLocation(null);}} className="p-1.5 hover:bg-foreground/5 rounded-full"><X className="w-3.5 h-3.5 text-muted-foreground" /></span>
-              }
-            </button>
+              {dropoffLocation && (
+                <button type="button" onClick={(e) => { e.stopPropagation(); setDropoffLocation(null); }} className="p-1.5 hover:bg-foreground/5 rounded-full shrink-0" aria-label="Clear drop-off">
+                  <X className="w-3.5 h-3.5 text-muted-foreground" />
+                </button>
+              )}
+            </div>
 
             <button
+              type="button"
               onClick={handleSwapPickupDropoff}
               className="absolute right-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-xl glass-card flex items-center justify-center text-primary active:scale-90 transition-all"
               title="Swap pickup and drop-off"
               aria-label="Swap pickup and drop-off">
-              
               <Route className="w-4 h-4" />
             </button>
           </div>
+
 
 
           {/* Multi-stop + Schedule */}
