@@ -66,6 +66,8 @@ import GenderPreferenceToggle, { type GenderPreference } from './GenderPreferenc
 import ContactPickerSheet from './ContactPickerSheet';
 import LuggageButton from '@/components/luggage/LuggageButton';
 import LuggageSheet from '@/components/luggage/LuggageSheet';
+import GpsPermissionBanner from '@/components/ride/GpsPermissionBanner';
+
 
 interface SelectedLocation {name: string;lat: number;lng: number;}
 interface GPSState {status: 'idle' | 'loading' | 'success' | 'denied' | 'unavailable';coords: {lat: number;lng: number;} | null;error: string | null;}
