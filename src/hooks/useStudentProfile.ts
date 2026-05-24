@@ -44,15 +44,16 @@ export function useStudentProfile() {
     }
     setLoading(true);
     // Explicit allowlist — never pull national_id_number / registration_number
-    // into the client bundle / memory. Those PII fields stay server-side and
-    // are only read by the admin verification surface.
+    // into the client. Internal anti-fraud signals (fraud_score, device_id,
+    // attempt_count, face_match_score) are column-level revoked from
+    // authenticated and MUST NOT be selected by the client.
     const { data } = await supabase
       .from('student_profiles')
       .select(
         'id, user_id, institution_id, id_photo_path, selfie_photo_path, ' +
-        'id_photo_quality, selfie_photo_quality, face_match_score, ' +
-        'verification_status, student_mode_active, attempt_count, ' +
-        'fraud_score, rejection_reason, created_at, updated_at'
+        'id_photo_quality, selfie_photo_quality, ' +
+        'verification_status, student_mode_active, ' +
+        'rejection_reason, created_at, updated_at'
       )
       .eq('user_id', user.id)
       .maybeSingle();
