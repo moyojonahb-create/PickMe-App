@@ -867,6 +867,10 @@ export default function RideView() {
             <EmailVerificationBanner email={user.email} emailConfirmedAt={user.email_confirmed_at ?? null} />
           )}
 
+          {/* GPS state banner — explains denied/loading/unavailable with a one-tap retry. */}
+          <GpsPermissionBanner status={gpsState.status} error={gpsState.error} onRetry={handleUseMyLocation} />
+
+
           {/* Service type indicator */}
           {serviceType !== 'ride' &&
           <div className="flex items-center justify-between px-1">
