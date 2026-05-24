@@ -25,6 +25,7 @@ interface Row {
   fraud_score: number;
   attempt_count: number;
   device_id: string | null;
+  institution_id: string | null;
   rejection_reason: string | null;
   id_photo_path: string | null;
   selfie_photo_path: string | null;
