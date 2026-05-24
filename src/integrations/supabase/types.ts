@@ -2647,6 +2647,37 @@ export type Database = {
         Args: { p_reason: string; p_severity?: string; p_user_id: string }
         Returns: Json
       }
+      admin_list_student_profiles: {
+        Args: { p_status?: string }
+        Returns: {
+          approved_at: string | null
+          approved_by: string | null
+          attempt_count: number
+          created_at: string
+          device_id: string | null
+          face_match_score: number | null
+          fraud_score: number
+          id: string
+          id_photo_path: string | null
+          id_photo_quality: Json | null
+          institution_id: string
+          national_id_number: string
+          registration_number: string
+          rejection_reason: string | null
+          selfie_photo_path: string | null
+          selfie_photo_quality: Json | null
+          student_mode_active: boolean
+          updated_at: string
+          user_id: string
+          verification_status: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "student_profiles"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       admin_lock_wallet: {
         Args: { p_reason: string; p_user_id: string }
         Returns: Json
