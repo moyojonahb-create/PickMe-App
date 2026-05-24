@@ -66,6 +66,8 @@ import GenderPreferenceToggle, { type GenderPreference } from './GenderPreferenc
 import ContactPickerSheet from './ContactPickerSheet';
 import LuggageButton from '@/components/luggage/LuggageButton';
 import LuggageSheet from '@/components/luggage/LuggageSheet';
+import GpsPermissionBanner from '@/components/ride/GpsPermissionBanner';
+
 
 interface SelectedLocation {name: string;lat: number;lng: number;}
 interface GPSState {status: 'idle' | 'loading' | 'success' | 'denied' | 'unavailable';coords: {lat: number;lng: number;} | null;error: string | null;}
@@ -864,6 +866,10 @@ export default function RideView() {
           {user?.email && !user?.email_confirmed_at && (
             <EmailVerificationBanner email={user.email} emailConfirmedAt={user.email_confirmed_at ?? null} />
           )}
+
+          {/* GPS state banner — explains denied/loading/unavailable with a one-tap retry. */}
+          <GpsPermissionBanner status={gpsState.status} error={gpsState.error} onRetry={handleUseMyLocation} />
+
 
           {/* Service type indicator */}
           {serviceType !== 'ride' &&

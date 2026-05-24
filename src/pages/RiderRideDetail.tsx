@@ -26,7 +26,10 @@ import TripGoogleMap from "@/components/TripGoogleMap";
 import LiveNavMap from "@/components/map/LiveNavMap";
 import SpeedBadge from "@/components/map/SpeedBadge";
 import DirectionArrow3D from "@/components/map/DirectionArrow3D";
+import TurnByTurnStrip from "@/components/map/TurnByTurnStrip";
+import TripTimeline, { statusToPhase } from "@/components/trip/TripTimeline";
 import { useOSRMRoute } from "@/hooks/useOSRMRoute";
+
 import { isGoogleMapsDisabled } from "@/lib/mapsKillSwitch";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -360,7 +363,10 @@ export default function RiderRideDetail() {
     driverLocation && isAccepted ? { lat: driverLocation.lat, lng: driverLocation.lng } : null,
     navTarget,
   );
-  const useMapboxLiveNav = isAccepted && isGoogleMapsDisabled();
+  // Always prefer the Mapbox-based live nav while accepted — Google key is unavailable
+  // in this environment and the legacy Google maps will hang forever.
+  const useMapboxLiveNav = isAccepted;
+
 
   // Ultra-compact collapsed content — thin floating bar
   const collapsedContent = (
@@ -470,6 +476,29 @@ export default function RiderRideDetail() {
           />
         )}
       </div>
+
+      {/* Live turn-by-turn + trip timeline overlay (only while there is a driver). */}
+      {isAccepted && useMapboxLiveNav && (
+        <div
+          className="absolute left-0 right-0 z-30 px-3 space-y-2 pointer-events-none"
+          style={{ top: 'calc(env(safe-area-inset-top, 0px) + 68px)' }}
+        >
+          <div className="pointer-events-auto">
+            <TurnByTurnStrip origin={driverLocation} destination={navTarget} />
+          </div>
+          <div className="pointer-events-auto mx-auto max-w-md rounded-2xl bg-white/85 backdrop-blur-xl border border-white/40 px-3 py-2 shadow-sm">
+            <TripTimeline phase={statusToPhase(ride?.status)} compact />
+            {(etaMinutes || distanceLeftKm) && (
+              <p className="mt-1 text-center text-[11px] font-semibold text-foreground/70 tabular-nums">
+                {etaMinutes ? `${etaMinutes} min` : ''}
+                {etaMinutes && distanceLeftKm ? ' · ' : ''}
+                {distanceLeftKm ? `${distanceLeftKm.toFixed(1)} km left` : ''}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
 
 
       {/* ═══ TOP BAR (floating) ═══ */}
