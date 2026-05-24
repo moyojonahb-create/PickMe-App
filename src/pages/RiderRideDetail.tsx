@@ -26,7 +26,10 @@ import TripGoogleMap from "@/components/TripGoogleMap";
 import LiveNavMap from "@/components/map/LiveNavMap";
 import SpeedBadge from "@/components/map/SpeedBadge";
 import DirectionArrow3D from "@/components/map/DirectionArrow3D";
+import TurnByTurnStrip from "@/components/map/TurnByTurnStrip";
+import TripTimeline, { statusToPhase } from "@/components/trip/TripTimeline";
 import { useOSRMRoute } from "@/hooks/useOSRMRoute";
+
 import { isGoogleMapsDisabled } from "@/lib/mapsKillSwitch";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
