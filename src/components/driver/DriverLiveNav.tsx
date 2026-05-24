@@ -152,7 +152,7 @@ export default function DriverLiveNav({
       />
 
       {/* Top status card */}
-      <div className="absolute top-0 left-0 right-0 z-10 p-3 pt-[calc(env(safe-area-inset-top,0px)+12px)]">
+      <div className="absolute top-0 left-0 right-0 z-10 p-3 pt-[calc(env(safe-area-inset-top,0px)+12px)] space-y-2">
         <motion.div
           initial={{ opacity: 0, y: -16 }}
           animate={{ opacity: 1, y: 0 }}
@@ -176,21 +176,28 @@ export default function DriverLiveNav({
             <div className="text-right shrink-0">
               <p className="text-[10px] uppercase font-semibold text-foreground/55">ETA</p>
               <p className="text-xl font-black tabular-nums text-primary leading-none">{minutesLeft}<span className="text-[10px] ml-0.5">min</span></p>
-              <p className="text-[11px] font-semibold text-foreground/70 mt-0.5">{distanceLabel}</p>
+              <p className="text-[11px] font-semibold text-foreground/70 mt-0.5 tabular-nums">{distanceLabel}</p>
             </div>
           </div>
+          <div className="mt-2.5 pt-2.5 border-t border-foreground/10">
+            <TripTimeline phase={statusToPhase(activeTrip.status)} compact />
+          </div>
         </motion.div>
+
+        {/* Turn-by-turn instruction strip */}
+        <TurnByTurnStrip origin={driverLatLng} destination={target} />
       </div>
 
       {/* Floating speed badge (top-right) */}
-      <div className="absolute top-[calc(env(safe-area-inset-top,0px)+120px)] right-3 z-10">
+      <div className="absolute top-[calc(env(safe-area-inset-top,0px)+200px)] right-3 z-10">
         <SpeedBadge kmh={tele.speedKmh} />
       </div>
 
       {/* 3D direction arrow (above bottom card) */}
-      <div className="absolute bottom-[210px] right-4 z-10">
+      <div className="absolute bottom-[210px] right-4 z-10 hidden sm:block">
         <DirectionArrow3D bearing={tele.bearing} />
       </div>
+
 
       {/* Bottom action panel */}
       <div className="absolute bottom-0 left-0 right-0 z-10 p-3 pb-[calc(env(safe-area-inset-bottom,0px)+12px)]">
