@@ -360,7 +360,10 @@ export default function RiderRideDetail() {
     driverLocation && isAccepted ? { lat: driverLocation.lat, lng: driverLocation.lng } : null,
     navTarget,
   );
-  const useMapboxLiveNav = isAccepted && isGoogleMapsDisabled();
+  // Always prefer the Mapbox-based live nav while accepted — Google key is unavailable
+  // in this environment and the legacy Google maps will hang forever.
+  const useMapboxLiveNav = isAccepted;
+
 
   // Ultra-compact collapsed content — thin floating bar
   const collapsedContent = (
