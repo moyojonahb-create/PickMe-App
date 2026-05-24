@@ -76,11 +76,24 @@ export default function AdminStudents() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    let q = supabase.from('student_profiles').select('*, institutions(name, city)').order('created_at', { ascending: false });
-    if (filter !== 'all') q = q.eq('verification_status', filter);
-    const { data, error } = await q;
+    // Use SECURITY DEFINER RPC so column-level revokes on sensitive
+    // anti-fraud fields don't strip them from the admin view.
+    const { data, error } = await supabase.rpc('admin_list_student_profiles', {
+      p_status: filter === 'all' ? null : filter,
+    });
     if (error) toast.error(error.message);
-    setRows((data as unknown as Row[]) ?? []);
+    // Hydrate institution info in a second pass.
+    const baseRows = (data as unknown as Row[]) ?? [];
+    const instIds = Array.from(new Set(baseRows.map(r => r.institution_id).filter(Boolean)));
+    if (instIds.length > 0) {
+      const { data: insts } = await supabase
+        .from('institutions')
+        .select('id, name, city')
+        .in('id', instIds as string[]);
+      const byId = new Map((insts ?? []).map((i: any) => [i.id, { name: i.name, city: i.city }]));
+      baseRows.forEach(r => { (r as any).institutions = byId.get(r.institution_id) ?? null; });
+    }
+    setRows(baseRows);
     setLoading(false);
   }, [filter]);
 
