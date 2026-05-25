@@ -334,13 +334,13 @@ function LiveNavMapInner({
   }
 
   return (
-    <div className={`relative ${className}`}>
-      {!ready && (
-        <div className="absolute inset-0 z-10">
-          <Skeleton className="absolute inset-0 rounded-none" />
+    <div className={className} style={{ position: 'absolute', inset: 0 }}>
+      <div ref={containerRef} className="absolute inset-0 w-full h-full bg-[#0b1220]" />
+      {!ready && !loadError && (
+        <div className="absolute inset-0 z-10 pointer-events-none">
+          <Skeleton className="absolute inset-0 rounded-none opacity-60" />
         </div>
       )}
-      <div ref={containerRef} className="absolute inset-0 w-full h-full" />
     </div>
   );
 }
