@@ -99,6 +99,9 @@ function LiveNavMapInner({
       try {
         const token = await getMapboxToken();
         if (cancelled) return;
+        if (!token || !token.startsWith('pk.')) {
+          throw new Error('Invalid Mapbox token (expected pk.*)');
+        }
         mapboxgl.accessToken = token;
 
         const map = new mapboxgl.Map({
@@ -112,8 +115,20 @@ function LiveNavMapInner({
           maxZoom: 19,
           attributionControl: false,
         });
+
+        // Surface auth/tile errors instead of staying silent on a black canvas.
+        map.on('error', (ev: { error?: { message?: string; status?: number } }) => {
+          const msg = ev?.error?.message || 'Unknown map error';
+          console.error('[LiveNavMap] mapbox error:', msg, ev);
+          if (/401|403|Unauthor|access token|Forbidden/i.test(msg)) {
+            setLoadError(`Mapbox auth error: ${msg}`);
+          }
+        });
+
         map.on('load', () => {
           if (cancelled) return;
+          // Force a resize once style is ready — fixes 0px container races.
+          requestAnimationFrame(() => map.resize());
 
           // Glow casing (soft outer halo)
           map.addSource('nav-route', {
@@ -151,6 +166,7 @@ function LiveNavMapInner({
         });
         mapRef.current = map;
       } catch (e) {
+        console.error('[LiveNavMap] init failed:', e);
         if (!cancelled) setLoadError((e as Error).message);
       }
     })();
