@@ -12,8 +12,8 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
-const MAX_FILES_PER_BATCH = 12;
-const MAX_BYTES_PER_FILE = 18_000;
+const MAX_FILES_PER_BATCH = 16;
+const MAX_BYTES_PER_FILE = 28_000;
 
 interface FileInput {
   path: string;
