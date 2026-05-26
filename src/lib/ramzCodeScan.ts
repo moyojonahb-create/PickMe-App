@@ -75,6 +75,8 @@ export interface ScanResult {
 }
 
 const BATCH_SIZE = 6;
+const AI_CONCURRENCY = 3; // up to 3 AI batches in flight at once
+const AI_FAILURE_TOLERANCE = 2; // disable AI only after N consecutive failures
 
 export async function listScannableFiles(): Promise<string[]> {
   return Object.keys(RAW_MODULES).sort();
@@ -92,11 +94,16 @@ export async function runCodeScan(
   const findings: CodeFinding[] = [];
   const scannedFiles: string[] = [];
   let aiDisabled = options.heuristicOnly === true;
+  let consecutiveFailures = 0;
+  let scannedCount = 0;
 
+  // Pre-build all batches.
+  const batches: string[][] = [];
   for (let i = 0; i < allPaths.length; i += BATCH_SIZE) {
-    const batch = allPaths.slice(i, i + BATCH_SIZE);
-    options.onProgress?.({ scanned: i, total: allPaths.length, currentBatch: batch });
+    batches.push(allPaths.slice(i, i + BATCH_SIZE));
+  }
 
+  const runBatch = async (batch: string[]) => {
     const files = await Promise.all(
       batch.map(async (path) => ({
         path: path.replace(/^\//, ''),
@@ -104,38 +111,51 @@ export async function runCodeScan(
       })),
     );
 
-    // ALWAYS run the local heuristic scanner — it costs nothing and works offline.
+    // ALWAYS run local heuristics — costs nothing, works offline.
     for (const f of files) {
       const local = heuristicScanFile(f.path, f.content);
       findings.push(...local);
       scannedFiles.push(f.path);
     }
 
-    // Optionally augment with AI findings when credits/quota are available.
-    if (aiDisabled) continue;
+    if (aiDisabled) return;
 
-    const { data, error } = await supabase.functions.invoke('ramz-code-scan', {
-      body: { files },
-    });
+    try {
+      const { data, error } = await supabase.functions.invoke('ramz-code-scan', {
+        body: { files },
+      });
 
-    if (error) {
-      console.warn('ramz-code-scan AI batch failed — continuing with heuristic results.', error);
-      aiDisabled = true; // stop hammering the gateway for the rest of the run
-      continue;
-    }
-
-    if (data?.fallback) {
-      // 402 / 429 / gateway error — keep scanning with heuristics only.
-      console.warn('ramz-code-scan AI fallback signaled:', data?.error);
-      aiDisabled = true;
-      continue;
-    }
-
-    if (Array.isArray(data?.findings)) {
-      for (const f of data.findings as CodeFinding[]) {
-        if (f && typeof f.file === 'string') findings.push(f);
+      if (error || data?.fallback) {
+        consecutiveFailures++;
+        if (consecutiveFailures >= AI_FAILURE_TOLERANCE) {
+          console.warn('ramz-code-scan AI disabled after consecutive failures.');
+          aiDisabled = true;
+        }
+        return;
       }
+
+      consecutiveFailures = 0;
+      if (Array.isArray(data?.findings)) {
+        for (const f of data.findings as CodeFinding[]) {
+          if (f && typeof f.file === 'string') findings.push(f);
+        }
+      }
+    } catch (e) {
+      consecutiveFailures++;
+      if (consecutiveFailures >= AI_FAILURE_TOLERANCE) aiDisabled = true;
     }
+  };
+
+  // Run batches with bounded concurrency.
+  for (let i = 0; i < batches.length; i += AI_CONCURRENCY) {
+    const group = batches.slice(i, i + AI_CONCURRENCY);
+    options.onProgress?.({
+      scanned: scannedCount,
+      total: allPaths.length,
+      currentBatch: group.flat(),
+    });
+    await Promise.allSettled(group.map(runBatch));
+    scannedCount += group.reduce((n, b) => n + b.length, 0);
   }
 
   options.onProgress?.({ scanned: allPaths.length, total: allPaths.length, currentBatch: [] });
