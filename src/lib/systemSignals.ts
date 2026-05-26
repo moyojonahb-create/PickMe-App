@@ -30,19 +30,23 @@ const nowMs = () => Date.now();
 const minutesAgoISO = (m: number) => new Date(nowMs() - m * 60_000).toISOString();
 const hoursAgoISO = (h: number) => new Date(nowMs() - h * 3_600_000).toISOString();
 
-async function safeCount(
-  table: string,
-  build: (q: ReturnType<typeof supabase.from>) => any,
-): Promise<number | null> {
+/**
+ * Run a head-count query and never throw. Returns null on error.
+ * The builder argument is `any` because each table has a different generic type
+ * and we want a single helper for all of them.
+ */
+async function runCount(builder: any): Promise<number | null> {
   try {
-    const q = build(supabase.from(table as any).select('id', { count: 'exact', head: true }));
-    const { count, error } = await q;
+    const { count, error } = await builder;
     if (error) return null;
     return count ?? 0;
   } catch {
     return null;
   }
 }
+
+const head = (table: string) =>
+  (supabase.from(table as any) as any).select('id', { count: 'exact', head: true });
 
 const sevFromCount = (n: number | null, warn: number, crit: number): SignalSeverity => {
   if (n == null) return 'warn';
