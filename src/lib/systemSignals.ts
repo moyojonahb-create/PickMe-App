@@ -70,10 +70,10 @@ export async function getRidePipelineSignal(): Promise<SignalCard> {
   const oneHourAgo = hoursAgoISO(1);
 
   const [pending, stuckAccepted, stuckInProgress, completedLastHour] = await Promise.all([
-    safeCount('rides', (q) => q.eq('status', 'pending')),
-    safeCount('rides', (q) => q.eq('status', 'accepted').lt('updated_at', fifteenAgo)),
-    safeCount('rides', (q) => q.eq('status', 'in_progress').lt('updated_at', fiveAgo)),
-    safeCount('rides', (q) => q.eq('status', 'completed').gt('updated_at', oneHourAgo)),
+    runCount(head('rides').eq('status', 'pending')),
+    runCount(head('rides').eq('status', 'accepted').lt('updated_at', fifteenAgo)),
+    runCount(head('rides').eq('status', 'in_progress').lt('updated_at', fiveAgo)),
+    runCount(head('rides').eq('status', 'completed').gt('updated_at', oneHourAgo)),
   ]);
 
   const metrics: SignalMetric[] = [
@@ -99,10 +99,10 @@ export async function getWalletIntegritySignal(): Promise<SignalCard> {
   const oneDay = hoursAgoISO(24);
 
   const [locked, paymentFailed, depositsPending, riderDepositsPending] = await Promise.all([
-    safeCount('wallets', (q) => q.eq('is_locked', true)),
-    safeCount('rides', (q) => q.eq('payment_failed', true).gt('created_at', oneDay)),
-    safeCount('deposit_requests', (q) => q.eq('status', 'pending')),
-    safeCount('rider_deposit_requests', (q) => q.eq('status', 'pending')),
+    runCount(head('wallets').eq('is_locked', true)),
+    runCount(head('rides').eq('payment_failed', true).gt('created_at', oneDay)),
+    runCount(head('deposit_requests').eq('status', 'pending')),
+    runCount(head('rider_deposit_requests').eq('status', 'pending')),
   ]);
 
   const metrics: SignalMetric[] = [
@@ -126,9 +126,9 @@ export async function getWalletIntegritySignal(): Promise<SignalCard> {
 // ============================================================
 export async function getDriverFleetSignal(): Promise<SignalCard> {
   const [online, approved, pendingApproval] = await Promise.all([
-    safeCount('drivers', (q) => q.eq('is_online', true).eq('status', 'approved')),
-    safeCount('drivers', (q) => q.eq('status', 'approved')),
-    safeCount('drivers', (q) => q.eq('status', 'pending')),
+    runCount(head('drivers').eq('is_online', true).eq('status', 'approved')),
+    runCount(head('drivers').eq('status', 'approved')),
+    runCount(head('drivers').eq('status', 'pending')),
   ]);
 
   // On-trip = approved drivers with an active ride.
@@ -164,8 +164,8 @@ export async function getRealtimeSignal(): Promise<SignalCard> {
   const fiveMinAgo = minutesAgoISO(5);
 
   const [freshPings, stalePings] = await Promise.all([
-    safeCount('live_locations', (q) => q.gt('updated_at', sixtySecondsAgo)),
-    safeCount('live_locations', (q) => q.lt('updated_at', fiveMinAgo)),
+    runCount(head('live_locations').gt('updated_at', sixtySecondsAgo)),
+    runCount(head('live_locations').lt('updated_at', fiveMinAgo)),
   ]);
 
   // Drivers in active trips without a recent ping.
@@ -199,8 +199,8 @@ export async function getSecuritySignal(): Promise<SignalCard> {
   const oneDay = hoursAgoISO(24);
 
   const [unresolvedFlags, criticalFlags, sosLast24h] = await Promise.all([
-    safeCount('fraud_flags', (q) => q.eq('resolved', false)),
-    safeCount('fraud_flags', (q) => q.eq('resolved', false).eq('severity', 'critical')),
+    runCount(head('fraud_flags').eq('resolved', false)),
+    runCount(head('fraud_flags').eq('resolved', false).eq('severity', 'critical')),
     safeCount('fraud_flags', (q) =>
       q.eq('flag_type', 'sos_alert').gt('created_at', oneDay),
     ),
@@ -228,8 +228,8 @@ export async function getSupportSignal(): Promise<SignalCard> {
   const oneDay = hoursAgoISO(24);
 
   const [openDisputes, recentDisputes, oldDisputes] = await Promise.all([
-    safeCount('disputes', (q) => q.in('status', ['open', 'in_review'])),
-    safeCount('disputes', (q) => q.gt('created_at', oneDay)),
+    runCount(head('disputes').in('status', ['open', 'in_review'])),
+    runCount(head('disputes').gt('created_at', oneDay)),
     safeCount('disputes', (q) =>
       q.in('status', ['open', 'in_review']).lt('created_at', hoursAgoISO(48)),
     ),
