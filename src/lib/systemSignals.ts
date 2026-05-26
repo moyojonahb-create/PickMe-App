@@ -167,9 +167,7 @@ export async function getRealtimeSignal(): Promise<SignalCard> {
   ]);
 
   // Drivers in active trips without a recent ping.
-  const inTripNoPing = await safeCount('rides', (q) =>
-    q.in('status', ['accepted', 'in_progress']).lt('updated_at', fiveMinAgo),
-  );
+  const inTripNoPing = await runCount(head('rides').in('status', ['accepted', 'in_progress']).lt('updated_at', fiveMinAgo));
 
   const metrics: SignalMetric[] = [
     { label: 'GPS pings <60s', value: freshPings ?? '—', severity: 'ok' },
@@ -199,9 +197,7 @@ export async function getSecuritySignal(): Promise<SignalCard> {
   const [unresolvedFlags, criticalFlags, sosLast24h] = await Promise.all([
     runCount(head('fraud_flags').eq('resolved', false)),
     runCount(head('fraud_flags').eq('resolved', false).eq('severity', 'critical')),
-    safeCount('fraud_flags', (q) =>
-      q.eq('flag_type', 'sos_alert').gt('created_at', oneDay),
-    ),
+    runCount(head('fraud_flags').eq('flag_type', 'sos_alert').gt('created_at', oneDay)),
   ]);
 
   const metrics: SignalMetric[] = [
@@ -228,9 +224,7 @@ export async function getSupportSignal(): Promise<SignalCard> {
   const [openDisputes, recentDisputes, oldDisputes] = await Promise.all([
     runCount(head('disputes').in('status', ['open', 'in_review'])),
     runCount(head('disputes').gt('created_at', oneDay)),
-    safeCount('disputes', (q) =>
-      q.in('status', ['open', 'in_review']).lt('created_at', hoursAgoISO(48)),
-    ),
+    runCount(head('disputes').in('status', ['open', 'in_review']).lt('created_at', hoursAgoISO(48))),
   ]);
 
   const metrics: SignalMetric[] = [
