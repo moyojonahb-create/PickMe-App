@@ -12,17 +12,21 @@ import { supabase } from '@/lib/supabaseClient';
 import { heuristicScanFile } from './ramzHeuristicScan';
 
 // Pull raw file contents at build time.
+// Scans the entire src/ tree EXCEPT test files, generated Supabase types, and the
+// scanner internals themselves (they trip their own rules with literal regex strings).
 const RAW_MODULES = import.meta.glob(
   [
-    '/src/hooks/**/*.{ts,tsx}',
-    '/src/lib/**/*.ts',
-    '/src/components/ride/**/*.{ts,tsx}',
-    '/src/components/wallet/**/*.{ts,tsx}',
-    '/src/components/admin/**/*.{ts,tsx}',
-    '/src/pages/Ride.tsx',
-    '/src/pages/RiderWalletPage.tsx',
-    '/src/pages/DriverWalletPage.tsx',
-    '/src/pages/RiderProfile.tsx',
+    '/src/**/*.{ts,tsx}',
+    '!/src/test/**',
+    '!/src/integrations/supabase/types.ts',
+    '!/src/integrations/supabase/client.ts',
+    '!/src/lib/ramzCodeScan.ts',
+    '!/src/lib/ramzHeuristicScan.ts',
+    '!/src/lib/ramzPatch.ts',
+    '!/src/lib/ramzPrompt.ts',
+    '!/src/lib/ramzAudit.ts',
+    '!/src/components/admin/RamzCodeScanPanel.tsx',
+    '!/src/vite-env.d.ts',
   ],
   { query: '?raw', import: 'default', eager: false },
 ) as Record<string, () => Promise<string>>;
