@@ -132,9 +132,7 @@ export async function getDriverFleetSignal(): Promise<SignalCard> {
   ]);
 
   // On-trip = approved drivers with an active ride.
-  const onTrip = await safeCount('rides', (q) =>
-    q.in('status', ['accepted', 'in_progress', 'arrived']),
-  );
+  const onTrip = await runCount(head('rides').in('status', ['accepted', 'in_progress', 'arrived']));
 
   const metrics: SignalMetric[] = [
     { label: 'Online drivers', value: online ?? '—', severity: 'ok' },
