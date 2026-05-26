@@ -191,7 +191,7 @@ serve(async (req: Request) => {
       ? "https://api.openai.com/v1/chat/completions"
       : "https://ai.gateway.lovable.dev/v1/chat/completions";
     const aiKey = useOpenAI ? OPENAI_API_KEY! : LOVABLE_API_KEY!;
-    const aiModel = useOpenAI ? "gpt-4o-mini" : "google/gemini-3-flash-preview";
+    const aiModel = useOpenAI ? "gpt-4o" : "google/gemini-2.5-flash";
 
     const aiResp = await fetch(aiUrl, {
       method: "POST",
