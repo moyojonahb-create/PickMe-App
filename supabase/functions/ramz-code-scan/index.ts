@@ -75,7 +75,11 @@ Severity guide:
 - medium: noticeable inefficiency, weak typing on hot path, missing index
 - low: code quality, minor cleanup
 
-Skip files with no real problems.`;
+REPORTING POSTURE:
+- For each file, emit AT LEAST one finding unless the file is genuinely flawless.
+- Prefer false positives over silence — the human reviewer will triage.
+- Optional fields (rootCause, userImpact, scalabilityImpact, performanceImpact, securityImpact, implementationDetails, expectedResult) can be omitted when you are unsure — never drop a finding just because you cannot fill those.
+- Do not invent issues; ground every finding in the supplied source.`;
 
 const TOOL_SCHEMA = {
   type: "function",
