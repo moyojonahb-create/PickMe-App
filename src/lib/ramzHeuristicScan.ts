@@ -352,6 +352,314 @@ const RULES: Rule[] = [
       return /<[A-Z][A-Za-z0-9]+\b/.test(forward) && !/forwardRef/.test(forward);
     },
   },
+  // ============================================================
+  // EXPANDED RULESET — added to surface more real production risks.
+  // ============================================================
+  {
+    id: 'empty-catch',
+    category: 'reliability',
+    severity: 'medium',
+    title: 'Empty catch block swallows errors',
+    description: 'A catch block with no body hides failures and makes production issues invisible.',
+    rootCause: 'Errors are silently discarded; Sentry/logs never see them.',
+    userImpact: 'Users see stale UI or missing data with no explanation.',
+    suggestion: 'Log via console.error or toast.error, or rethrow when unrecoverable.',
+    expectedResult: 'All failures surface in logs and the UI.',
+    test: (line, idx, lines, path) => {
+      if (isTestFile(path) || isScannerSelf(path)) return false;
+      if (!/catch\s*(\([^)]*\))?\s*\{\s*$/.test(line)) return false;
+      const next = (lines[idx + 1] ?? '').trim();
+      return next === '}' || next === '/* ignore */}' || next === '// ignore';
+    },
+  },
+  {
+    id: 'hardcoded-hex-color',
+    category: 'ux',
+    severity: 'low',
+    title: 'Hard-coded HEX color in JSX',
+    description: 'Components use raw HEX colors instead of design-system tokens (project rule: HSL semantic tokens only).',
+    rootCause: 'Direct colors bypass theme support and break dark/light parity.',
+    suggestion: 'Replace with a semantic Tailwind token (text-foreground, bg-primary, etc.) defined in index.css.',
+    expectedResult: 'Colors respect theme switches and stay brand-consistent.',
+    test: (line, idx, lines, path) => {
+      if (!/\.(tsx|jsx)$/.test(path)) return false;
+      if (isTestFile(path) || isScannerSelf(path)) return false;
+      // Look for HEX in className or style props.
+      return /(className|style)=\{?[^}]*#[0-9a-fA-F]{3,8}\b/.test(line);
+    },
+  },
+  {
+    id: 'unguarded-json-parse',
+    category: 'bug',
+    severity: 'medium',
+    title: 'JSON.parse without try/catch',
+    description: 'Unguarded JSON.parse throws on malformed input and crashes the component tree.',
+    rootCause: 'Network or storage may return non-JSON; without try/catch the SyntaxError propagates up.',
+    userImpact: 'Random white-screen crashes when cached or remote payloads are corrupt.',
+    suggestion: 'Wrap in try/catch and fall back to a default, or use a safeParse helper.',
+    expectedResult: 'Corrupt payloads degrade gracefully.',
+    test: (line, idx, lines, path) => {
+      if (isTestFile(path) || isScannerSelf(path)) return false;
+      if (!/JSON\.parse\(/.test(line)) return false;
+      const window = lines.slice(Math.max(0, idx - 6), idx + 1).join('\n');
+      return !/try\s*\{/.test(window);
+    },
+  },
+  {
+    id: 'promise-no-catch',
+    category: 'reliability',
+    severity: 'medium',
+    title: 'Promise .then() without .catch()',
+    description: '.then() chains without a .catch() handler become unhandled rejections.',
+    suggestion: 'Add .catch((e) => console.error(e)) or await inside a try/catch.',
+    expectedResult: 'All async failures are observed.',
+    test: (line, idx, lines, path) => {
+      if (isTestFile(path) || isScannerSelf(path)) return false;
+      if (!/\.then\s*\(/.test(line)) return false;
+      const window = lines.slice(idx, idx + 6).join(' ');
+      if (/\.catch\s*\(/.test(window)) return false;
+      // Skip await-style — those are fine.
+      const before = lines.slice(Math.max(0, idx - 1), idx).join(' ');
+      return !/await\s+/.test(before);
+    },
+  },
+  {
+    id: 'missing-list-key',
+    category: 'react',
+    severity: 'medium',
+    title: 'Mapped JSX element without key prop',
+    description: 'Rendering arrays without a stable key prop forces React to re-render the entire list and causes state-loss bugs.',
+    suggestion: 'Add key={item.id} (or a stable unique value) to the returned element.',
+    expectedResult: 'Stable list reconciliation, no key warnings in console.',
+    test: (line, idx, lines, path) => {
+      if (!/\.(tsx|jsx)$/.test(path)) return false;
+      if (isTestFile(path) || isScannerSelf(path)) return false;
+      // crude: .map((... ) => <Tag without key on same or next line
+      if (!/\.map\s*\(\s*\(?[^)]*\)?\s*=>\s*</.test(line)) return false;
+      const window = lines.slice(idx, idx + 3).join(' ');
+      return !/\bkey\s*=/.test(window);
+    },
+  },
+  {
+    id: 'fetch-no-abort',
+    category: 'reliability',
+    severity: 'low',
+    title: 'fetch() without AbortController signal',
+    description: 'Without an abort signal, fetch() can update state after unmount and leak network requests on weak connections.',
+    suggestion: 'Pass { signal: controller.signal } and abort on cleanup.',
+    expectedResult: 'No "state update on unmounted component" warnings.',
+    test: (line, idx, lines, path) => {
+      if (isTestFile(path) || isScannerSelf(path)) return false;
+      if (!/\bfetch\s*\(/.test(line)) return false;
+      const window = lines.slice(idx, idx + 4).join(' ');
+      return !/signal\s*:/.test(window) && !/AbortController/.test(window);
+    },
+  },
+  {
+    id: 'as-any-cast',
+    category: 'type-safety',
+    severity: 'low',
+    title: '`as any` cast weakens type checking',
+    description: 'Casting through `as any` disables type-checking at the boundary and hides shape mismatches.',
+    suggestion: 'Cast to the precise type or use `unknown` + a runtime guard.',
+    test: (line, idx, lines, path) => {
+      if (isTestFile(path) || isScannerSelf(path)) return false;
+      return /\bas\s+any\b/.test(line) && !/\/\/\s*eslint-disable/.test(line);
+    },
+  },
+  {
+    id: 'inline-credentials',
+    category: 'security',
+    severity: 'critical',
+    title: 'Possible JWT or API key embedded in source',
+    description: 'A long literal that looks like a JWT (eyJ...) or OpenAI key (sk-...) is hard-coded in app code.',
+    securityImpact: 'Credential exposure to anyone who can read the bundle.',
+    suggestion: 'Move to a Supabase secret and read it from an edge function, never the browser bundle.',
+    test: (line, idx, lines, path) => {
+      if (isTestFile(path) || isScannerSelf(path)) return false;
+      if (path.includes('supabase/client') || path.includes('supabaseClient')) return false;
+      return /(['"`])(eyJ[A-Za-z0-9_\-]{20,}|sk-[A-Za-z0-9]{20,})\1/.test(line);
+    },
+  },
+  {
+    id: 'nonnull-bang',
+    category: 'bug',
+    severity: 'low',
+    title: 'Non-null assertion (!) on possibly-null value',
+    description: 'The ! operator silences the type system but throws at runtime when the value is actually null/undefined.',
+    suggestion: 'Use an explicit null check (`if (!x) return`) or optional chaining (`x?.y`).',
+    test: (line, idx, lines, path) => {
+      if (isTestFile(path) || isScannerSelf(path)) return false;
+      if (!/\.(tsx|ts)$/.test(path)) return false;
+      // crude: `something!.method(` or `something!.prop`
+      return /[A-Za-z0-9_\]]\!\.[A-Za-z_]/.test(line) && !/\/\/\s*eslint-disable/.test(line);
+    },
+  },
+  {
+    id: 'localstorage-no-try',
+    category: 'reliability',
+    severity: 'medium',
+    title: 'localStorage call without try/catch',
+    description: 'Safari private mode and some embedded WebViews throw on localStorage access — must be wrapped.',
+    suggestion: 'Wrap in try/catch and fall back to in-memory state.',
+    expectedResult: 'App boots successfully in Safari private mode and Capacitor WebViews.',
+    test: (line, idx, lines, path) => {
+      if (isTestFile(path) || isScannerSelf(path)) return false;
+      if (!/localStorage\.(get|set|remove)Item\s*\(/.test(line)) return false;
+      const window = lines.slice(Math.max(0, idx - 4), idx + 2).join('\n');
+      return !/try\s*\{/.test(window);
+    },
+  },
+  {
+    id: 'img-no-alt',
+    category: 'accessibility',
+    severity: 'low',
+    title: '<img> tag missing alt attribute',
+    description: 'Images without alt text fail screen readers and hurt SEO.',
+    suggestion: 'Add alt="" for decorative images or alt="meaningful description" for content.',
+    test: (line, idx, lines, path) => {
+      if (!/\.(tsx|jsx)$/.test(path)) return false;
+      if (isTestFile(path) || isScannerSelf(path)) return false;
+      if (!/<img\b/.test(line)) return false;
+      const window = lines.slice(idx, idx + 3).join(' ');
+      return !/\balt\s*=/.test(window);
+    },
+  },
+  {
+    id: 'gps-no-options',
+    category: 'mobile',
+    severity: 'medium',
+    title: 'getCurrentPosition without timeout/highAccuracy options',
+    description: 'Without options, getCurrentPosition can hang indefinitely on Android and drains battery with low-accuracy results.',
+    suggestion: 'Pass { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 }.',
+    expectedResult: 'GPS resolves in <10s or fails fast; battery usage stable.',
+    test: (line, idx, lines, path) => {
+      if (isTestFile(path) || isScannerSelf(path)) return false;
+      if (!/geolocation\.(get|watch)Position\s*\(/.test(line)) return false;
+      const window = lines.slice(idx, idx + 4).join(' ');
+      return !/timeout\s*:/.test(window);
+    },
+  },
+  {
+    id: 'realtime-on-no-event',
+    category: 'realtime',
+    severity: 'low',
+    title: 'Realtime .on() without explicit event filter',
+    description: 'Listening for "*" events delivers every change and floods the channel; scope to INSERT/UPDATE/DELETE.',
+    suggestion: 'Use { event: "INSERT" | "UPDATE" | "DELETE", schema: "public", table: "..." }.',
+    test: (line, idx, lines, path) => {
+      if (isTestFile(path) || isScannerSelf(path)) return false;
+      if (!/\.on\(\s*['"`]postgres_changes['"`]/.test(line)) return false;
+      const window = lines.slice(idx, idx + 4).join(' ');
+      return /event\s*:\s*['"`]\*['"`]/.test(window);
+    },
+  },
+  {
+    id: 'inline-style-large',
+    category: 'performance',
+    severity: 'low',
+    title: 'Large inline style object on JSX element',
+    description: 'Inline style objects break memoization and trigger re-renders; move to Tailwind classes or a stable variable.',
+    suggestion: 'Replace with className using design-system tokens.',
+    test: (line, idx, lines, path) => {
+      if (!/\.(tsx|jsx)$/.test(path)) return false;
+      if (isTestFile(path) || isScannerSelf(path)) return false;
+      const m = line.match(/style=\{\{([^}]+)\}\}/);
+      if (!m) return false;
+      // Count comma-separated props
+      return m[1].split(',').length >= 5;
+    },
+  },
+  {
+    id: 'rpc-template-string',
+    category: 'security',
+    severity: 'high',
+    title: 'supabase.rpc() called with template-string arguments',
+    description: 'Building RPC payloads via template strings risks injecting unexpected SQL inside the function body.',
+    securityImpact: 'Potential SQL injection vector through user-controlled string interpolation.',
+    suggestion: 'Pass typed parameters as an object: supabase.rpc("fn", { id, value }).',
+    test: (line, idx, lines, path) => {
+      if (isTestFile(path) || isScannerSelf(path)) return false;
+      return /supabase\.rpc\([^)]*\$\{/.test(line);
+    },
+  },
+  {
+    id: 'navigate-in-effect',
+    category: 'react',
+    severity: 'low',
+    title: 'navigate() inside useEffect without cleanup guard',
+    description: 'navigate() in an effect can run after unmount and cause a route loop.',
+    suggestion: 'Guard with an `isMounted` ref or restructure the effect dependencies.',
+    test: (line, idx, lines, path) => {
+      if (!/\.(tsx|ts)$/.test(path)) return false;
+      if (isTestFile(path) || isScannerSelf(path)) return false;
+      if (!/\bnavigate\s*\(/.test(line)) return false;
+      const before = lines.slice(Math.max(0, idx - 10), idx).join('\n');
+      return /useEffect\s*\(/.test(before) && !/return\s*\(\s*\)\s*=>/.test(before);
+    },
+  },
+  {
+    id: 'useeffect-empty-deps-with-state',
+    category: 'react',
+    severity: 'medium',
+    title: 'useEffect with empty deps reads changing state',
+    description: 'An effect with [] dependencies captures stale closures of any state it reads.',
+    suggestion: 'Add the referenced state/props to the dependency array, or move logic outside the effect.',
+    test: (line, idx, lines, path) => {
+      if (!/\.(tsx|ts)$/.test(path)) return false;
+      if (isTestFile(path) || isScannerSelf(path)) return false;
+      // crude: }, []); preceded by a multi-line effect body that references useState getters
+      if (!/\}\s*,\s*\[\s*\]\s*\)/.test(line)) return false;
+      const body = lines.slice(Math.max(0, idx - 25), idx).join('\n');
+      if (!/useEffect\s*\(/.test(body)) return false;
+      // Heuristic: body references a `setX(...)` call AND a state variable
+      return /set[A-Z]\w*\s*\(/.test(body) && /\b(loading|error|user|data|state|ride|driver)\b/.test(body);
+    },
+  },
+  {
+    id: 'tostring-on-optional',
+    category: 'bug',
+    severity: 'low',
+    title: '.toString() on possibly undefined value',
+    description: 'Calling .toString() on undefined throws "Cannot read properties of undefined".',
+    suggestion: 'Use String(x ?? "") or x?.toString() ?? "" instead.',
+    test: (line, idx, lines, path) => {
+      if (isTestFile(path) || isScannerSelf(path)) return false;
+      // pattern: foo?.bar.toString()  OR foo?.toString() not OK either if then chained
+      return /\?\.\w+\.toString\s*\(/.test(line);
+    },
+  },
+  {
+    id: 'unsafe-href-target',
+    category: 'security',
+    severity: 'medium',
+    title: 'External link missing rel="noopener noreferrer"',
+    description: 'Links with target="_blank" without noopener can give the opened page access to window.opener.',
+    securityImpact: 'Reverse tabnabbing — opened page can navigate your tab.',
+    suggestion: 'Always set rel="noopener noreferrer" on target="_blank" links.',
+    test: (line, idx, lines, path) => {
+      if (!/\.(tsx|jsx)$/.test(path)) return false;
+      if (isTestFile(path) || isScannerSelf(path)) return false;
+      if (!/target=['"]_blank['"]/.test(line)) return false;
+      const window = lines.slice(Math.max(0, idx - 1), idx + 2).join(' ');
+      return !/noopener/.test(window);
+    },
+  },
+  {
+    id: 'console-error-in-render',
+    category: 'reliability',
+    severity: 'low',
+    title: 'console.error called during render',
+    description: 'console.error inside a component body (outside an effect/handler) runs on every render and floods logs.',
+    suggestion: 'Move the log into a useEffect or an event handler.',
+    test: (line, idx, lines, path) => {
+      if (!/\.(tsx|jsx)$/.test(path)) return false;
+      if (isTestFile(path) || isScannerSelf(path)) return false;
+      if (!/^\s{2,4}console\.error\(/.test(line)) return false;
+      const before = lines.slice(Math.max(0, idx - 4), idx).join('\n');
+      return !/(useEffect|onClick|onSubmit|=>)/.test(before);
+    },
+  },
 ];
 
 export function heuristicScanFile(path: string, content: string): CodeFinding[] {

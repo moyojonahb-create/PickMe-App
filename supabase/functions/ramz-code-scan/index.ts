@@ -12,8 +12,8 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
-const MAX_FILES_PER_BATCH = 12;
-const MAX_BYTES_PER_FILE = 18_000;
+const MAX_FILES_PER_BATCH = 16;
+const MAX_BYTES_PER_FILE = 28_000;
 
 interface FileInput {
   path: string;
@@ -75,7 +75,11 @@ Severity guide:
 - medium: noticeable inefficiency, weak typing on hot path, missing index
 - low: code quality, minor cleanup
 
-Skip files with no real problems.`;
+REPORTING POSTURE:
+- For each file, emit AT LEAST one finding unless the file is genuinely flawless.
+- Prefer false positives over silence — the human reviewer will triage.
+- Optional fields (rootCause, userImpact, scalabilityImpact, performanceImpact, securityImpact, implementationDetails, expectedResult) can be omitted when you are unsure — never drop a finding just because you cannot fill those.
+- Do not invent issues; ground every finding in the supplied source.`;
 
 const TOOL_SCHEMA = {
   type: "function",
@@ -187,7 +191,7 @@ serve(async (req: Request) => {
       ? "https://api.openai.com/v1/chat/completions"
       : "https://ai.gateway.lovable.dev/v1/chat/completions";
     const aiKey = useOpenAI ? OPENAI_API_KEY! : LOVABLE_API_KEY!;
-    const aiModel = useOpenAI ? "gpt-4o-mini" : "google/gemini-3-flash-preview";
+    const aiModel = useOpenAI ? "gpt-4o" : "google/gemini-2.5-flash";
 
     const aiResp = await fetch(aiUrl, {
       method: "POST",
