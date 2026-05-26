@@ -857,6 +857,9 @@ export default function AdminSystemHealth() {
     <AdminGuard>
       <AdminLayout>
         <div className="space-y-6">
+          {/* Live operational signals — DB-backed, refreshes every 30s */}
+          <SystemSignals />
+
           {/* Live load + capacity forecast (top — most important for scale) */}
           <LoadPulsePanel />
 
