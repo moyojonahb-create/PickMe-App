@@ -1011,6 +1011,48 @@ export type Database = {
           },
         ]
       }
+      mirror_outbox: {
+        Row: {
+          created_at: string
+          id: number
+          last_error: string | null
+          next_retry_at: string
+          op: string
+          payload: Json
+          retry_count: number
+          row_pk: string
+          status: string
+          table_name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: number
+          last_error?: string | null
+          next_retry_at?: string
+          op: string
+          payload: Json
+          retry_count?: number
+          row_pk: string
+          status?: string
+          table_name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: number
+          last_error?: string | null
+          next_retry_at?: string
+          op?: string
+          payload?: Json
+          retry_count?: number
+          row_pk?: string
+          status?: string
+          table_name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       notifications: {
         Row: {
           body: string
