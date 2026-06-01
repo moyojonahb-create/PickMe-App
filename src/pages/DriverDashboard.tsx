@@ -6,6 +6,12 @@ import { useAuth } from "@/hooks/useAuth";
 import { useFemaleTheme } from "@/hooks/useFemaleTheme";
 import { useOpenRidesRealtime } from "@/hooks/useRideRealtime";
 import {
+  eventNumber,
+  eventRideId,
+  eventString,
+  type BackendSocketEvent,
+} from "@/lib/backendSocketClient";
+import {
   fetchOpenRides,
   getDriverProfile,
   submitOffer,
@@ -51,6 +57,7 @@ import { filterActiveRides, getSecondsRemaining, expireOldRides } from "@/lib/ri
 import { preloadAllTownPricing, type TownPricingConfig } from "@/hooks/useTownPricing";
 
 import { completeTrip } from "@/lib/completeTrip";
+import { backendPost } from "@/lib/backendClient";
 import WalletBalance from "@/components/wallet/WalletBalance";
 import DepositModal from "@/components/wallet/DepositModal";
 import TransactionsSheet from "@/components/wallet/TransactionsSheet";
@@ -151,9 +158,14 @@ export default function DriverDashboard() {
   const [statusUpdating, setStatusUpdating] = useState(false);
 
   const lastRideIds = useRef<Set<string>>(new Set());
+  const activeTripRef = useRef<typeof activeTrip>(null);
   const locationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const { speak, isSupported: voiceSupported } = useVoiceNavigation({ enabled: voiceEnabled });
   const [driverBalance, setDriverBalance] = useState(0);
+
+  useEffect(() => {
+    activeTripRef.current = activeTrip;
+  }, [activeTrip]);
   const fetchDriverBalance = useCallback(async () => {
     if (!user) return;
     const { data } = await supabase
@@ -278,57 +290,51 @@ export default function DriverDashboard() {
     }
   }, [isOnline, profile?.status]);
 
-  // Toggle online status with can_driver_operate check
+  // Toggle online status through backend driver presence.
   const toggleOnline = async (online: boolean) => {
-    if (!profile || togglingOnline) return;
+    console.log("TOGGLE CLICKED", online);
+    console.log("CURRENT PROFILE", profile);
+    if (!profile || togglingOnline) {
+      console.log("TOGGLE ABORTED: no profile or already toggling", { profile: !!profile, togglingOnline });
+      return;
+    }
 
-    // If going online, require selfie check first (once per session)
+    // If going online, require selfie check first
     if (online && !pendingOnlineAfterSelfie) {
-      const lastSelfie = sessionStorage.getItem('pickme-selfie-verified');
+      const lastSelfie = sessionStorage.getItem("pickme-selfie-verified");
+
       if (!lastSelfie) {
         setSelfieCheckOpen(true);
         return;
       }
     }
+
     setPendingOnlineAfterSelfie(false);
-
     setTogglingOnline(true);
+
     try {
-      if (online) {
-        const { data: canOperate, error: rpcErr } = await supabase.rpc("can_driver_operate", { p_driver_id: user!.id });
-        if (rpcErr) throw new Error(rpcErr.message);
-        if (!canOperate) {
-          toast.error("Cannot go online", {
-            description: "Your trial has ended or your wallet balance is too low. Please deposit to continue.",
-            duration: 8000,
-          });
-          setTogglingOnline(false);
-          return;
-        }
-      }
+      console.log("UPDATING DRIVER PRESENCE", { driverRecordId: profile.id, setOnline: online });
+      await backendPost("/api/drivers/me/presence", { online });
 
-      const { error: updateErr } = await supabase.from("drivers").update({ is_online: online }).eq("id", profile.id);
-
-      if (updateErr) throw new Error(updateErr.message);
-
+      console.log("SETTING LOCAL STATE", online);
       setIsOnline(online);
-      setProfile({ ...profile, is_online: online });
+      setProfile((prev) => prev ? { ...prev, is_online: online } : prev);
 
       if (online) {
-        toast.success("You're now online!", { description: "You'll see new ride requests" });
-        if (voiceEnabled && voiceSupported) {
-          speak("You are now online. Waiting for ride requests.");
-        }
-        // Start live location tracking for admin monitoring
         startLocationTracking();
-        refresh();
+        toast.success("You're now online!");
       } else {
-        toast.info("You're now offline", { description: "You won't receive new ride requests" });
         stopLocationTracking();
         setRides([]);
+        toast.info("You're now offline");
       }
-    } catch (e: unknown) {
-      toast.error("Failed to update status", { description: (e as Error).message });
+
+      // Refresh to get server state — but avoid overwriting user's recent toggle while toggling
+      await refresh();
+    } catch (e: any) {
+      toast.error("Failed to update status", {
+        description: e.message,
+      });
     } finally {
       setTogglingOnline(false);
     }
@@ -339,8 +345,13 @@ export default function DriverDashboard() {
       setError(null);
 
       const p = await getDriverProfile();
+      console.log("REFRESH: fetched driver profile", p);
       setProfile(p);
-      setIsOnline(p?.is_online ?? false);
+      if (!togglingOnline) {
+        setIsOnline(p?.is_online ?? false);
+      } else {
+        console.log("REFRESH SKIPPED setting isOnline due to togglingOnline=true");
+      }
       // Auto-enable pink mode for female drivers
       if (p?.gender === 'female') setFemaleMode(true);
 
@@ -366,7 +377,7 @@ export default function DriverDashboard() {
         .maybeSingle();
       
       if (activeTripData) {
-        const prevStatus = activeTrip?.status;
+        const prevStatus = activeTripRef.current?.status;
         const newStatus = activeTripData.status;
 
         setActiveTrip({
@@ -407,6 +418,7 @@ export default function DriverDashboard() {
           toast.info("Navigating to drop-off — follow in-app directions");
         }
         // Fetch rider phone
+        console.log("UPDATING DATABASE");
         const { data: riderProfile } = await supabase
           .from("profiles")
           .select("phone")
@@ -428,13 +440,12 @@ export default function DriverDashboard() {
       if (p.is_online) {
         // Expire old rides server-side first
         await expireOldRides();
-        const list = await fetchOpenRides(profile?.gender);
+        const list = await fetchOpenRides(p?.gender);
         const activeList = filterActiveRides(list);
-
         setRides(activeList as Ride[]);
 
         // Fetch preferences for all visible rides
-        const allRideIds = activeList.map(r => r.id);
+        const allRideIds = activeList.map((r) => r.id);
         if (activeTripData) allRideIds.push(activeTripData.id);
         if (allRideIds.length > 0) {
           const { data: allPrefs } = await supabase
@@ -494,6 +505,63 @@ export default function DriverDashboard() {
     }
   }, [voiceEnabled, voiceSupported, speak]);
 
+  const applyRideOfferEvent = useCallback((event?: BackendSocketEvent) => {
+    if (!isOnline) return;
+    if (!event || event.type !== "ride_offer") {
+      refresh();
+      return;
+    }
+
+    const rideId = eventRideId(event);
+    if (!rideId) {
+      refresh();
+      return;
+    }
+
+    const pickupAddress = eventString(event, ["pickup_address", "pickupAddress"]);
+    const dropoffAddress = eventString(event, ["dropoff_address", "dropoffAddress"]);
+    const fare = eventNumber(event, ["fare", "price", "offered_fare", "offeredFare"]);
+    const pickupLat = eventNumber(event, ["pickup_lat", "pickupLat"]);
+    const pickupLon = eventNumber(event, ["pickup_lon", "pickup_lng", "pickupLon", "pickupLng"]);
+    const dropoffLat = eventNumber(event, ["dropoff_lat", "dropoffLat"]);
+    const dropoffLon = eventNumber(event, ["dropoff_lon", "dropoff_lng", "dropoffLon", "dropoffLng"]);
+
+    if (!pickupAddress || !dropoffAddress || fare == null || pickupLat == null || pickupLon == null || dropoffLat == null || dropoffLon == null) {
+      refresh();
+      return;
+    }
+
+    const ride: Ride = {
+      id: rideId,
+      user_id: eventString(event, ["user_id", "rider_id", "userId", "riderId"]) ?? "",
+      status: eventString(event, ["status"]) ?? "pending",
+      pickup_address: pickupAddress,
+      dropoff_address: dropoffAddress,
+      fare,
+      distance_km: eventNumber(event, ["distance_km", "distanceKm"]) ?? 0,
+      duration_minutes: eventNumber(event, ["duration_minutes", "durationMinutes"]) ?? 0,
+      created_at: eventString(event, ["created_at", "createdAt"]) ?? new Date().toISOString(),
+      expires_at: eventString(event, ["expires_at", "expiresAt"]),
+      passenger_count: eventNumber(event, ["passenger_count", "passengerCount"]) ?? undefined,
+      payment_method: eventString(event, ["payment_method", "paymentMethod"]) ?? "cash",
+      gender_preference: eventString(event, ["gender_preference", "genderPreference"]),
+      vehicle_type: eventString(event, ["vehicle_type", "vehicleType"]) ?? undefined,
+      passenger_name: eventString(event, ["passenger_name", "passengerName"]),
+      passenger_phone: eventString(event, ["passenger_phone", "passengerPhone"]),
+    };
+
+    if (profile?.gender && profile.gender !== "female" && ride.gender_preference && ride.gender_preference !== "any") return;
+
+    setRides((prev) => {
+      if (prev.some((existing) => existing.id === ride.id)) return prev;
+      return [ride, ...prev];
+    });
+    playNewRequestSound();
+    vibrateAlert();
+    showBrowserNotification("New Ride Request", "A backend-dispatched ride is available", "/driver");
+    toast.info("New ride request", { description: "A rider is looking for a driver near you", duration: 10000 });
+  }, [isOnline, profile?.gender, refresh]);
+
   // Request notification permission on mount
   useEffect(() => {
     try {
@@ -514,7 +582,7 @@ export default function DriverDashboard() {
   }, [authLoading, user, nav, refresh]);
 
   // Realtime subscription for open rides (only triggers refresh if online)
-  useOpenRidesRealtime(refresh);
+  useOpenRidesRealtime(applyRideOfferEvent);
 
   // Client-side timer to filter out expired rides every second
   useEffect(() => {
@@ -590,13 +658,10 @@ export default function DriverDashboard() {
 
     setStatusUpdating(true);
     try {
-      const { error } = await supabase
-        .from("rides")
-        .update({ status: nextStatus })
-        .eq("id", activeTrip.id)
-        .eq("status", expectedStatus);
-
-      if (error) throw new Error(error.message);
+      await backendPost(`/api/rides/${activeTrip.id}/status`, {
+        status: nextStatus,
+        expectedStatus,
+      });
 
       setActiveTrip((prev) => prev?.id === activeTrip.id ? { ...prev, status: nextStatus } : prev);
       toast.info(successMessage);

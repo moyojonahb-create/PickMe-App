@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { queueOfflineRide } from '@/lib/offlineQueue';
 import { detectSuspiciousPatterns, reportFraudFlag } from '@/lib/fraudDetection';
 import { isRateLimited } from '@/lib/rateLimit';
+import { backendPost } from '@/lib/backendClient';
 
 type RequestRideInput = {
   pickup_address: string;
@@ -106,69 +107,24 @@ export async function requestRide(input: RequestRideInput) {
   }
 
   let data: RideRow | null = null;
-  let error: { message: string; details?: string; hint?: string } | null = null;
 
-  // Wallet rides go through atomic RPC that re-validates balance + lock server-side
-  if (insertPayload.payment_method === 'wallet') {
-    const { data: rpcData, error: rpcErr } = await supabase.rpc('request_wallet_ride', {
-      p_payload: insertPayload as never,
-    });
-    if (rpcErr) {
-      return { ok: false as const, error: `Ride request failed: ${rpcErr.message}` };
+  try {
+    const result = await backendPost<{
+      ok?: boolean;
+      reason?: string;
+      error?: string;
+      ride?: RideRow;
+      ride_id?: string;
+      fare?: number;
+    }>('/api/rides', insertPayload);
+
+    if (result?.ok === false) {
+      return { ok: false as const, error: result.reason || result.error || 'Ride could not be created' };
     }
-    const result = rpcData as { ok?: boolean; reason?: string; ride_id?: string; balance?: number; fare?: number } | null;
-    if (!result?.ok) {
-      return { ok: false as const, error: result?.reason || 'Wallet ride could not be created' };
-    }
-    // Fetch the inserted ride row
-    const fetched = await supabase
-      .from('rides')
-      .select('id, user_id, status, pickup_address, dropoff_address, fare, distance_km, duration_minutes, pickup_lat, pickup_lon, dropoff_lat, dropoff_lon, vehicle_type, payment_method, town_id, scheduled_at, created_at')
-      .eq('id', result.ride_id)
-      .maybeSingle();
-    return { ok: true as const, ride: (fetched.data ?? { id: result.ride_id }) as RideRow };
-  }
 
-  const firstInsert = await supabase
-    .from("rides")
-    .insert(insertPayload as never)
-    .select("id, user_id, status, pickup_address, dropoff_address, fare, distance_km, duration_minutes, pickup_lat, pickup_lon, dropoff_lat, dropoff_lon, vehicle_type, payment_method, town_id, scheduled_at, created_at")
-    .maybeSingle();
-
-  data = firstInsert.data as RideRow | null;
-  error = firstInsert.error
-    ? {
-        message: firstInsert.error.message,
-        details: firstInsert.error.details ?? undefined,
-        hint: firstInsert.error.hint ?? undefined,
-      }
-    : null;
-
-  // Backward-compatible fallback for environments where passenger fields don't exist yet
-  if (error && /passenger_name|passenger_phone|column .* does not exist/i.test(error.message)) {
-    const { passenger_name, passenger_phone, ...fallbackPayload } = insertPayload as Record<string, unknown>;
-    const fallbackInsert = await supabase
-      .from("rides")
-      .insert(fallbackPayload as never)
-      .select("id, user_id, status, pickup_address, dropoff_address, fare, distance_km, duration_minutes, pickup_lat, pickup_lon, dropoff_lat, dropoff_lon, vehicle_type, payment_method, town_id, scheduled_at, created_at")
-      .maybeSingle();
-
-    data = fallbackInsert.data as RideRow | null;
-    error = fallbackInsert.error
-      ? {
-          message: fallbackInsert.error.message,
-          details: fallbackInsert.error.details ?? undefined,
-          hint: fallbackInsert.error.hint ?? undefined,
-        }
-      : null;
-  }
-
-  if (error) {
-    const msg = `Ride request failed: ${error.message}` +
-      (error.details ? ` | Details: ${error.details}` : "") +
-      (error.hint ? ` | Hint: ${error.hint}` : "");
-    console.error("SUPABASE INSERT ERROR:", error);
-    return { ok: false as const, error: msg };
+    data = (result.ride ?? (result.ride_id ? { id: result.ride_id, fare: result.fare } : result as RideRow)) as RideRow;
+  } catch (e) {
+    return { ok: false as const, error: `Ride request failed: ${(e as Error).message}` };
   }
 
   // Send push notification to online drivers (fire-and-forget)

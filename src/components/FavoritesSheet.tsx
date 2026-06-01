@@ -4,7 +4,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { supabase } from '@/lib/supabaseClient';
+import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL, supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 
@@ -31,19 +31,32 @@ const iconMap: Record<string, React.ElementType> = {
 
 const geocodeAddress = async (address: string): Promise<{ latitude: number; longitude: number; formattedAddress: string } | null> => {
   try {
-    const { data, error } = await supabase.functions.invoke('here-geocode', {
-      body: { address }
+    const url = new URL(`${SUPABASE_URL}/functions/v1/nominatim-search`);
+    url.searchParams.set('q', address);
+    url.searchParams.set('limit', '1');
+    url.searchParams.set('countrycodes', 'zw');
+
+    const response = await fetch(url.toString(), {
+      headers: {
+        apikey: SUPABASE_PUBLISHABLE_KEY,
+        Authorization: `Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
+      },
     });
 
-    if (error) {
-      console.error('Geocoding error:', error);
+    if (!response.ok) {
+      console.error('Geocoding error:', response.status, await response.text());
       return null;
     }
 
+    const [result] = await response.json();
+    const latitude = Number(result?.lat);
+    const longitude = Number(result?.lon);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+
     return {
-      latitude: data.latitude,
-      longitude: data.longitude,
-      formattedAddress: data.formattedAddress
+      latitude,
+      longitude,
+      formattedAddress: result.display_name || address
     };
   } catch (err) {
     console.error('Failed to geocode address:', err);
@@ -104,7 +117,7 @@ const FavoritesSheet = ({ isOpen, onClose, onSelectLocation }: FavoritesSheetPro
     setSaving(true);
     setGeocodeError(null);
 
-    // Geocode the address using HERE API
+    // Geocode the address using the deployed Nominatim Edge Function.
     const geocoded = await geocodeAddress(newAddress);
     
     if (!geocoded) {

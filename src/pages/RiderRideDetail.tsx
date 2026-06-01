@@ -3,6 +3,14 @@ import { motion, AnimatePresence } from "framer-motion";
 import { completeTrip } from "@/lib/completeTrip";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
+import {
+  eventDriverId,
+  eventNumber,
+  eventOfferId,
+  eventString,
+  type BackendSocketEvent,
+} from "@/lib/backendSocketClient";
+import { cancelRide, updateRideFare } from "@/lib/backendClient";
 import { resolveAvatarUrl } from "@/lib/avatarUrl";
 import { useAuth } from "@/hooks/useAuth";
 import { useRideRealtime } from "@/hooks/useRideRealtime";
@@ -102,6 +110,13 @@ export default function RiderRideDetail() {
   const [showEcoCashPay, setShowEcoCashPay] = useState(false);
   const [sheetState, setSheetState] = useState<SheetState>('half');
   const [showAcceptedOverlay, setShowAcceptedOverlay] = useState(false);
+  const [wsDriverLocation, setWsDriverLocation] = useState<{
+    lat: number;
+    lng: number;
+    heading: number | null;
+    speed: number | null;
+    updated_at: string;
+  } | null>(null);
 
   // Rider wallet removed — direct payment to driver
   const walletPin: string | null = null;
@@ -195,7 +210,63 @@ export default function RiderRideDetail() {
     } catch (e: unknown) { console.error("Failed to fetch offers:", e); }
   }, [rideId, lastOfferCount]);
 
-  useRideRealtime(rideId ?? null, { onRideChange: refreshRide, onOfferChange: refreshOffers });
+  const applyOfferEvent = useCallback((event: BackendSocketEvent) => {
+    if (!rideId) return;
+    const offerId = eventOfferId(event);
+    const driverId = eventDriverId(event);
+    const price = eventNumber(event, ["price", "fare", "offer_fare", "offered_fare"]);
+    if (!offerId || !driverId || price == null) {
+      refreshOffers();
+      return;
+    }
+
+    const nextOffer: Offer = {
+      id: offerId,
+      ride_id: rideId,
+      driver_id: driverId,
+      price,
+      eta_minutes: eventNumber(event, ["eta_minutes", "etaMinutes", "eta"]) ?? null,
+      message: eventString(event, ["message"]) ?? null,
+      status: "pending",
+      created_at: eventString(event, ["created_at", "createdAt"]) ?? new Date().toISOString(),
+    };
+
+    setOffers((prev) => {
+      if (prev.some((offer) => offer.id === offerId)) return prev;
+      return [nextOffer, ...prev];
+    });
+    setLastOfferCount((prev) => Math.max(prev + 1, 1));
+    fetchDriversByIds([driverId])
+      .then((map) => setDriversById((prev) => ({ ...prev, ...map })))
+      .catch(() => {});
+    playNewRequestSound();
+    haptic('medium');
+    setModalOpen(true);
+    toast.success("New driver offer received!", {
+      description: "Tap to review the latest Go dispatch offer.",
+      duration: 8000,
+    });
+  }, [rideId, refreshOffers]);
+
+  const handleDriverLocationEvent = useCallback((event: BackendSocketEvent) => {
+    const driverUserId = (driverProfile as Record<string, unknown>)?.user_id as string | undefined;
+    const eventDriver = eventDriverId(event);
+    if (driverUserId && eventDriver && eventDriver !== driverUserId) return;
+    if (typeof event.latitude !== "number" || typeof event.longitude !== "number") return;
+    setWsDriverLocation({
+      lat: event.latitude,
+      lng: event.longitude,
+      heading: typeof event.heading === "number" ? event.heading : null,
+      speed: typeof event.speed === "number" ? event.speed : null,
+      updated_at: typeof event.updated_at === "string" ? event.updated_at : new Date().toISOString(),
+    });
+  }, [driverProfile]);
+
+  useRideRealtime(rideId ?? null, {
+    onRideChange: refreshRide,
+    onOfferChange: applyOfferEvent,
+    onDriverLocation: handleDriverLocationEvent,
+  });
 
   useEffect(() => {
     try {
@@ -205,10 +276,11 @@ export default function RiderRideDetail() {
     } catch (_) {}
   }, []);
 
-  const driverLocation = useDriverTracking(
+  const fallbackDriverLocation = useDriverTracking(
     (driverProfile as Record<string, unknown>)?.user_id as string ?? null,
     ride?.status ?? null
   );
+  const driverLocation = wsDriverLocation ?? fallbackDriverLocation;
 
   const isPendingStatus = ride?.status === "pending";
   const nearbyDrivers = useNearbyDrivers(isPendingStatus);
@@ -253,8 +325,7 @@ export default function RiderRideDetail() {
     if (clampedFare === ride.fare) return;
     setUpdatingFare(true);
     try {
-      const { error } = await supabase.from("rides").update({ fare: clampedFare }).eq("id", rideId);
-      if (error) throw error;
+      await updateRideFare(rideId, clampedFare);
       setRide({ ...ride, fare: clampedFare });
       toast.success(`Fare updated to $${clampedFare.toFixed(2)}`);
     } catch (e: unknown) { toast.error("Failed to update fare", { description: (e as Error).message }); }
@@ -282,8 +353,7 @@ export default function RiderRideDetail() {
   const handleCancelRide = async () => {
     if (!rideId) return;
     try {
-      const { error } = await supabase.from("rides").update({ status: "cancelled" }).eq("id", rideId);
-      if (error) throw error;
+      await cancelRide(rideId);
       toast.info("Ride cancelled");
       nav("/ride");
     } catch (e: unknown) { toast.error("Failed to cancel ride", { description: (e as Error).message }); }

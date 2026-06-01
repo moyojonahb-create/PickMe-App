@@ -28,6 +28,9 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
 import { completeTrip } from "@/lib/completeTrip";
+import { backendPost } from "@/lib/backendClient";
+import { eventString } from "@/lib/backendSocketClient";
+import { useRideRealtime } from "@/hooks/useRideRealtime";
 import { useVoiceNavigation } from "@/hooks/useVoiceNavigation";
 import { RideCommunication } from "@/components/ride/RideCommunication";
 import type { Coordinates } from "@/lib/osrm";
@@ -239,39 +242,33 @@ export default function FullScreenNavigation({
 
   const { speak, isSupported: voiceSupported } = useVoiceNavigation({ enabled: voiceEnabled });
 
-  // ── Realtime subscription for instant route switching & auto-exit ──
-  useEffect(() => {
-    const channel = supabase
-      .channel(`nav-trip-${activeTrip.id}`)
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "rides", filter: `id=eq.${activeTrip.id}` },
-        (payload) => {
-          const updated = payload.new as Record<string, unknown>;
-          const newStatus = updated.status as string;
+  useRideRealtime(activeTrip.id, {
+    onRideChange: (event) => {
+      const eventStatus = event?.type === "ride_started"
+        ? "in_progress"
+        : event?.type === "ride_completed"
+          ? "completed"
+          : eventString(event!, ["status"]);
+      if (!eventStatus) return;
 
-          if (newStatus === "completed" || newStatus === "cancelled") {
-            if (voiceEnabled) speak("Trip completed. Returning to dashboard.", true);
-            onTripComplete();
-            return;
-          }
+      if (eventStatus === "completed" || eventStatus === "cancelled") {
+        if (voiceEnabled) speak("Trip completed. Returning to dashboard.", true);
+        onTripComplete();
+        return;
+      }
 
-          if (newStatus !== activeTrip.status) {
-            onTripUpdate({ ...activeTrip, status: newStatus });
-            lastFetchPhase.current = "";
+      if (eventStatus !== activeTrip.status) {
+        onTripUpdate({ ...activeTrip, status: eventStatus });
+        lastFetchPhase.current = "";
 
-            if (newStatus === "arrived" && voiceEnabled) {
-              speak("You have arrived at the pickup point.", true);
-            } else if (newStatus === "in_progress" && voiceEnabled) {
-              speak("Rider picked up. Navigating to destination.", true);
-            }
-          }
+        if (eventStatus === "arrived" && voiceEnabled) {
+          speak("You have arrived at the pickup point.", true);
+        } else if (eventStatus === "in_progress" && voiceEnabled) {
+          speak("Rider picked up. Navigating to destination.", true);
         }
-      )
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
-  }, [activeTrip.id, activeTrip.status, voiceEnabled]);
+      }
+    },
+  });
 
   // Trip phase
   const isPickupPhase = ["accepted", "enroute", "enroute_pickup"].includes(activeTrip.status);
@@ -395,19 +392,26 @@ export default function FullScreenNavigation({
   // ── Trip Actions ──
 
   const handleStatusUpdate = async (newStatus: string, message: string, voiceMsg?: string) => {
-    await supabase.from("rides").update({ status: newStatus }).eq("id", activeTrip.id);
-    onTripUpdate({ ...activeTrip, status: newStatus });
-    toast.info(message);
-    if (voiceEnabled && voiceMsg) speak(voiceMsg, true);
-    lastFetchPhase.current = "";
+    try {
+      await backendPost(`/api/rides/${activeTrip.id}/status`, {
+        status: newStatus,
+        expectedStatus: activeTrip.status,
+      });
+      onTripUpdate({ ...activeTrip, status: newStatus });
+      toast.info(message);
+      if (voiceEnabled && voiceMsg) speak(voiceMsg, true);
+      lastFetchPhase.current = "";
 
-    if (newStatus === "arrived") {
-      supabase.from("notifications").insert({
-        user_id: activeTrip.user_id,
-        title: "🚗 Your driver has arrived!",
-        body: "Your driver is at the pickup point. Please meet them now.",
-        notification_type: "driver_arrived",
-      }).then(() => {});
+      if (newStatus === "arrived") {
+        supabase.from("notifications").insert({
+          user_id: activeTrip.user_id,
+          title: "🚗 Your driver has arrived!",
+          body: "Your driver is at the pickup point. Please meet them now.",
+          notification_type: "driver_arrived",
+        }).then(() => {});
+      }
+    } catch (e: unknown) {
+      toast.error("Failed to update trip", { description: (e as Error).message });
     }
   };
 

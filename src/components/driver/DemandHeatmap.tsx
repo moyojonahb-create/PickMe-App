@@ -50,8 +50,15 @@ export default function DemandHeatmap({ townId, className }: DemandHeatmapProps)
   useEffect(() => {
     const fetchZones = async () => {
       setLoading(true);
-      // Trigger zone recalculation (ignore errors if RPC doesn't exist)
-      try { await supabase.rpc('update_demand_zones'); } catch {}
+      // Trigger zone recalculation through a secure server-side wrapper.
+      try {
+        await supabase.functions.invoke('maintenance', {
+          body: JSON.stringify({ action: 'update_demand_zones' }),
+          headers: { 'Content-Type': 'application/json' },
+        });
+      } catch {
+        // Ignore errors here so the heatmap still renders off stale data.
+      }
       
       const { data } = await supabase
         .from('ride_demand_zones')

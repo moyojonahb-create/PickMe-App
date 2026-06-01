@@ -3,9 +3,9 @@ import { useEffect, useMemo, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, MapPin, Navigation, Phone, MessageCircle, CheckCircle2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { supabase } from '@/lib/supabaseClient';
 import { toast } from 'sonner';
 import { completeTrip } from '@/lib/completeTrip';
+import { backendPost } from '@/lib/backendClient';
 import LiveNavMap, { type NavPhase } from '@/components/map/LiveNavMap';
 import SpeedBadge from '@/components/map/SpeedBadge';
 import DirectionArrow3D from '@/components/map/DirectionArrow3D';
@@ -89,12 +89,10 @@ export default function DriverLiveNav({
     if (busy) return;
     setBusy(true);
     try {
-      const { error } = await supabase
-        .from('rides')
-        .update({ status: 'in_progress' })
-        .eq('id', activeTrip.id)
-        .eq('status', activeTrip.status);
-      if (error) throw error;
+      await backendPost(`/api/rides/${activeTrip.id}/status`, {
+        status: 'in_progress',
+        expectedStatus: activeTrip.status,
+      });
       const next = { ...activeTrip, status: 'in_progress' };
       onTripUpdate(next);
       toast.success('Trip started — navigating to dropoff');
@@ -110,11 +108,10 @@ export default function DriverLiveNav({
     if (busy) return;
     setBusy(true);
     try {
-      const { error } = await supabase
-        .from('rides')
-        .update({ status: 'arrived' })
-        .eq('id', activeTrip.id);
-      if (error) throw error;
+      await backendPost(`/api/rides/${activeTrip.id}/status`, {
+        status: 'arrived',
+        expectedStatus: activeTrip.status,
+      });
       onTripUpdate({ ...activeTrip, status: 'arrived' });
       toast.info('Marked as arrived');
     } catch (e) {

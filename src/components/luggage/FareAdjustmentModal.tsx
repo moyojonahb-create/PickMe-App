@@ -4,6 +4,7 @@ import { Briefcase, Check, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
+import { updateRideFare } from '@/lib/backendClient';
 
 interface FareAdjustment {
   id: string;
@@ -62,10 +63,7 @@ export default function FareAdjustmentModal({ rideId, onAccepted }: FareAdjustme
       .eq('id', adjustment.id);
 
     if (!updErr && accept) {
-      await supabase
-        .from('rides')
-        .update({ fare: adjustment.new_price } as never)
-        .eq('id', rideId);
+      await updateRideFare(rideId, adjustment.new_price);
       onAccepted?.(adjustment.new_price);
       toast({ title: 'Fare updated', description: `New fare $${adjustment.new_price.toFixed(2)}` });
     } else if (!accept) {

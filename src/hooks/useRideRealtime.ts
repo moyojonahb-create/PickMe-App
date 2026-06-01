@@ -1,16 +1,18 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import { useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabaseClient';
+import {
+  backendSocketClient,
+  eventRideId,
+  type BackendSocketEvent,
+} from '@/lib/backendSocketClient';
 
-/**
- * Single consolidated channel per ride — handles rides, offers, and messages.
- * Replaces multiple separate subscriptions with ONE channel.
- */
 export function useRideRealtime(
   rideId: string | null,
   callbacks: {
-    onRideChange?: () => void;
-    onOfferChange?: () => void;
+    onRideChange?: (event?: BackendSocketEvent) => void;
+    onOfferChange?: (event?: BackendSocketEvent) => void;
+    onDriverLocation?: (event: BackendSocketEvent) => void;
     onMessageChange?: () => void;
   }
 ) {
@@ -20,19 +22,30 @@ export function useRideRealtime(
   useEffect(() => {
     if (!rideId) return;
 
-    // ONE channel for all three tables — reduces connection count by 3x
+    backendSocketClient.joinRide(rideId);
+
+    const unsubs = [
+      backendSocketClient.on("ride_offer", (event) => {
+        if (eventRideId(event) === rideId) callbacksRef.current.onOfferChange?.(event);
+      }),
+      backendSocketClient.on("ride_accepted", (event) => {
+        if (eventRideId(event) === rideId) callbacksRef.current.onRideChange?.(event);
+      }),
+      backendSocketClient.on("driver_location", (event) => {
+        const eventId = eventRideId(event);
+        if (eventId === rideId || !eventId) callbacksRef.current.onDriverLocation?.(event);
+      }),
+      backendSocketClient.on("ride_started", (event) => {
+        if (eventRideId(event) === rideId) callbacksRef.current.onRideChange?.(event);
+      }),
+      backendSocketClient.on("ride_completed", (event) => {
+        if (eventRideId(event) === rideId) callbacksRef.current.onRideChange?.(event);
+      }),
+    ];
+
+    // Chat remains Supabase-backed; ride lifecycle and offers use Go websocket events.
     const channel = supabase
-      .channel(`ride-${rideId}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "rides", filter: `id=eq.${rideId}` },
-        () => callbacksRef.current.onRideChange?.()
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "offers", filter: `ride_id=eq.${rideId}` },
-        () => callbacksRef.current.onOfferChange?.()
-      )
+      .channel(`ride-messages-${rideId}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "messages", filter: `ride_id=eq.${rideId}` },
@@ -41,116 +54,79 @@ export function useRideRealtime(
       .subscribe();
 
     return () => {
+      unsubs.forEach((unsub) => unsub());
+      backendSocketClient.leaveRide(rideId);
       supabase.removeChannel(channel);
     };
   }, [rideId]);
 }
 
-/**
- * Single channel for driver dashboard — rides + offers combined.
- */
-export function useOpenRidesRealtime(onUpdate: () => void) {
+export function useOpenRidesRealtime(onUpdate: (event?: BackendSocketEvent) => void) {
   const onUpdateRef = useRef(onUpdate);
   onUpdateRef.current = onUpdate;
 
   useEffect(() => {
-    const channel = supabase
-      .channel('open-rides')
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "rides" },
-        () => onUpdateRef.current()
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "offers" },
-        () => onUpdateRef.current()
-      )
-      .subscribe();
+    const unsubs = [
+      backendSocketClient.on("ride_offer", (event) => onUpdateRef.current(event)),
+      backendSocketClient.on("ride_accepted", (event) => onUpdateRef.current(event)),
+      backendSocketClient.on("ride_started", (event) => onUpdateRef.current(event)),
+      backendSocketClient.on("ride_completed", (event) => onUpdateRef.current(event)),
+    ];
 
     return () => {
-      supabase.removeChannel(channel);
+      unsubs.forEach((unsub) => unsub());
     };
   }, []);
 }
 
-/**
- * New ride INSERT listener for driver notifications.
- */
-export function useRealtimeRideRequests(onNewRide: (ride: unknown) => void) {
+export function useRealtimeRideRequests(onNewRide: (ride: BackendSocketEvent) => void) {
   const onNewRideRef = useRef(onNewRide);
   onNewRideRef.current = onNewRide;
 
   useEffect(() => {
-    const channel = supabase
-      .channel('driver-ride-requests')
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "rides" },
-        (payload) => {
-          const ride = payload.new;
-          if (ride.status === "pending") {
-            const expiresAt = ride.expires_at ? new Date(ride.expires_at).getTime() : null;
-            if (!expiresAt || expiresAt > Date.now()) {
-              onNewRideRef.current(ride);
-            }
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return backendSocketClient.on("ride_offer", (event) => onNewRideRef.current(event));
   }, []);
 }
 
-/**
- * Offer INSERT listener for a specific ride.
- */
-export function useRealtimeOffers(rideId: string | null, onOffer: (offer: unknown) => void) {
+export function useRealtimeOffers(rideId: string | null, onOffer: (offer: BackendSocketEvent) => void) {
   const onOfferRef = useRef(onOffer);
   onOfferRef.current = onOffer;
 
   useEffect(() => {
     if (!rideId) return;
-
-    const channel = supabase
-      .channel(`offers-${rideId}`)
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "offers", filter: `ride_id=eq.${rideId}` },
-        (payload) => onOfferRef.current(payload.new)
-      )
-      .subscribe();
-
+    backendSocketClient.joinRide(rideId);
+    const unsub = backendSocketClient.on("ride_offer", (event) => {
+      if (eventRideId(event) === rideId) onOfferRef.current(event);
+    });
     return () => {
-      supabase.removeChannel(channel);
+      unsub();
+      backendSocketClient.leaveRide(rideId);
     };
   }, [rideId]);
 }
 
-/**
- * Ride UPDATE listener for status changes.
- */
-export function useRealtimeRideStatus(rideId: string | null, onUpdate: (ride: unknown) => void) {
+export function useRealtimeRideStatus(rideId: string | null, onUpdate: (ride: BackendSocketEvent) => void) {
   const onUpdateRef = useRef(onUpdate);
   onUpdateRef.current = onUpdate;
 
   useEffect(() => {
     if (!rideId) return;
-
-    const channel = supabase
-      .channel(`ride-status-${rideId}`)
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "rides", filter: `id=eq.${rideId}` },
-        (payload) => onUpdateRef.current(payload.new)
-      )
-      .subscribe();
+    backendSocketClient.joinRide(rideId);
+    const unsubs = [
+      backendSocketClient.on("ride_accepted", (event) => {
+        if (eventRideId(event) === rideId) onUpdateRef.current(event);
+      }),
+      backendSocketClient.on("ride_started", (event) => {
+        if (eventRideId(event) === rideId) onUpdateRef.current(event);
+      }),
+      backendSocketClient.on("ride_completed", (event) => {
+        if (eventRideId(event) === rideId) onUpdateRef.current(event);
+      }),
+    ];
 
     return () => {
-      supabase.removeChannel(channel);
+      unsubs.forEach((unsub) => unsub());
+      backendSocketClient.leaveRide(rideId);
     };
   }, [rideId]);
 }

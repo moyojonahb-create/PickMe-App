@@ -1,60 +1,72 @@
 import { supabase } from "@/integrations/supabase/client";
+import { backendPost } from "@/lib/backendClient";
+import { backendSocketClient } from "@/lib/backendSocketClient";
 
-// Cache userId to avoid repeated auth calls (10K drivers × every 10s = 100K calls/min)
+// Cache userId to avoid repeated auth calls
 let cachedUserId: string | null = null;
 
 async function getUserId(): Promise<string | null> {
   if (cachedUserId) return cachedUserId;
+
   const { data } = await supabase.auth.getUser();
   cachedUserId = data?.user?.id ?? null;
+
   return cachedUserId;
 }
 
-// Clear cache on sign-out
+// Clear cache on sign out
 supabase.auth.onAuthStateChange((event) => {
-  if (event === "SIGNED_OUT") cachedUserId = null;
+  if (event === "SIGNED_OUT") {
+    cachedUserId = null;
+  }
 });
 
-// Deduplicate: skip upsert if driver hasn't moved significantly
+// Deduplicate location updates
 let lastSentLat = 0;
 let lastSentLng = 0;
+
 const MIN_MOVE_THRESHOLD = 0.00005; // ~5m
 
 /**
- * Update the driver's current location in the database.
- * Skips DB write if position hasn't changed significantly (saves ~70% of writes at 10K scale).
+ * Update driver location
  */
-export async function updateDriverLocation(lat: number, lng: number): Promise<void> {
+export async function updateDriverLocation(
+  lat: number,
+  lng: number
+): Promise<void> {
   const userId = await getUserId();
+
   if (!userId) {
     console.warn("[DriverLocation] No user logged in");
     return;
   }
 
-  // Skip if barely moved
+  // Skip tiny movements
   const dLat = Math.abs(lat - lastSentLat);
   const dLng = Math.abs(lng - lastSentLng);
-  if (dLat < MIN_MOVE_THRESHOLD && dLng < MIN_MOVE_THRESHOLD && lastSentLat !== 0) {
+
+  if (
+    dLat < MIN_MOVE_THRESHOLD &&
+    dLng < MIN_MOVE_THRESHOLD &&
+    lastSentLat !== 0
+  ) {
     return;
   }
 
-  const { error } = await supabase.from("live_locations").upsert(
-    {
-      user_id: userId,
-      latitude: lat,
-      longitude: lng,
-      user_type: "driver",
-      is_online: true,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "user_id" }
-  );
-
-  if (error) {
-    console.error("[DriverLocation] Failed to update location:", error);
-  } else {
+  try {
+    if (backendSocketClient.readyState === WebSocket.OPEN) {
+      backendSocketClient.send({
+        type: "driver_location",
+        latitude: lat,
+        longitude: lng,
+      });
+    } else {
+      await backendPost("/api/drivers/me/location", { latitude: lat, longitude: lng });
+    }
     lastSentLat = lat;
     lastSentLng = lng;
+  } catch (err) {
+    console.error("[DriverLocation] Failed:", err);
   }
 }
 
@@ -62,28 +74,34 @@ export async function updateDriverLocation(lat: number, lng: number): Promise<vo
  * Calculate distance between two points using Haversine formula
  */
 export function calculateDistance(
-  lat1: number, 
-  lon1: number, 
-  lat2: number, 
+  lat1: number,
+  lon1: number,
+  lat2: number,
   lon2: number
 ): number {
-  const R = 6371; // Earth's radius in km
+  const R = 6371;
+
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
   const dLon = ((lon2 - lon1) * Math.PI) / 180;
+
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
     Math.cos((lat1 * Math.PI) / 180) *
       Math.cos((lat2 * Math.PI) / 180) *
       Math.sin(dLon / 2) *
       Math.sin(dLon / 2);
+
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
   return R * c;
 }
 
 /**
- * Filter and sort rides by distance from driver's location
+ * Filter rides by distance
  */
-export function filterRidesByDistance<T extends { pickup_lat: number; pickup_lon: number }>(
+export function filterRidesByDistance<
+  T extends { pickup_lat: number; pickup_lon: number }
+>(
   rides: T[],
   driverLat: number,
   driverLng: number,
@@ -92,7 +110,12 @@ export function filterRidesByDistance<T extends { pickup_lat: number; pickup_lon
   return rides
     .map((ride) => ({
       ...ride,
-      distance_km: calculateDistance(driverLat, driverLng, ride.pickup_lat, ride.pickup_lon),
+      distance_km: calculateDistance(
+        driverLat,
+        driverLng,
+        ride.pickup_lat,
+        ride.pickup_lon
+      ),
     }))
     .filter((ride) => ride.distance_km <= maxDistanceKm)
     .sort((a, b) => a.distance_km - b.distance_km);

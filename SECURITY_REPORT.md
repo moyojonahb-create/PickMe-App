@@ -1,102 +1,185 @@
-# Security Audit Report — PickMe / Voyex
-**Date:** 2026-05-27
-**Auditor mode:** Authorized defensive review
-**Scope:** Frontend (React/Vite), Supabase (DB + RLS + Edge Functions), storage buckets, wallet/ride/admin flows.
+# PickMe Security Report
 
----
+Date: 2026-05-31  
+Scope: Supabase database, RLS, Edge Functions, frontend RPC/table calls, wallet/payment flows, identity verification, and launch controls. This replaces the earlier narrow report with a full production-readiness security audit.
 
-## 1. Threat model
+## Executive Summary
 
-| Actor | Capability against this app |
-|---|---|
-| Anonymous outsider | Hit any public REST endpoint, scrape bundle for API keys, brute-force OTP |
-| Normal rider | Read/write their own data; try to read other riders' data, manipulate fare/wallet via direct REST |
-| Driver | Accept rides, complete trips; try to fake completion, skip commission, read pre-trip PII |
-| Fake / mass-created account | Spam ride requests, exploit promo/referral, drain wallet via duplicate transfers |
-| Malicious admin (compromised) | Already trusted — mitigated by audit trail + role check from DB only |
-| Modified APK / bot | Bypass client validation, spoof GPS, submit forged location/fare values |
+PickMe has many of the right primitives: RLS is broadly enabled, wallet mutations are mostly concentrated in `SECURITY DEFINER` RPCs with row locks, OTP/PIN tables are later revoked from direct client access, and admin operations check `user_roles`. The biggest security risks are operational exposure and consistency drift:
 
----
+- Some service-role Edge Functions are callable with `verify_jwt=false`; they must all authenticate and authorize internally.
+- The `maintenance` Edge Function can run service-role maintenance RPCs and currently shows no caller authentication in code.
+- Realtime publication drift can break security assumptions: app code subscribes to tables that later migrations removed from publication.
+- Student verification and driver documents carry national-ID-level data; access controls were patched, but live column grant verification is required.
+- Wallet and fare flows still have client-side direct inserts/updates in some paths, creating tampering risk if RLS/RPC gates are incomplete.
 
-## 2. Findings & fixes (this audit)
+Security readiness score: 66/100.
 
-### 🔴 CRITICAL / ERROR — Riders could read raw national ID & registration number
-- **Location:** `public.student_profiles` (cols `national_id_number`, `registration_number`)
-- **Risk:** RLS allowed `auth.uid() = user_id` to SELECT the whole row, exposing national-ID-level PII to the client bundle. A compromised device or XSS would leak Zim national IDs.
-- **Safe test:** As a logged-in student, `supabase.from('student_profiles').select('national_id_number')` — would return the value.
-- **Fix applied:** Column-level `REVOKE SELECT (national_id_number, registration_number) ... FROM authenticated, anon`. Admin RPC `admin_list_student_profiles` (SECURITY DEFINER) still returns them server-side.
-- **Expected result:** Client query now returns `null`/permission error for those columns; admin dashboard unaffected.
+## Critical Findings
 
-### 🟠 HIGH — Drivers could read passenger phone/name on pending rides
-- **Location:** RLS policy `Drivers can view rides assigned to them` on `public.rides`
-- **Risk:** `status = 'pending'` was in the allowed array. Any driver briefly assigned (or via race) could harvest `passenger_phone` and `passenger_name` before the trip began — useful for off-app contact / fraud.
-- **Fix applied:** Policy rewritten to allow `accepted`, `in_progress`, `arrived`, `completed` only — never `pending`.
-- **Expected result:** Driver only sees passenger contact info after they have actively accepted the trip.
+### Critical: Public `maintenance` Edge Function Runs Service-Role RPCs
 
-### 🟠 HIGH — Drivers could read luggage descriptions/photos for ANY pending ride
-- **Location:** RLS policy `Approved drivers view luggage for assigned rides` on `public.luggage_requests`
-- **Risk:** The `OR r.status = 'pending'` branch meant every online driver could pull luggage descriptions + photo paths for every pending courier/freight request across the country. Exposes rider goods & enables targeted theft.
-- **Fix applied:** Policy now requires the driver be the actually-assigned driver (`d.user_id = auth.uid()`).
-- **Expected result:** Only the driver who took the job sees the luggage payload.
+Evidence: `supabase/functions/maintenance/index.ts` creates a service-role client and allows `update_demand_zones`, `cleanup_old_messages`, `auto_resolve_noise_fraud_flags`, and `expire_old_rides`. I did not find JWT validation or admin/service authorization in the function body.
 
-### 🟡 MEDIUM — OTP table reachable via PostgREST (already revoked, re-asserted)
-- **Location:** `public.phone_verifications` (RLS-on, no policies; previously had default grants)
-- **Fix:** Idempotent `REVOKE ALL ... FROM PUBLIC, anon, authenticated`; `GRANT ALL TO service_role` only. The `twilio-otp` edge function still works (uses service role).
+Impact: If deployed publicly, anyone who can call the function can trigger destructive/privileged maintenance. `update_demand_zones` deletes and rebuilds demand zones; cleanup functions mutate production data.
 
-### 🟠 OPERATIONAL (cannot fix from code) — Google Maps key in client bundle
-- **Location:** `VITE_GOOGLE_MAPS_API_KEY` (must ship to browser for the JS SDK).
-- **Risk:** Anyone can extract the key and bill your account.
-- **Required action by you:** In Google Cloud Console → APIs & Services → Credentials → restrict key to HTTP referrers: `https://pickme.co.zw/*`, `https://*.voyex.site/*`, `https://*.lovable.app/*`, and your Capacitor bundle ID. Also restrict to only Maps JS, Places, Directions APIs.
+Affected files: `supabase/functions/maintenance/index.ts`, `src/components/driver/DemandHeatmap.tsx`, `src/lib/rideExpiry.ts`, `src/lib/ramzActions.ts`.
 
----
+Fix:
 
-## 3. Verified secure (no action required)
+```ts
+// In maintenance/index.ts before executing RPC:
+const authHeader = req.headers.get("Authorization");
+if (!authHeader?.startsWith("Bearer ")) return json401();
+const userClient = createClient(url, anonKey, { global: { headers: { Authorization: authHeader } } });
+const { data: userData } = await userClient.auth.getUser();
+const userId = userData.user?.id;
+if (!userId) return json401();
+const { data: role } = await serviceClient.from("user_roles")
+  .select("role").eq("user_id", userId).eq("role", "admin").maybeSingle();
+if (!role) return json403();
+```
 
-| Area | Why it's OK |
-|---|---|
-| **Service-role key** | Only present in edge functions (`Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')`), never in `src/`. |
-| **Wallet RPCs** (`transfer_funds`, `pay_ride_from_wallet`, `complete_trip_with_commission`, `request_withdrawal`, `request_wallet_ride`) | All `SECURITY DEFINER` with internal `auth.uid()` checks, balance locks (`FOR UPDATE`), duplicate-detection windows, daily limits, fare derived server-side from `rides.fare` (not client). |
-| **Admin gate** | `admin-api` edge function re-validates JWT then re-checks `user_roles` via service-role client. Frontend `has_role` cache is UX-only. |
-| **`delete-account` fn** | Verifies `userId === user.id` before service-role delete. |
-| **`wallet-pin` fn** | PBKDF2 100k iters + per-user salt, in-memory rate limit (5 attempts / 15-min lockout). |
-| **Storage buckets** | All 6 buckets (`driver-documents`, `deposit-proofs`, `rider-deposit-proofs`, `driver-avatars`, `student-verification`, `luggage-photos`) are private; RLS scoped to `(storage.foldername(name))[1] = auth.uid()::text`. |
-| **`dangerouslySetInnerHTML`** | Only in `src/components/ui/chart.tsx` (shadcn) with non-user-controlled config strings — no XSS sink. |
-| **localStorage usage** | Only theme, locale, UI prefs, nav resume coords — no JWTs, no PINs, no balances. |
-| **`request_wallet_ride`** | Forces `user_id := auth.uid()` and `payment_method := 'wallet'` server-side — client cannot inject another user. |
-| **`complete_trip_with_commission`** | Auth gated to driver or rider of the ride; commission rounded server-side at 15%. Cannot be faked from client. |
-| **`is_locked` wallets** | Auto-charge failure flips wallet to locked + fraud_flag → admin review. |
-| **Rate limiting** | `public.check_rate_limit` available; PIN endpoint has dedicated brute-force lockout. |
+### Critical: `useDriverNoShow.ts` Has Broken Syntax In A Safety Flow
 
----
+Evidence: `npx tsc -b --noEmit` fails at `src/hooks/useDriverNoShow.ts`; callback uses `await` inside non-async `setTimeout` and references undeclared `interval`.
 
-## 4. Linter noise (intentional, ignored with rationale)
+Impact: Type checking is blocked and the driver no-show safety feature cannot be trusted.
 
-The 28 Supabase linter warnings remaining are all either:
-- **`SECURITY DEFINER function callable by authenticated`** — required surface for wallet/ride/admin RPCs. Each function self-gates with `auth.uid()` and is covered by the CI guard `src/test/securityDefinerAllowlist.test.ts`.
-- **`RLS enabled, no policy`** on `phone_verifications` & `wallet_pins` — intentional deny-by-default; only `service_role` (edge functions) is granted table access.
+Affected file: `src/hooks/useDriverNoShow.ts`.
 
-These are documented in `mem://technical/security/security-architecture`.
+Fix: wrap the interval callback in `setInterval(async () => ...)`, store the interval id, and clean up both timeout and interval.
 
----
+### Critical: Realtime Publication Drift Can Break Ride Status And Wallet Updates
 
-## 5. Remaining risks / recommendations before launch
+Evidence: migrations add then later drop `rides`, `driver_wallets`, `call_sessions`, `town_pricing`, and `disputes` from `supabase_realtime`. Frontend still subscribes to `rides`, `driver_wallets`, `call_sessions`, and disputes/emergency admin flows.
 
-1. **Restrict Google Maps key referrers** (only fix you must do in GCP console).
-2. **Enable Supabase HIBP password check** if/when you add email-password auth (currently phone-only OTP, N/A).
-3. **Add Sentry alerts** on `fraud_flags` insert with severity `high`/`critical` so admins are paged in real time.
-4. **Periodic audit:** run `security--run_security_scan` after any RLS or new-table migration.
-5. **GPS spoofing:** continue trusting the auto-resolve trigger that downgrades >2000 km/h flags as noise; consider server-side speed sanity check at trip end before paying out.
-6. **APK signing:** ensure release builds use a hardware-backed key; reject unsigned builds in CI.
-7. **Dependency scan:** run `npm audit` weekly; no high/critical found at audit time but the surface changes.
+Impact: riders/drivers may miss ride acceptance, completion, wallet balance changes, or call session updates.
 
----
+Affected files: `src/hooks/useRideRealtime.ts`, `src/pages/DriverWalletPage.tsx`, `src/hooks/useAgoraCall.ts`, `src/hooks/useWebRTCCall.ts`, `src/pages/admin/AdminDashboard.tsx`, `src/pages/admin/AdminDisputes.tsx`.
 
-## 6. Migrations applied during this audit
+Fix migration:
 
-1. `20260527160744_*.sql` — revoke EXECUTE on fraud-flag auto-resolve fns from anon/authenticated; revoke client grants on `phone_verifications` & `wallet_pins`.
-2. `20260527161745_*.sql` — re-assertion / cleanup.
-3. `20260527_*_security_hardening.sql` (this turn) — column REVOKE on student PII, tighter `luggage_requests` policy, tighter `rides` driver-SELECT policy.
+```sql
+do $$
+begin
+  begin alter publication supabase_realtime add table public.rides; exception when duplicate_object then null; end;
+  begin alter publication supabase_realtime add table public.driver_wallets; exception when duplicate_object then null; end;
+  begin alter publication supabase_realtime add table public.call_sessions; exception when duplicate_object then null; end;
+  begin alter publication supabase_realtime add table public.disputes; exception when duplicate_object then null; end;
+end $$;
+```
 
----
+## High Findings
 
-**Posture after audit:** No known critical/high client-exploitable vulnerabilities remain. Single outstanding item is the Google Maps key referrer restriction, which is a Google Cloud Console action.
+### High: Missing `admin_topup_driver` Audited RPC
+
+Impact: driver wallet support operations lack a single audited, idempotent, admin-gated path. Manual table updates are dangerous in production.
+
+Fix: add the SQL in `DATABASE_AUDIT.md`.
+
+### High: `verify_jwt=false` Edge Functions Need Uniform Auth Middleware
+
+Functions configured with `verify_jwt=false`: `admin-api`, `google-routes`, `twilio-otp`, `import-osm-places`, `settle-trip`, `agora-token`, `google-maps-key`, `nominatim-search`, `google-places-search`, `ramz-code-scan`, `ramz-generate-patch`.
+
+Impact: Manual auth is easy to miss. Functions that proxy paid APIs can be abused for billing. Functions using service role can bypass RLS.
+
+Fix: centralize auth helper per function class:
+
+- Public geocoder/token proxy: require bearer user or signed app token, rate-limit by IP/user/device.
+- Admin function: require bearer user plus `user_roles.admin`.
+- Ride function: require bearer user plus ride-party membership.
+- OTP function: rate-limit unauthenticated access by phone/IP/device.
+
+### High: Client-Side Ride Creation Accepts Client Fare For Cash Rides
+
+Evidence: `src/lib/requestRide.ts` inserts `fare`, `distance_km`, and route fields directly into `rides` for non-wallet rides.
+
+Impact: modified clients can understate fares or manipulate distance. Wallet path uses `request_wallet_ride`, but cash path still trusts the browser.
+
+Fix: create `request_cash_ride(p_payload jsonb)` or general `request_ride` RPC that recomputes or verifies fare server-side using town pricing and route distance.
+
+### High: `here-geocode` Edge Function Missing
+
+Evidence: `src/components/FavoritesSheet.tsx` invokes `here-geocode`; no local `supabase/functions/here-geocode` exists.
+
+Impact: favorite location geocoding fails in production unless deployed outside the repo. If it exists remotely but not in source, reproducible deploys are broken.
+
+Fix: add the function or change the client to `google-places-search`, `nominatim-search`, or `mapbox-search`.
+
+### High: Student Verification Abuse Needs Persistent Rate Limits
+
+Evidence: `verify-student` uses service role and writes attempts; table exists. Need live confirmation of hard limits by user/device/document/IP.
+
+Impact: fake students can brute-force document combinations, farm discounts, or upload excessive files.
+
+Fix: enforce limits in the Edge Function using `student_verification_attempts`, `device_id`, `national_id_number` hash, and storage quotas.
+
+## Medium Findings
+
+### Medium: `driver_locations` Spec Mismatch
+
+Impact: integration and analytics code expecting `driver_locations` will fail. Create compatibility view over `live_locations`.
+
+### Medium: Wallet PIN Rate Limit Is In-Memory
+
+Evidence: `wallet-pin` has endpoint-level attempt logic, but in-memory limits reset on cold start/multi-instance.
+
+Impact: distributed brute force risk.
+
+Fix: persist attempts in `wallet_pin_attempts` keyed by user, device, and IP.
+
+### Medium: Admin Dashboards Use N+1 Profile Fetching
+
+Evidence: `src/pages/admin/AdminDrivers.tsx` fetches profile per driver. `src/pages/admin/AdminDashboard.tsx` fetches profile and live location per driver.
+
+Impact: admin pages degrade quickly at scale and may expose partial data on failures.
+
+Fix: add admin RPCs/views for joined projections with security definer/admin checks.
+
+### Medium: Realtime Filters Are Broad For Drivers
+
+Evidence: `useOpenRidesRealtime` subscribes to all `rides` and `offers`; `useNearbyDrivers` subscribes to all driver location changes and filters client-side.
+
+Impact: location and ride event volume can become a privacy and quota issue.
+
+Fix: server-side dispatch channels by town/geohash, or broadcast only eligible rides through Edge/Realtime channels.
+
+## Low Findings
+
+- Existing `SECURITY_REPORT.md` noted Google Maps browser key restriction; still required.
+- Build warns Sentry auth token is missing, so source maps/releases are not uploaded.
+- `ramz` admin code-generation tools should be disabled or heavily gated in production.
+- Storage buckets need live private/public confirmation; migrations imply private bucket policy intent.
+
+## Browser RPC Calls
+
+Client RPCs found: `can_driver_operate`, `complete_trip_with_commission`, `pay_ride_from_wallet`, `transfer_funds`, `request_withdrawal`, `lookup_user_by_pickme_account`, `request_wallet_ride`. These must remain explicitly granted only to `authenticated`, with internal authorization.
+
+Maintenance RPCs found behind Edge Functions: `dispatch_scheduled_rides`, `expire_old_rides`, `update_demand_zones`, `cleanup_old_messages`, `auto_resolve_noise_fraud_flags`. These should be service/admin only.
+
+## Wallet Security
+
+Good:
+
+- Wallet mutations use `FOR UPDATE` in key RPCs.
+- Direct update/delete policies were added for `wallets` and `driver_wallets`.
+- `wallet_pins` access was revoked from public/anon/authenticated.
+
+Risks:
+
+- No `admin_topup_driver` RPC.
+- Need persistent PIN attempt logging.
+- Need idempotency keys for deposits, wallet payments, withdrawals, and top-ups.
+- Need ledger immutability: avoid update/delete on financial history except compensating entries.
+
+## Production Security Fix List
+
+1. Lock `maintenance` behind admin/service auth.
+2. Reconcile Realtime publication with frontend subscriptions.
+3. Add `admin_topup_driver`.
+4. Move all ride creation through server-side RPC validation.
+5. Add persistent PIN/OTP/student verification rate limits.
+6. Add the missing `here-geocode` function or remove the call.
+7. Run live Supabase Advisor and RLS impersonation tests before launch.
+

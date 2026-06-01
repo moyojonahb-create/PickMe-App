@@ -38,12 +38,12 @@ function mockOnline(value: boolean) {
   });
 }
 
-function mockRideInsert(result: { data: unknown; error: unknown }) {
-  const single = vi.fn().mockResolvedValue(result);
-  const select = vi.fn(() => ({ single }));
-  const insert = vi.fn(() => ({ select }));
-  supabaseMock.from.mockReturnValue({ insert });
-  return { insert, select, single };
+function mockRideFetch(result: { data: unknown; error: unknown }) {
+  const maybeSingle = vi.fn().mockResolvedValue(result);
+  const eq = vi.fn(() => ({ maybeSingle }));
+  const select = vi.fn(() => ({ eq }));
+  supabaseMock.from.mockReturnValue({ select });
+  return { select, eq, maybeSingle };
 }
 
 describe("requestRide", () => {
@@ -57,14 +57,15 @@ describe("requestRide", () => {
     });
   });
 
-  it("creates a cash ride with validated payload", async () => {
-    const chain = mockRideInsert({ data: { id: "ride-1", status: "pending" }, error: null });
+  it("creates a cash ride through the server-side fare RPC", async () => {
+    supabaseMock.rpc.mockResolvedValue({ data: { ok: true, ride_id: "ride-1", fare: 5 }, error: null });
+    mockRideFetch({ data: { id: "ride-1", status: "pending" }, error: null });
 
     const result = await requestRide(validInput);
 
     expect(result).toEqual({ ok: true, ride: { id: "ride-1", status: "pending" } });
-    expect(chain.insert).toHaveBeenCalledWith(
-      expect.objectContaining({
+    expect(supabaseMock.rpc).toHaveBeenCalledWith("request_cash_ride", {
+      p_payload: expect.objectContaining({
         user_id: "user-1",
         pickup_address: "Pickup",
         dropoff_address: "Dropoff",
@@ -72,8 +73,8 @@ describe("requestRide", () => {
         dropoff_lon: validInput.dropoff_lng,
         payment_method: "cash",
         status: "pending",
-      })
-    );
+      }),
+    });
   });
 
   it("returns a safe error when the user is not authenticated", async () => {
@@ -100,8 +101,8 @@ describe("requestRide", () => {
     expect(supabaseMock.from).not.toHaveBeenCalled();
   });
 
-  it("surfaces network/API insert failures", async () => {
-    mockRideInsert({
+  it("surfaces network/API RPC failures", async () => {
+    supabaseMock.rpc.mockResolvedValue({
       data: null,
       error: { message: "Network request failed", details: "fetch failed", hint: "Retry later" },
     });
@@ -116,12 +117,13 @@ describe("requestRide", () => {
     }
   });
 
-  it("handles an empty successful response without crashing", async () => {
-    mockRideInsert({ data: null, error: null });
+  it("handles an empty successful fetch response without crashing", async () => {
+    supabaseMock.rpc.mockResolvedValue({ data: { ok: true, ride_id: "ride-1", fare: 5 }, error: null });
+    mockRideFetch({ data: null, error: null });
 
     const result = await requestRide(validInput);
 
-    expect(result).toEqual({ ok: true, ride: null });
+    expect(result).toEqual({ ok: true, ride: { id: "ride-1", fare: 5 } });
   });
 
   it("uses wallet RPC and handles empty fetch response", async () => {
