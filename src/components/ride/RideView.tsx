@@ -10,6 +10,16 @@ import { usePricingSettings } from '@/hooks/usePricingSettings';
 import { useLandmarks } from '@/hooks/useLandmarks';
 import { supabase } from '@/lib/supabaseClient';
 import { requestRide } from '@/lib/requestRide';
+import { cancelRide } from '@/lib/backendClient';
+import {
+  eventDriverId,
+  eventNumber,
+  eventOfferId,
+  eventString,
+  type BackendSocketEvent,
+} from '@/lib/backendSocketClient';
+import { acceptOffer, declineOffer } from '@/lib/offerHelpers';
+import { useRideRealtime } from '@/hooks/useRideRealtime';
 import { searchZW, reverseZW } from '@/lib/geo_osm';
 import { cachePlaceFromNominatim } from '@/lib/placeCache';
 import { searchCachedPlacesPrefix } from '@/lib/placeCache';
@@ -182,6 +192,58 @@ export default function RideView() {
     return { fareR: rec.recommended, distanceKm: routeData.distanceKm, durationMinutes: routeData.durationMinutes, currencySymbol: rec.currencySymbol, currencyCode: rec.currencyCode };
   }, [routeData, townPricing]);
   const fareEstimate = calculateFare();
+
+  const applyRideOfferEvent = useCallback((event: BackendSocketEvent) => {
+    if (!currentRideId) return;
+    const offerId = eventOfferId(event);
+    const driverId = eventDriverId(event);
+    const offeredFare = eventNumber(event, ['price', 'fare', 'offer_fare', 'offered_fare']);
+    if (!offerId || !driverId || offeredFare == null) return;
+
+    const etaMinutes = eventNumber(event, ['eta_minutes', 'etaMinutes', 'eta']) ?? 10;
+    const driverName = eventString(event, ['driver_name', 'driverName', 'name']) ?? 'Driver';
+    const vehicleMake = eventString(event, ['vehicle_make', 'vehicleMake']);
+    const vehicleModel = eventString(event, ['vehicle_model', 'vehicleModel']);
+    const plateNumber = eventString(event, ['plate_number', 'plateNumber']) ?? '-';
+    const vehicleType = (eventString(event, ['vehicle_type', 'vehicleType']) ?? 'Car') as DriverOffer['vehicleType'];
+
+    const nextViewing: DriverViewing = {
+      driverId,
+      name: vehicleMake || vehicleModel ? `${vehicleMake ?? ''} ${vehicleModel ?? ''}`.trim() : driverName,
+      phone: eventString(event, ['phone']) ?? '+263',
+      vehicleType,
+      plateNumber,
+      languages: ['English'],
+      distanceKm: eventNumber(event, ['distance_km', 'distanceKm']) ?? 0,
+      etaMinutes,
+    };
+
+    const nextOffer: DriverOffer = {
+      ...nextViewing,
+      offerId,
+      offeredFareR: offeredFare,
+      createdAt: eventString(event, ['created_at', 'createdAt']) ?? new Date().toISOString(),
+      driverName,
+      vehicleMake: vehicleMake ?? undefined,
+      vehicleModel: vehicleModel ?? undefined,
+      gender: eventString(event, ['gender']),
+      avatarUrl: eventString(event, ['avatar_url', 'avatarUrl']),
+      ratingAvg: eventNumber(event, ['rating_avg', 'ratingAvg']),
+      totalTrips: eventNumber(event, ['total_trips', 'totalTrips']),
+    };
+
+    setViewingDrivers((prev) => prev.some((driver) => driver.driverId === driverId) ? prev : [nextViewing, ...prev]);
+    setOffers((prev) => prev.some((offer) => offer.offerId === offerId) ? prev : [nextOffer, ...prev]);
+    setRideStatus('offers_received');
+    setOffersOpen(true);
+  }, [currentRideId]);
+
+  useRideRealtime(currentRideId, {
+    onOfferChange: applyRideOfferEvent,
+    onRideChange: () => {
+      if (currentRideId) navigate(`/ride/${currentRideId}`, { replace: true });
+    },
+  });
 
   // Student discount: $1 off when verified & under daily cap
   const { available: studentDiscountAvailable, usedToday: studentRidesUsedToday, dailyCap: studentDailyCap } = useStudentDiscountAvailable();
@@ -542,9 +604,38 @@ export default function RideView() {
     setSearchQuery('');
   };
 
-  const handleAcceptOffer = async (offerId: string) => {setRideStatus('driver_assigned');setOffersOpen(false);toast({ title: 'Driver accepted!' });setMatchedDriver({ name: 'Sipho Ndlovu', car: 'Toyota Corolla', plate: 'ACB 2345', rating: 4.8, eta: 3 });setTimeout(() => setRideStatus('driver_arriving'), 2000);};
-  const handleDeclineOffer = async (offerId: string) => {setOffers((prev) => prev.filter((o) => o.offerId !== offerId));if (offers.length <= 1) setRideStatus('searching');};
-  const handleCancelRide = async () => {if (currentRideId) await supabase.from('rides').update({ status: 'cancelled' }).eq('id', currentRideId);setRideStatus('idle');setCurrentRideId(null);setOffers([]);setViewingDrivers([]);setMatchedDriver(null);toast({ title: 'Ride cancelled' });};
+  const handleAcceptOffer = async (offerId: string) => {
+    if (!currentRideId) return;
+    try {
+      await acceptOffer(currentRideId, offerId);
+      setOffersOpen(false);
+      toast({ title: 'Offer accepted', description: 'Waiting for the backend confirmation.' });
+      navigate(`/ride/${currentRideId}`, { replace: true });
+    } catch (error: unknown) {
+      toast({ title: 'Failed to accept offer', description: (error as Error).message, variant: 'destructive' });
+    }
+  };
+  const handleDeclineOffer = async (offerId: string) => {
+    try {
+      await declineOffer(offerId);
+      setOffers((prev) => {
+        const next = prev.filter((o) => o.offerId !== offerId);
+        if (next.length === 0) setRideStatus('searching');
+        return next;
+      });
+    } catch (error: unknown) {
+      toast({ title: 'Failed to decline offer', description: (error as Error).message, variant: 'destructive' });
+    }
+  };
+  const handleCancelRide = async () => {
+    if (currentRideId) await cancelRide(currentRideId);
+    setRideStatus('idle');
+    setCurrentRideId(null);
+    setOffers([]);
+    setViewingDrivers([]);
+    setMatchedDriver(null);
+    toast({ title: 'Ride cancelled' });
+  };
 
   const handleSearchChange = (value: string) => {
     setSearchQuery(value);

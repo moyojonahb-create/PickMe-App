@@ -49,6 +49,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { supabase } from '@/lib/supabaseClient';
+import { cancelRide } from '@/lib/backendClient';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
@@ -130,12 +131,7 @@ const AdminTrips = () => {
   const handleCancelTrip = async (rideId: string) => {
     setCancellingId(rideId);
     try {
-      const { error } = await supabase
-        .from('rides')
-        .update({ status: 'cancelled' })
-        .eq('id', rideId);
-
-      if (error) throw error;
+      await cancelRide(rideId, { reason: 'Admin cancelled trip' });
 
       toast.success('Trip cancelled by admin');
       fetchRides();

@@ -283,26 +283,7 @@ function InnerMap({
   );
 }
 
-/* ------------------------------------------------------------------ */
-/*  Exported wrapper                                                   */
-/* ------------------------------------------------------------------ */
-
-export default function TripGoogleMap(props: TripGoogleMapProps) {
-  const googleDisabled = isGoogleMapsDisabled();
-
-  // Default path: Mapbox (Google can be opted into via localStorage/env).
-  if (googleDisabled) {
-    return (
-      <MapboxMap
-        pickup={props.pickup}
-        dropoff={props.dropoff}
-        driverLocation={props.driverLocation}
-        defaultZoom={14}
-        height={props.height ?? '300px'}
-      />
-    );
-  }
-
+function GoogleTripMap(props: TripGoogleMapProps) {
   const { isLoaded, loadError, apiKey } = useGoogleMaps();
 
   if (!apiKey) {
@@ -330,4 +311,27 @@ export default function TripGoogleMap(props: TripGoogleMapProps) {
   }
 
   return <InnerMap {...props} />;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Exported wrapper                                                   */
+/* ------------------------------------------------------------------ */
+
+export default function TripGoogleMap(props: TripGoogleMapProps) {
+  const googleDisabled = isGoogleMapsDisabled();
+
+  // Default path: Mapbox (Google can be opted into via localStorage/env).
+  if (googleDisabled) {
+    return (
+      <MapboxMap
+        pickup={props.pickup}
+        dropoff={props.dropoff}
+        driverLocation={props.driverLocation}
+        defaultZoom={14}
+        height={props.height ?? '300px'}
+      />
+    );
+  }
+
+  return <GoogleTripMap {...props} />;
 }

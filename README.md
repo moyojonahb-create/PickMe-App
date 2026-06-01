@@ -38,7 +38,7 @@ npm run dev
 
 ## Local requirements
 
-This repo currently expects **Node.js 20 or 22**.
+This repo currently expects **Node.js 20 or 22**. The checked-in `.nvmrc` and `.node-version` files pin local development to Node 22, and `.npmrc` enables `engine-strict` so installs fail fast on unsupported Node versions.
 
 - `npm run test` is not compatible with Node 24 at the moment (Vitest crashes on Node 24).
 

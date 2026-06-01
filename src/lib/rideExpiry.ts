@@ -24,12 +24,21 @@ export function getSecondsRemaining(expiresAt: string | null): number {
  * Call the server-side RPC to expire old pending rides
  */
 export async function expireOldRides(): Promise<number> {
-  const { data, error } = await supabase.rpc('expire_old_rides');
-  if (error) {
-    console.error('[Expiry] Failed to expire old rides:', error);
+  try {
+    const { data, error } = await supabase.functions.invoke('maintenance', {
+      body: JSON.stringify({ action: 'expire_old_rides' }),
+    });
+
+    if (error) {
+      console.error('[Expiry] maintenance invoke failed:', error);
+      return 0;
+    }
+
+    return (data && (data as any).data?.expired) ?? 0;
+  } catch (err) {
+    console.error('[Expiry] Failed to invoke maintenance:', err);
     return 0;
   }
-  return data ?? 0;
 }
 
 /**

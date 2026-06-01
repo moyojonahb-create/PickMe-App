@@ -20,15 +20,16 @@ export function useDriverNoShow({ rideId, driverId, pickupLat, pickupLng, rideSt
   const checkCount = useRef(0);
 
   useEffect(() => {
-    if (!rideId || !driverId || !pickupLat || !pickupLng) return;
+    if (!rideId || !driverId || pickupLat == null || pickupLng == null) return;
     if (rideStatus !== 'accepted') { setShowNoShowAlert(false); return; }
 
     // Only start monitoring 2 minutes after acceptance
     const acceptTime = acceptedAt ? new Date(acceptedAt).getTime() : Date.now();
     const delay = Math.max(0, acceptTime + 2 * 60 * 1000 - Date.now());
+    let intervalId: ReturnType<typeof setInterval> | null = null;
 
     const timeoutId = setTimeout(() => {
-      const interval = setInterval(async () => {
+      const checkDriverProgress = async () => {
         const { data } = await supabase
           .from('live_locations')
           .select('latitude, longitude')
@@ -49,18 +50,25 @@ export function useDriverNoShow({ rideId, driverId, pickupLat, pickupLng, rideSt
           // If driver hasn't moved at least 100m closer
           if (last >= first - 0.1) {
             setShowNoShowAlert(true);
-            clearInterval(interval);
+            if (intervalId) clearInterval(intervalId);
+            intervalId = null;
           }
           // Reset window
           distanceHistory.current = [last];
           checkCount.current = 0;
         }
-      }, 60 * 1000); // Check every minute
+      };
 
-      return () => clearInterval(interval);
+      void checkDriverProgress();
+      intervalId = setInterval(() => void checkDriverProgress(), 60 * 1000); // Check every minute
     }, delay);
 
-    return () => { clearTimeout(timeoutId); distanceHistory.current = []; checkCount.current = 0; };
+    return () => {
+      clearTimeout(timeoutId);
+      if (intervalId) clearInterval(intervalId);
+      distanceHistory.current = [];
+      checkCount.current = 0;
+    };
   }, [rideId, driverId, pickupLat, pickupLng, rideStatus, acceptedAt]);
 
   const dismissAlert = () => setShowNoShowAlert(false);

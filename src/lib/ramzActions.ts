@@ -11,6 +11,7 @@
  */
 import { supabase } from '@/lib/supabaseClient';
 import { subDays, subHours } from 'date-fns';
+import { cancelRide } from '@/lib/backendClient';
 
 export interface RamzAction {
   /** Button label shown to admin */
@@ -28,16 +29,26 @@ export const RAMZ_ACTIONS: Record<string, RamzAction> = {
     label: 'Expire stale rides',
     confirm: 'Expire every pending ride older than 30 minutes?',
     run: async () => {
-      const { error } = await supabase.rpc('expire_old_rides' as never);
-      if (error) throw error;
-      return 'Stale rides expired.';
+      try {
+        // Invoke server-side dispatcher which calls expire_old_rides with service
+        // role privileges. Avoids client-side 403 from calling the RPC directly.
+        const { data, error } = await supabase.functions.invoke('dispatch-scheduled');
+        if (error) throw error;
+        const expired = (data && (data as any).expired) ?? 0;
+        return `Stale rides expired (${expired}).`;
+      } catch (err) {
+        throw err;
+      }
     },
   },
 
   'fraud-flags': {
     label: 'Auto-resolve noise flags',
     run: async () => {
-      const { error } = await supabase.rpc('auto_resolve_noise_fraud_flags' as never);
+      const { error } = await supabase.functions.invoke('maintenance', {
+        body: JSON.stringify({ action: 'auto_resolve_noise_fraud_flags' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
       if (error) throw error;
       return 'Sensor-jitter fraud flags resolved.';
     },
@@ -47,7 +58,10 @@ export const RAMZ_ACTIONS: Record<string, RamzAction> = {
     label: 'Clean old messages',
     confirm: 'Delete chat messages older than 7 days?',
     run: async () => {
-      const { error } = await supabase.rpc('cleanup_old_messages' as never);
+      const { error } = await supabase.functions.invoke('maintenance', {
+        body: JSON.stringify({ action: 'cleanup_old_messages' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
       if (error) throw error;
       return 'Old messages cleaned up.';
     },
@@ -98,11 +112,7 @@ export const RAMZ_ACTIONS: Record<string, RamzAction> = {
       if (!stuck?.length) return 'No stuck rides to cancel.';
 
       const ids = stuck.map(r => r.id);
-      const { error } = await supabase
-        .from('rides')
-        .update({ status: 'cancelled' } as never)
-        .in('id', ids);
-      if (error) throw error;
+      await Promise.all(ids.map((id) => cancelRide(id, { reason: 'Admin force-cancelled stuck accepted ride' })));
 
       // Notify riders
       const notifs = stuck.map(r => ({
