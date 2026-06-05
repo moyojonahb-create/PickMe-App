@@ -1353,9 +1353,8 @@ export default function RideView() {
             ))}
           </div>
         </div>
-
-        </div>
       </GlassSheet>
+
 
       {/* ═══ PAYMENT METHOD PROMPT — refined card ═══ */}
       <PaymentSheet
