@@ -979,21 +979,32 @@ export default function RideView() {
           </div>
 
 
-          {/* Pickup & Dropoff — premium cards with swap */}
-          <div className="space-y-2 relative">
+          {/* Pickup & Dropoff — unified premium card, dropoff dominant */}
+          <div
+            className="relative rounded-[20px] overflow-hidden border border-primary/10"
+            style={{
+              background: 'linear-gradient(180deg, hsl(var(--card)) 0%, hsl(217 91% 60% / 0.04) 100%)',
+              boxShadow: '0 8px 28px -12px hsl(224 71% 37% / 0.25), 0 2px 6px -2px hsl(224 71% 37% / 0.10)',
+            }}
+          >
+            {/* Connector line */}
+            <div className="absolute left-[28px] top-[42px] bottom-[58px] w-px bg-gradient-to-b from-accent/60 via-primary/30 to-primary/60 pointer-events-none" />
+
+            {/* Pickup — compact */}
             <div
               role="button"
               tabIndex={0}
               onClick={() => { setActiveField('pickup'); setSearchQuery(''); }}
               onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { setActiveField('pickup'); setSearchQuery(''); } }}
-              className="w-full min-h-[62px] flex items-center gap-3 px-3 py-3 rounded-2xl active:scale-[0.98] transition-all text-left glass-card cursor-pointer">
-              <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-accent">
-                <MapPin className="w-4 h-4 text-accent-foreground" />
+              className="w-full flex items-center gap-3 px-3.5 py-2.5 active:bg-primary/5 transition-colors text-left cursor-pointer"
+            >
+              <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 bg-accent ring-4 ring-accent/15">
+                <div className="w-2 h-2 rounded-full bg-accent-foreground" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-semibold text-primary uppercase tracking-widest leading-tight">Pickup</p>
-                <p className={cn("text-[14px] font-medium truncate leading-snug", pickupLocation ? 'text-foreground' : 'text-muted-foreground')}>
-                  {pickupLocation?.name || 'Where from?'}
+                <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-[0.14em] leading-tight">From</p>
+                <p className={cn("text-[13px] font-medium truncate leading-snug", pickupLocation ? 'text-foreground' : 'text-muted-foreground')}>
+                  {pickupLocation?.name || 'Current location'}
                 </p>
               </div>
               {pickupLocation ? (
@@ -1001,43 +1012,58 @@ export default function RideView() {
                   <X className="w-3.5 h-3.5 text-muted-foreground" />
                 </button>
               ) : (
-                <button type="button" onClick={(e) => { e.stopPropagation(); handleUseMyLocation(); }} className="p-1.5 hover:bg-foreground/5 rounded-full shrink-0" aria-label="Use my location">
+                <button type="button" onClick={(e) => { e.stopPropagation(); handleUseMyLocation(); }} className="p-1.5 hover:bg-primary/10 rounded-full shrink-0" aria-label="Use my location">
                   <Locate className="w-3.5 h-3.5 text-primary" />
                 </button>
               )}
             </div>
 
+            <div className="mx-3.5 h-px bg-border/40" />
+
+            {/* Drop-off — DOMINANT */}
             <div
               role="button"
               tabIndex={0}
               onClick={() => { setActiveField('dropoff'); setSearchQuery(''); }}
               onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { setActiveField('dropoff'); setSearchQuery(''); } }}
-              className="w-full min-h-[62px] flex items-center gap-3 px-3 py-3 rounded-2xl active:scale-[0.98] transition-all text-left glass-card cursor-pointer">
-              <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'var(--gradient-primary)' }}>
-                <MapPin className="w-4 h-4 text-primary-foreground" />
+              className="w-full flex items-center gap-3 px-3.5 py-4 active:bg-primary/5 transition-colors text-left cursor-pointer"
+            >
+              <div
+                className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 shadow-lg"
+                style={{
+                  background: 'var(--gradient-primary)',
+                  boxShadow: '0 6px 16px -4px hsl(224 71% 37% / 0.45)',
+                }}
+              >
+                <MapPin className="w-5 h-5 text-primary-foreground" strokeWidth={2.5} />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-semibold text-primary uppercase tracking-widest leading-tight">Drop-off</p>
-                <p className={cn("text-[14px] font-medium truncate leading-snug", dropoffLocation ? 'text-foreground' : 'text-muted-foreground')}>
-                  {dropoffLocation?.name || 'Where to?'}
+                <p className="text-[10px] font-bold text-primary uppercase tracking-[0.16em] leading-tight">Where to?</p>
+                <p className={cn("text-[17px] font-bold truncate leading-tight mt-0.5", dropoffLocation ? 'text-foreground' : 'text-foreground/40')}>
+                  {dropoffLocation?.name || 'Enter destination'}
                 </p>
               </div>
-              {dropoffLocation && (
+              {dropoffLocation ? (
                 <button type="button" onClick={(e) => { e.stopPropagation(); setDropoffLocation(null); }} className="p-1.5 hover:bg-foreground/5 rounded-full shrink-0" aria-label="Clear drop-off">
-                  <X className="w-3.5 h-3.5 text-muted-foreground" />
+                  <X className="w-4 h-4 text-muted-foreground" />
                 </button>
+              ) : (
+                <ChevronRight className="w-5 h-5 text-primary shrink-0" />
               )}
             </div>
 
+            {/* Swap floating button */}
             <button
               type="button"
               onClick={handleSwapPickupDropoff}
-              className="absolute right-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-xl glass-card flex items-center justify-center text-primary active:scale-90 transition-all"
+              className="absolute right-3 top-[34px] w-8 h-8 rounded-full bg-card border border-primary/20 flex items-center justify-center text-primary active:scale-90 transition-all shadow-md hover:bg-primary/5"
               title="Swap pickup and drop-off"
-              aria-label="Swap pickup and drop-off">
-              <Route className="w-4 h-4" />
+              aria-label="Swap pickup and drop-off"
+            >
+              <Route className="w-3.5 h-3.5" />
             </button>
           </div>
+
 
 
 
