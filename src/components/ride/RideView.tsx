@@ -118,7 +118,9 @@ export default function RideView() {
   const nominatimDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [reverseGeoLoading, setReverseGeoLoading] = useState(false);
   const [selectedTier, setSelectedTier] = useState<VehicleTier>('standard');
+  const [selectedRideType, setSelectedRideType] = useState<'economy' | 'luggage' | 'student'>('economy');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
+
   const [showPaymentPrompt, setShowPaymentPrompt] = useState<{ open: boolean; fare: number }>({ open: false, fare: 0 });
   const { balance: walletBalance } = useWallet();
   const [passengerCount, setPassengerCount] = useState(1);
@@ -979,21 +981,32 @@ export default function RideView() {
           </div>
 
 
-          {/* Pickup & Dropoff — premium cards with swap */}
-          <div className="space-y-2 relative">
+          {/* Pickup & Dropoff — unified premium card, dropoff dominant */}
+          <div
+            className="relative rounded-[20px] overflow-hidden border border-primary/10"
+            style={{
+              background: 'linear-gradient(180deg, hsl(var(--card)) 0%, hsl(217 91% 60% / 0.04) 100%)',
+              boxShadow: '0 8px 28px -12px hsl(224 71% 37% / 0.25), 0 2px 6px -2px hsl(224 71% 37% / 0.10)',
+            }}
+          >
+            {/* Connector line */}
+            <div className="absolute left-[28px] top-[42px] bottom-[58px] w-px bg-gradient-to-b from-accent/60 via-primary/30 to-primary/60 pointer-events-none" />
+
+            {/* Pickup — compact */}
             <div
               role="button"
               tabIndex={0}
               onClick={() => { setActiveField('pickup'); setSearchQuery(''); }}
               onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { setActiveField('pickup'); setSearchQuery(''); } }}
-              className="w-full min-h-[62px] flex items-center gap-3 px-3 py-3 rounded-2xl active:scale-[0.98] transition-all text-left glass-card cursor-pointer">
-              <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-accent">
-                <MapPin className="w-4 h-4 text-accent-foreground" />
+              className="w-full flex items-center gap-3 px-3.5 py-2.5 active:bg-primary/5 transition-colors text-left cursor-pointer"
+            >
+              <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 bg-accent ring-4 ring-accent/15">
+                <div className="w-2 h-2 rounded-full bg-accent-foreground" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-semibold text-primary uppercase tracking-widest leading-tight">Pickup</p>
-                <p className={cn("text-[14px] font-medium truncate leading-snug", pickupLocation ? 'text-foreground' : 'text-muted-foreground')}>
-                  {pickupLocation?.name || 'Where from?'}
+                <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-[0.14em] leading-tight">From</p>
+                <p className={cn("text-[13px] font-medium truncate leading-snug", pickupLocation ? 'text-foreground' : 'text-muted-foreground')}>
+                  {pickupLocation?.name || 'Current location'}
                 </p>
               </div>
               {pickupLocation ? (
@@ -1001,47 +1014,94 @@ export default function RideView() {
                   <X className="w-3.5 h-3.5 text-muted-foreground" />
                 </button>
               ) : (
-                <button type="button" onClick={(e) => { e.stopPropagation(); handleUseMyLocation(); }} className="p-1.5 hover:bg-foreground/5 rounded-full shrink-0" aria-label="Use my location">
+                <button type="button" onClick={(e) => { e.stopPropagation(); handleUseMyLocation(); }} className="p-1.5 hover:bg-primary/10 rounded-full shrink-0" aria-label="Use my location">
                   <Locate className="w-3.5 h-3.5 text-primary" />
                 </button>
               )}
             </div>
 
+            <div className="mx-3.5 h-px bg-border/40" />
+
+            {/* Drop-off — DOMINANT */}
             <div
               role="button"
               tabIndex={0}
               onClick={() => { setActiveField('dropoff'); setSearchQuery(''); }}
               onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { setActiveField('dropoff'); setSearchQuery(''); } }}
-              className="w-full min-h-[62px] flex items-center gap-3 px-3 py-3 rounded-2xl active:scale-[0.98] transition-all text-left glass-card cursor-pointer">
-              <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'var(--gradient-primary)' }}>
-                <MapPin className="w-4 h-4 text-primary-foreground" />
+              className="w-full flex items-center gap-3 px-3.5 py-4 active:bg-primary/5 transition-colors text-left cursor-pointer"
+            >
+              <div
+                className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 shadow-lg"
+                style={{
+                  background: 'var(--gradient-primary)',
+                  boxShadow: '0 6px 16px -4px hsl(224 71% 37% / 0.45)',
+                }}
+              >
+                <MapPin className="w-5 h-5 text-primary-foreground" strokeWidth={2.5} />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-semibold text-primary uppercase tracking-widest leading-tight">Drop-off</p>
-                <p className={cn("text-[14px] font-medium truncate leading-snug", dropoffLocation ? 'text-foreground' : 'text-muted-foreground')}>
-                  {dropoffLocation?.name || 'Where to?'}
+                <p className="text-[10px] font-bold text-primary uppercase tracking-[0.16em] leading-tight">Where to?</p>
+                <p className={cn("text-[17px] font-bold truncate leading-tight mt-0.5", dropoffLocation ? 'text-foreground' : 'text-foreground/40')}>
+                  {dropoffLocation?.name || 'Enter destination'}
                 </p>
               </div>
-              {dropoffLocation && (
+              {dropoffLocation ? (
                 <button type="button" onClick={(e) => { e.stopPropagation(); setDropoffLocation(null); }} className="p-1.5 hover:bg-foreground/5 rounded-full shrink-0" aria-label="Clear drop-off">
-                  <X className="w-3.5 h-3.5 text-muted-foreground" />
+                  <X className="w-4 h-4 text-muted-foreground" />
                 </button>
+              ) : (
+                <ChevronRight className="w-5 h-5 text-primary shrink-0" />
               )}
             </div>
 
+            {/* Swap floating button */}
             <button
               type="button"
               onClick={handleSwapPickupDropoff}
-              className="absolute right-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-xl glass-card flex items-center justify-center text-primary active:scale-90 transition-all"
+              className="absolute right-3 top-[34px] w-8 h-8 rounded-full bg-card border border-primary/20 flex items-center justify-center text-primary active:scale-90 transition-all shadow-md hover:bg-primary/5"
               title="Swap pickup and drop-off"
-              aria-label="Swap pickup and drop-off">
-              <Route className="w-4 h-4" />
+              aria-label="Swap pickup and drop-off"
+            >
+              <Route className="w-3.5 h-3.5" />
             </button>
           </div>
 
+          {/* Ride type cards — Economy / Luggage / Student */}
+          {(() => {
+            const types: { id: 'economy' | 'luggage' | 'student'; title: string; desc: string; icon: typeof Car; onSelect?: () => void }[] = [
+              { id: 'economy', title: 'Economy', desc: 'Everyday rides', icon: Car },
+              { id: 'luggage', title: 'Luggage', desc: 'Extra space', icon: Zap, onSelect: () => setLuggageOpen(true) },
+              { id: 'student', title: 'Student', desc: studentDiscountAvailable ? '$1 off ride' : 'Verify to save', icon: Star },
+            ];
+            return (
+              <div className="grid grid-cols-3 gap-2">
+                {types.map((t) => {
+                  const Icon = t.icon;
+                  const active = selectedRideType === t.id;
+                  return (
+                    <button
+                      key={t.id}
+                      onClick={() => { setSelectedRideType(t.id); t.onSelect?.(); haptic('light'); }}
+                      className={cn(
+                        'relative rounded-2xl p-2.5 text-left transition-all active:scale-[0.97] border',
+                        active
+                          ? 'bg-primary text-primary-foreground border-primary shadow-[0_8px_20px_-8px_hsl(224_71%_37%/0.6)]'
+                          : 'bg-card text-foreground border-border/60 hover:border-primary/40',
+                      )}
+                    >
+                      <div className={cn('w-7 h-7 rounded-lg flex items-center justify-center mb-1', active ? 'bg-primary-foreground/15' : 'bg-primary/10')}>
+                        <Icon className={cn('w-4 h-4', active ? 'text-primary-foreground' : 'text-primary')} strokeWidth={2.2} />
+                      </div>
+                      <p className={cn('text-[12px] font-bold leading-tight', active ? 'text-primary-foreground' : 'text-foreground')}>{t.title}</p>
+                      <p className={cn('text-[10px] leading-tight mt-0.5 truncate', active ? 'text-primary-foreground/80' : 'text-muted-foreground')}>{t.desc}</p>
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })()}
 
-
-          {/* Multi-stop + Schedule */}
+          {/* Multi-stop + Schedule for later */}
           <div className="grid grid-cols-2 gap-2">
             <MultiStopInput
               stops={rideStops}
@@ -1051,31 +1111,36 @@ export default function RideView() {
             <ScheduleRide scheduledAt={scheduledAt} onSchedule={setScheduledAt} />
           </div>
 
-          {/* Passenger selector — compact inline */}
-          <div className="flex items-center justify-between glass-card rounded-2xl px-3 py-2">
-            <div className="flex items-center gap-2">
-              <Users className="w-3.5 h-3.5 text-primary" />
-              <span className="text-xs font-medium text-foreground">Passengers</span>
+          {/* Passenger selector — refined */}
+          <div className="flex items-center justify-between bg-card border border-border/60 rounded-2xl px-3 py-2 shadow-sm">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center">
+                <Users className="w-4 h-4 text-primary" strokeWidth={2.2} />
+              </div>
+              <div>
+                <p className="text-[12px] font-bold text-foreground leading-tight">Passengers</p>
+                <p className="text-[10px] text-muted-foreground leading-tight">
+                  {passengerCount === 1 ? '1 rider' : `${passengerCount} riders`}
+                  {passengerCount > 3 ? ' • extra fee' : ''}
+                </p>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 bg-secondary/70 rounded-full p-0.5">
               <button
                 onClick={() => setPassengerCount((prev) => Math.max(1, prev - 1))}
                 disabled={passengerCount <= 1}
-                className="w-7 h-7 rounded-full glass-card flex items-center justify-center active:scale-90 transition-all disabled:opacity-30">
-                <Minus className="w-3 h-3 text-foreground" />
+                className="w-7 h-7 rounded-full bg-card flex items-center justify-center active:scale-90 transition-all disabled:opacity-30 shadow-sm">
+                <Minus className="w-3 h-3 text-primary" strokeWidth={2.5} />
               </button>
-              <span className="text-sm font-bold text-foreground tabular-nums w-4 text-center">{passengerCount}</span>
+              <span className="text-sm font-bold text-foreground tabular-nums w-6 text-center">{passengerCount}</span>
               <button
                 onClick={() => setPassengerCount((prev) => Math.min(10, prev + 1))}
                 disabled={passengerCount >= 10}
-                className="w-7 h-7 rounded-full glass-card flex items-center justify-center active:scale-90 transition-all disabled:opacity-30">
-                <Plus className="w-3 h-3 text-foreground" />
+                className="w-7 h-7 rounded-full bg-card flex items-center justify-center active:scale-90 transition-all disabled:opacity-30 shadow-sm">
+                <Plus className="w-3 h-3 text-primary" strokeWidth={2.5} />
               </button>
             </div>
           </div>
-          {passengerCount > 3 &&
-          <p className="text-[11px] text-accent font-medium -mt-1.5 ml-1">⚡ Extra passenger charges applied</p>
-          }
 
           <div className='glass-card rounded-2xl px-3 py-2 space-y-2'>
             <div className='flex items-center justify-between'>
@@ -1127,7 +1192,48 @@ export default function RideView() {
 
             return (
               <>
-                {/* Compact fare card */}
+                {/* Fare Estimate card — premium */}
+                <div
+                  className="rounded-2xl overflow-hidden border border-primary/15"
+                  style={{
+                    background: 'linear-gradient(135deg, hsl(224 71% 37% / 0.06) 0%, hsl(217 91% 60% / 0.10) 100%)',
+                    boxShadow: '0 10px 28px -14px hsl(224 71% 37% / 0.45)',
+                  }}
+                >
+                  <div className="px-3.5 pt-2.5 pb-3 flex items-end justify-between">
+                    <div>
+                      <p className="text-[10px] font-bold text-primary uppercase tracking-[0.16em] leading-tight">Estimated Fare</p>
+                      <p className="text-[22px] font-extrabold text-foreground leading-tight mt-0.5 tabular-nums">
+                        {fmt(Math.max(totalFare - 0.5, 0.5))}
+                        <span className="text-muted-foreground font-bold"> – </span>
+                        {fmt(totalFare + 1)}
+                      </p>
+                    </div>
+                    <div
+                      className="w-11 h-11 rounded-2xl flex items-center justify-center shrink-0"
+                      style={{ background: 'var(--gradient-primary)', boxShadow: '0 6px 16px -4px hsl(224 71% 37% / 0.5)' }}
+                    >
+                      <Car className="w-5 h-5 text-primary-foreground" strokeWidth={2.3} />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 border-t border-primary/10 bg-card/40">
+                    <div className="flex items-center gap-2 px-3.5 py-2 border-r border-primary/10">
+                      <Clock className="w-3.5 h-3.5 text-primary" />
+                      <div>
+                        <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider leading-tight">ETA</p>
+                        <p className="text-[13px] font-bold text-foreground leading-tight">{fareEstimate.durationMinutes} min</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 px-3.5 py-2">
+                      <Route className="w-3.5 h-3.5 text-primary" />
+                      <div>
+                        <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider leading-tight">Distance</p>
+                        <p className="text-[13px] font-bold text-foreground leading-tight">{fareEstimate.distanceKm.toFixed(1)} km</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 
 
 
@@ -1204,7 +1310,8 @@ export default function RideView() {
                 <PrimaryButton
                   onClick={() => setShowPaymentPrompt({ open: true, fare: totalFare })}
                   disabled={isRequesting}
-                  className="w-full h-[48px] text-[15px] font-semibold rounded-2xl gap-2 inline-flex items-center justify-center active:scale-[0.97] transition-transform">
+                  className="w-full h-[52px] text-[15px] font-bold rounded-2xl gap-2 inline-flex items-center justify-center active:scale-[0.97] transition-transform"
+                  style={{ boxShadow: '0 10px 24px -8px hsl(224 71% 37% / 0.55)' }}>
 
                   {isRequesting ? (
                     <>
@@ -1213,8 +1320,8 @@ export default function RideView() {
                     </>
                   ) : (
                     <>
-                      <Car className="w-4 h-4" />
-                      {`Find Drivers • ${fmt(totalFare)}`}
+                      <Car className="w-4 h-4" strokeWidth={2.4} />
+                      {`Find Nearby Drivers • ${fmt(totalFare)}`}
                     </>
                   )}
                 </PrimaryButton>
@@ -1223,12 +1330,31 @@ export default function RideView() {
           })() :
           <SecondaryButton
             disabled
-            className="w-full h-[48px] text-[15px] font-semibold rounded-2xl bg-primary/30 text-primary-foreground border-transparent">
-              {pickupLocation && dropoffLocation ? <><div className="w-4 h-4 border-2 border-primary-foreground/50 border-t-transparent rounded-full animate-spin mr-2" />Calculating…</> : 'Find Drivers'}
+            className="w-full h-[52px] text-[15px] font-bold rounded-2xl bg-primary/30 text-primary-foreground border-transparent">
+              {pickupLocation && dropoffLocation ? <><div className="w-4 h-4 border-2 border-primary-foreground/50 border-t-transparent rounded-full animate-spin mr-2" />Calculating…</> : 'Find Nearby Drivers'}
             </SecondaryButton>
           }
+
+          {/* Trust indicators */}
+          <div className="flex items-center justify-between mt-2.5 px-1">
+            {[
+              { label: 'Verified Drivers' },
+              { label: 'Live Tracking' },
+              { label: 'Cash & Wallet' },
+            ].map((t) => (
+              <div key={t.label} className="flex items-center gap-1 text-[10px] font-semibold text-muted-foreground">
+                <span className="w-3.5 h-3.5 rounded-full bg-primary/10 flex items-center justify-center">
+                  <svg viewBox="0 0 12 12" className="w-2.5 h-2.5 text-primary" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M2.5 6.5L5 9l4.5-5" />
+                  </svg>
+                </span>
+                {t.label}
+              </div>
+            ))}
+          </div>
         </div>
       </GlassSheet>
+
 
       {/* ═══ PAYMENT METHOD PROMPT — refined card ═══ */}
       <PaymentSheet
