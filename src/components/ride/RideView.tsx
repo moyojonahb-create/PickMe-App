@@ -1192,7 +1192,48 @@ export default function RideView() {
 
             return (
               <>
-                {/* Compact fare card */}
+                {/* Fare Estimate card — premium */}
+                <div
+                  className="rounded-2xl overflow-hidden border border-primary/15"
+                  style={{
+                    background: 'linear-gradient(135deg, hsl(224 71% 37% / 0.06) 0%, hsl(217 91% 60% / 0.10) 100%)',
+                    boxShadow: '0 10px 28px -14px hsl(224 71% 37% / 0.45)',
+                  }}
+                >
+                  <div className="px-3.5 pt-2.5 pb-3 flex items-end justify-between">
+                    <div>
+                      <p className="text-[10px] font-bold text-primary uppercase tracking-[0.16em] leading-tight">Estimated Fare</p>
+                      <p className="text-[22px] font-extrabold text-foreground leading-tight mt-0.5 tabular-nums">
+                        {fmt(Math.max(totalFare - 0.5, 0.5))}
+                        <span className="text-muted-foreground font-bold"> – </span>
+                        {fmt(totalFare + 1)}
+                      </p>
+                    </div>
+                    <div
+                      className="w-11 h-11 rounded-2xl flex items-center justify-center shrink-0"
+                      style={{ background: 'var(--gradient-primary)', boxShadow: '0 6px 16px -4px hsl(224 71% 37% / 0.5)' }}
+                    >
+                      <Car className="w-5 h-5 text-primary-foreground" strokeWidth={2.3} />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 border-t border-primary/10 bg-card/40">
+                    <div className="flex items-center gap-2 px-3.5 py-2 border-r border-primary/10">
+                      <Clock className="w-3.5 h-3.5 text-primary" />
+                      <div>
+                        <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider leading-tight">ETA</p>
+                        <p className="text-[13px] font-bold text-foreground leading-tight">{fareEstimate.durationMinutes} min</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 px-3.5 py-2">
+                      <Route className="w-3.5 h-3.5 text-primary" />
+                      <div>
+                        <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider leading-tight">Distance</p>
+                        <p className="text-[13px] font-bold text-foreground leading-tight">{fareEstimate.distanceKm.toFixed(1)} km</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 
 
 
