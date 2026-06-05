@@ -1310,7 +1310,8 @@ export default function RideView() {
                 <PrimaryButton
                   onClick={() => setShowPaymentPrompt({ open: true, fare: totalFare })}
                   disabled={isRequesting}
-                  className="w-full h-[48px] text-[15px] font-semibold rounded-2xl gap-2 inline-flex items-center justify-center active:scale-[0.97] transition-transform">
+                  className="w-full h-[52px] text-[15px] font-bold rounded-2xl gap-2 inline-flex items-center justify-center active:scale-[0.97] transition-transform"
+                  style={{ boxShadow: '0 10px 24px -8px hsl(224 71% 37% / 0.55)' }}>
 
                   {isRequesting ? (
                     <>
@@ -1319,8 +1320,8 @@ export default function RideView() {
                     </>
                   ) : (
                     <>
-                      <Car className="w-4 h-4" />
-                      {`Find Drivers • ${fmt(totalFare)}`}
+                      <Car className="w-4 h-4" strokeWidth={2.4} />
+                      {`Find Nearby Drivers • ${fmt(totalFare)}`}
                     </>
                   )}
                 </PrimaryButton>
@@ -1329,10 +1330,30 @@ export default function RideView() {
           })() :
           <SecondaryButton
             disabled
-            className="w-full h-[48px] text-[15px] font-semibold rounded-2xl bg-primary/30 text-primary-foreground border-transparent">
-              {pickupLocation && dropoffLocation ? <><div className="w-4 h-4 border-2 border-primary-foreground/50 border-t-transparent rounded-full animate-spin mr-2" />Calculating…</> : 'Find Drivers'}
+            className="w-full h-[52px] text-[15px] font-bold rounded-2xl bg-primary/30 text-primary-foreground border-transparent">
+              {pickupLocation && dropoffLocation ? <><div className="w-4 h-4 border-2 border-primary-foreground/50 border-t-transparent rounded-full animate-spin mr-2" />Calculating…</> : 'Find Nearby Drivers'}
             </SecondaryButton>
           }
+
+          {/* Trust indicators */}
+          <div className="flex items-center justify-between mt-2.5 px-1">
+            {[
+              { label: 'Verified Drivers' },
+              { label: 'Live Tracking' },
+              { label: 'Cash & Wallet' },
+            ].map((t) => (
+              <div key={t.label} className="flex items-center gap-1 text-[10px] font-semibold text-muted-foreground">
+                <span className="w-3.5 h-3.5 rounded-full bg-primary/10 flex items-center justify-center">
+                  <svg viewBox="0 0 12 12" className="w-2.5 h-2.5 text-primary" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M2.5 6.5L5 9l4.5-5" />
+                  </svg>
+                </span>
+                {t.label}
+              </div>
+            ))}
+          </div>
+        </div>
+
         </div>
       </GlassSheet>
 
