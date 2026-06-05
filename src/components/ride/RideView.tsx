@@ -118,7 +118,9 @@ export default function RideView() {
   const nominatimDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [reverseGeoLoading, setReverseGeoLoading] = useState(false);
   const [selectedTier, setSelectedTier] = useState<VehicleTier>('standard');
+  const [selectedRideType, setSelectedRideType] = useState<'economy' | 'luggage' | 'student'>('economy');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
+
   const [showPaymentPrompt, setShowPaymentPrompt] = useState<{ open: boolean; fare: number }>({ open: false, fare: 0 });
   const { balance: walletBalance } = useWallet();
   const [passengerCount, setPassengerCount] = useState(1);
