@@ -1188,6 +1188,52 @@ export default function RideView() {
             </div>
           )} */}
 
+          {/* ── Fare estimate: loading skeleton ── */}
+          {pickupLocation && dropoffLocation && (routeLoading || !fareEstimate) && (
+            <div className="rounded-2xl overflow-hidden border border-primary/15 bg-card/40" aria-busy="true" aria-live="polite">
+              <div className="px-3.5 pt-2.5 pb-3 flex items-end justify-between">
+                <div className="flex-1 space-y-1.5">
+                  <div className="h-3 w-24 rounded-md bg-muted animate-pulse" />
+                  <div className="h-6 w-36 rounded-md bg-muted animate-pulse" />
+                </div>
+                <div className="w-11 h-11 rounded-2xl bg-muted animate-pulse" />
+              </div>
+              <div className="grid grid-cols-2 border-t border-primary/10">
+                <div className="flex items-center gap-2 px-3.5 py-2 border-r border-primary/10">
+                  <div className="w-3.5 h-3.5 rounded-full bg-muted animate-pulse" />
+                  <div className="space-y-1">
+                    <div className="h-2 w-8 rounded bg-muted animate-pulse" />
+                    <div className="h-3 w-12 rounded bg-muted animate-pulse" />
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 px-3.5 py-2">
+                  <div className="w-3.5 h-3.5 rounded-full bg-muted animate-pulse" />
+                  <div className="space-y-1">
+                    <div className="h-2 w-12 rounded bg-muted animate-pulse" />
+                    <div className="h-3 w-14 rounded bg-muted animate-pulse" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── Fare estimate: empty hint when destinations not yet picked ── */}
+          {(!pickupLocation || !dropoffLocation) && (
+            <div className="rounded-2xl border border-dashed border-primary/25 bg-primary/[0.03] px-3.5 py-3 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center shrink-0">
+                <Navigation className="w-5 h-5 text-primary" strokeWidth={2.2} />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[12px] font-bold text-foreground leading-tight">
+                  {!pickupLocation ? 'Set your pickup point' : 'Where are you going?'}
+                </p>
+                <p className="text-[10px] text-muted-foreground leading-snug mt-0.5">
+                  Fare estimate, ETA and distance appear once both locations are set.
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* ── Fare breakdown + Negotiation (expanded) ── */}
           {pickupLocation && dropoffLocation && fareEstimate && (() => {
             const activeTown = selectedTown.name;
