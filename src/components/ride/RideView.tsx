@@ -935,10 +935,11 @@ export default function RideView() {
 
       {/* ── BOTTOM SHEET ── */}
       <GlassSheet
-        className="absolute left-3 right-3 z-50 flex flex-col"
+        className="absolute left-3 right-3 sm:left-1/2 sm:-translate-x-1/2 sm:right-auto sm:w-[460px] sm:max-w-[calc(100%-24px)] md:w-[480px] lg:w-[500px] z-50 flex flex-col"
         style={{
           bottom: 8,
-          height: sheetExpanded ? '70vh' : '48vh',
+          height: sheetExpanded ? '72vh' : '50vh',
+          maxHeight: 'calc(100dvh - 80px)',
           transition: 'height 0.3s cubic-bezier(0.32,0.72,0,1)',
           paddingBottom: 'env(safe-area-inset-bottom)',
           borderTopLeftRadius: 28,
@@ -1074,27 +1075,38 @@ export default function RideView() {
               { id: 'student', title: 'Student', desc: studentDiscountAvailable ? '$1 off ride' : 'Verify to save', icon: Star },
             ];
             return (
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-3 gap-2 sm:gap-2.5">
                 {types.map((t) => {
                   const Icon = t.icon;
                   const active = selectedRideType === t.id;
                   return (
-                    <button
+                    <motion.button
                       key={t.id}
+                      type="button"
+                      whileTap={{ scale: 0.94 }}
+                      transition={{ type: 'spring', stiffness: 500, damping: 30 }}
                       onClick={() => { setSelectedRideType(t.id); t.onSelect?.(); haptic('light'); }}
+                      aria-pressed={active}
                       className={cn(
-                        'relative rounded-2xl p-2.5 text-left transition-all active:scale-[0.97] border',
+                        'relative rounded-2xl p-2.5 sm:p-3 text-left transition-colors border overflow-hidden',
                         active
-                          ? 'bg-primary text-primary-foreground border-primary shadow-[0_8px_20px_-8px_hsl(224_71%_37%/0.6)]'
-                          : 'bg-card text-foreground border-border/60 hover:border-primary/40',
+                          ? 'bg-primary text-primary-foreground border-primary ring-2 ring-primary/30 ring-offset-1 ring-offset-card shadow-[0_10px_24px_-10px_hsl(224_71%_37%/0.65)]'
+                          : 'bg-card text-foreground border-border/60 hover:border-primary/40 hover:bg-primary/[0.03]',
                       )}
                     >
+                      {active && (
+                        <span className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-primary-foreground/90 text-primary flex items-center justify-center shadow-sm">
+                          <svg viewBox="0 0 12 12" className="w-2.5 h-2.5" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M2.5 6.5L5 9l4.5-5" />
+                          </svg>
+                        </span>
+                      )}
                       <div className={cn('w-7 h-7 rounded-lg flex items-center justify-center mb-1', active ? 'bg-primary-foreground/15' : 'bg-primary/10')}>
                         <Icon className={cn('w-4 h-4', active ? 'text-primary-foreground' : 'text-primary')} strokeWidth={2.2} />
                       </div>
                       <p className={cn('text-[12px] font-bold leading-tight', active ? 'text-primary-foreground' : 'text-foreground')}>{t.title}</p>
-                      <p className={cn('text-[10px] leading-tight mt-0.5 truncate', active ? 'text-primary-foreground/80' : 'text-muted-foreground')}>{t.desc}</p>
-                    </button>
+                      <p className={cn('text-[10px] leading-tight mt-0.5 truncate', active ? 'text-primary-foreground/85' : 'text-muted-foreground')}>{t.desc}</p>
+                    </motion.button>
                   );
                 })}
               </div>
@@ -1175,6 +1187,52 @@ export default function RideView() {
               <p className="text-[9px] text-muted-foreground mt-1">Change in Profile → Ride Preferences</p>
             </div>
           )} */}
+
+          {/* ── Fare estimate: loading skeleton ── */}
+          {pickupLocation && dropoffLocation && (routeLoading || !fareEstimate) && (
+            <div className="rounded-2xl overflow-hidden border border-primary/15 bg-card/40" aria-busy="true" aria-live="polite">
+              <div className="px-3.5 pt-2.5 pb-3 flex items-end justify-between">
+                <div className="flex-1 space-y-1.5">
+                  <div className="h-3 w-24 rounded-md bg-muted animate-pulse" />
+                  <div className="h-6 w-36 rounded-md bg-muted animate-pulse" />
+                </div>
+                <div className="w-11 h-11 rounded-2xl bg-muted animate-pulse" />
+              </div>
+              <div className="grid grid-cols-2 border-t border-primary/10">
+                <div className="flex items-center gap-2 px-3.5 py-2 border-r border-primary/10">
+                  <div className="w-3.5 h-3.5 rounded-full bg-muted animate-pulse" />
+                  <div className="space-y-1">
+                    <div className="h-2 w-8 rounded bg-muted animate-pulse" />
+                    <div className="h-3 w-12 rounded bg-muted animate-pulse" />
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 px-3.5 py-2">
+                  <div className="w-3.5 h-3.5 rounded-full bg-muted animate-pulse" />
+                  <div className="space-y-1">
+                    <div className="h-2 w-12 rounded bg-muted animate-pulse" />
+                    <div className="h-3 w-14 rounded bg-muted animate-pulse" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── Fare estimate: empty hint when destinations not yet picked ── */}
+          {(!pickupLocation || !dropoffLocation) && (
+            <div className="rounded-2xl border border-dashed border-primary/25 bg-primary/[0.03] px-3.5 py-3 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center shrink-0">
+                <Navigation className="w-5 h-5 text-primary" strokeWidth={2.2} />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[12px] font-bold text-foreground leading-tight">
+                  {!pickupLocation ? 'Set your pickup point' : 'Where are you going?'}
+                </p>
+                <p className="text-[10px] text-muted-foreground leading-snug mt-0.5">
+                  Fare estimate, ETA and distance appear once both locations are set.
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* ── Fare breakdown + Negotiation (expanded) ── */}
           {pickupLocation && dropoffLocation && fareEstimate && (() => {
@@ -1334,6 +1392,33 @@ export default function RideView() {
               {pickupLocation && dropoffLocation ? <><div className="w-4 h-4 border-2 border-primary-foreground/50 border-t-transparent rounded-full animate-spin mr-2" />Calculating…</> : 'Find Nearby Drivers'}
             </SecondaryButton>
           }
+
+          {/* Nearby drivers presence indicator */}
+          {(rideStatus === 'idle' || rideStatus === 'searching') && (gpsState.coords || pickupLocation) && (
+            <div className="flex items-center justify-center gap-2 mt-1.5 px-1" aria-live="polite">
+              {nearbyDrivers.length > 0 ? (
+                <>
+                  <span className="relative flex w-2 h-2">
+                    <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-70 animate-ping" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                  </span>
+                  <span className="text-[11px] font-semibold text-foreground">
+                    {nearbyDrivers.length} {nearbyDrivers.length === 1 ? 'driver' : 'drivers'} nearby
+                  </span>
+                </>
+              ) : gpsState.status === 'loading' ? (
+                <>
+                  <Loader2 className="w-3 h-3 animate-spin text-primary" />
+                  <span className="text-[11px] font-semibold text-muted-foreground">Locating you…</span>
+                </>
+              ) : (
+                <>
+                  <span className="w-2 h-2 rounded-full bg-muted-foreground/40" />
+                  <span className="text-[11px] font-semibold text-muted-foreground">Searching for nearby drivers…</span>
+                </>
+              )}
+            </div>
+          )}
 
           {/* Trust indicators */}
           <div className="flex items-center justify-between mt-2.5 px-1">
