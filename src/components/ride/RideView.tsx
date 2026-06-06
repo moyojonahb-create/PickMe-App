@@ -1393,6 +1393,33 @@ export default function RideView() {
             </SecondaryButton>
           }
 
+          {/* Nearby drivers presence indicator */}
+          {(rideStatus === 'idle' || rideStatus === 'searching') && (gpsState.coords || pickupLocation) && (
+            <div className="flex items-center justify-center gap-2 mt-1.5 px-1" aria-live="polite">
+              {nearbyDrivers.length > 0 ? (
+                <>
+                  <span className="relative flex w-2 h-2">
+                    <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-70 animate-ping" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                  </span>
+                  <span className="text-[11px] font-semibold text-foreground">
+                    {nearbyDrivers.length} {nearbyDrivers.length === 1 ? 'driver' : 'drivers'} nearby
+                  </span>
+                </>
+              ) : gpsState.status === 'loading' ? (
+                <>
+                  <Loader2 className="w-3 h-3 animate-spin text-primary" />
+                  <span className="text-[11px] font-semibold text-muted-foreground">Locating you…</span>
+                </>
+              ) : (
+                <>
+                  <span className="w-2 h-2 rounded-full bg-muted-foreground/40" />
+                  <span className="text-[11px] font-semibold text-muted-foreground">Searching for nearby drivers…</span>
+                </>
+              )}
+            </div>
+          )}
+
           {/* Trust indicators */}
           <div className="flex items-center justify-between mt-2.5 px-1">
             {[
