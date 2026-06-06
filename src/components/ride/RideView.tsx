@@ -935,10 +935,11 @@ export default function RideView() {
 
       {/* ── BOTTOM SHEET ── */}
       <GlassSheet
-        className="absolute left-3 right-3 z-50 flex flex-col"
+        className="absolute left-3 right-3 sm:left-1/2 sm:-translate-x-1/2 sm:right-auto sm:w-[460px] sm:max-w-[calc(100%-24px)] md:w-[480px] lg:w-[500px] z-50 flex flex-col"
         style={{
           bottom: 8,
-          height: sheetExpanded ? '70vh' : '48vh',
+          height: sheetExpanded ? '72vh' : '50vh',
+          maxHeight: 'calc(100dvh - 80px)',
           transition: 'height 0.3s cubic-bezier(0.32,0.72,0,1)',
           paddingBottom: 'env(safe-area-inset-bottom)',
           borderTopLeftRadius: 28,
