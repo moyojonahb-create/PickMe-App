@@ -1075,27 +1075,38 @@ export default function RideView() {
               { id: 'student', title: 'Student', desc: studentDiscountAvailable ? '$1 off ride' : 'Verify to save', icon: Star },
             ];
             return (
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-3 gap-2 sm:gap-2.5">
                 {types.map((t) => {
                   const Icon = t.icon;
                   const active = selectedRideType === t.id;
                   return (
-                    <button
+                    <motion.button
                       key={t.id}
+                      type="button"
+                      whileTap={{ scale: 0.94 }}
+                      transition={{ type: 'spring', stiffness: 500, damping: 30 }}
                       onClick={() => { setSelectedRideType(t.id); t.onSelect?.(); haptic('light'); }}
+                      aria-pressed={active}
                       className={cn(
-                        'relative rounded-2xl p-2.5 text-left transition-all active:scale-[0.97] border',
+                        'relative rounded-2xl p-2.5 sm:p-3 text-left transition-colors border overflow-hidden',
                         active
-                          ? 'bg-primary text-primary-foreground border-primary shadow-[0_8px_20px_-8px_hsl(224_71%_37%/0.6)]'
-                          : 'bg-card text-foreground border-border/60 hover:border-primary/40',
+                          ? 'bg-primary text-primary-foreground border-primary ring-2 ring-primary/30 ring-offset-1 ring-offset-card shadow-[0_10px_24px_-10px_hsl(224_71%_37%/0.65)]'
+                          : 'bg-card text-foreground border-border/60 hover:border-primary/40 hover:bg-primary/[0.03]',
                       )}
                     >
+                      {active && (
+                        <span className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-primary-foreground/90 text-primary flex items-center justify-center shadow-sm">
+                          <svg viewBox="0 0 12 12" className="w-2.5 h-2.5" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M2.5 6.5L5 9l4.5-5" />
+                          </svg>
+                        </span>
+                      )}
                       <div className={cn('w-7 h-7 rounded-lg flex items-center justify-center mb-1', active ? 'bg-primary-foreground/15' : 'bg-primary/10')}>
                         <Icon className={cn('w-4 h-4', active ? 'text-primary-foreground' : 'text-primary')} strokeWidth={2.2} />
                       </div>
                       <p className={cn('text-[12px] font-bold leading-tight', active ? 'text-primary-foreground' : 'text-foreground')}>{t.title}</p>
-                      <p className={cn('text-[10px] leading-tight mt-0.5 truncate', active ? 'text-primary-foreground/80' : 'text-muted-foreground')}>{t.desc}</p>
-                    </button>
+                      <p className={cn('text-[10px] leading-tight mt-0.5 truncate', active ? 'text-primary-foreground/85' : 'text-muted-foreground')}>{t.desc}</p>
+                    </motion.button>
                   );
                 })}
               </div>
