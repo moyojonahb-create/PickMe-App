@@ -313,14 +313,80 @@ function InnerMapGoogle({
           />
         )}
 
-        {/* Nearby drivers as animated, rotated, brand-blue car icons with a soft halo */}
-        {smoothDrivers.map((d) => (
-          <Marker key={d.id} position={{ lat: d.lat, lng: d.lng }} icon={{
-            url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(d.isOnline ? NEARBY_CAR_SVG(d.heading) : OFFLINE_CAR_SVG),
-            scaledSize: new google.maps.Size(d.isOnline ? 36 : 28, d.isOnline ? 36 : 28),
-            anchor: new google.maps.Point(d.isOnline ? 18 : 14, d.isOnline ? 18 : 14),
-          }} zIndex={5} />
-        ))}
+        {/* Nearby drivers — declustered when crowded, individual on tap/zoom-in */}
+        {(() => {
+          const z = mapRef.current?.getZoom?.() ?? defaultZoom ?? 13;
+          // Cluster only when many drivers are visible AND zoomed-out enough
+          // that pins would otherwise pile up. Zoom-in (>=15) always shows
+          // individual cars; tapping a cluster zooms into its bounds.
+          const CLUSTER_THRESHOLD = 8;
+          if (smoothDrivers.length < CLUSTER_THRESHOLD || z >= 15) {
+            return smoothDrivers.map((d) => (
+              <Marker key={d.id} position={{ lat: d.lat, lng: d.lng }} icon={{
+                url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(d.isOnline ? NEARBY_CAR_SVG(d.heading) : OFFLINE_CAR_SVG),
+                scaledSize: new google.maps.Size(d.isOnline ? 36 : 28, d.isOnline ? 36 : 28),
+                anchor: new google.maps.Point(d.isOnline ? 18 : 14, d.isOnline ? 18 : 14),
+              }} zIndex={5} />
+            ));
+          }
+          // Snap-to-grid clustering. Cell size shrinks as we zoom in so groups
+          // break apart naturally without any data dependency.
+          const cell = z >= 14 ? 0.004 : z >= 13 ? 0.008 : z >= 12 ? 0.016 : 0.03;
+          const buckets = new Map<string, { lat: number; lng: number; count: number; ids: string[] }>();
+          for (const d of smoothDrivers) {
+            const key = `${Math.round(d.lat / cell)}:${Math.round(d.lng / cell)}`;
+            const b = buckets.get(key);
+            if (b) { b.lat += d.lat; b.lng += d.lng; b.count += 1; b.ids.push(d.id); }
+            else buckets.set(key, { lat: d.lat, lng: d.lng, count: 1, ids: [d.id] });
+          }
+          const out: JSX.Element[] = [];
+          for (const [key, b] of buckets.entries()) {
+            const lat = b.lat / b.count;
+            const lng = b.lng / b.count;
+            if (b.count === 1) {
+              const d = smoothDrivers.find((x) => x.id === b.ids[0])!;
+              out.push(
+                <Marker key={d.id} position={{ lat: d.lat, lng: d.lng }} icon={{
+                  url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(d.isOnline ? NEARBY_CAR_SVG(d.heading) : OFFLINE_CAR_SVG),
+                  scaledSize: new google.maps.Size(d.isOnline ? 36 : 28, d.isOnline ? 36 : 28),
+                  anchor: new google.maps.Point(d.isOnline ? 18 : 14, d.isOnline ? 18 : 14),
+                }} zIndex={5} />
+              );
+            } else {
+              const size = b.count >= 20 ? 48 : b.count >= 10 ? 44 : 40;
+              const label = String(b.count);
+              const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 48 48">`
+                + `<circle cx="24" cy="24" r="22" fill="#1B3FA0" fill-opacity="0.18"/>`
+                + `<circle cx="24" cy="24" r="16" fill="#1B3FA0" stroke="#ffffff" stroke-width="3"/>`
+                + `<text x="24" y="29" text-anchor="middle" font-family="Inter,system-ui,sans-serif" font-size="13" font-weight="700" fill="#ffffff">${label}</text>`
+                + `</svg>`;
+              out.push(
+                <Marker
+                  key={`cluster-${key}`}
+                  position={{ lat, lng }}
+                  icon={{
+                    url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
+                    scaledSize: new google.maps.Size(size, size),
+                    anchor: new google.maps.Point(size / 2, size / 2),
+                  }}
+                  zIndex={6}
+                  onClick={() => {
+                    const map = mapRef.current;
+                    if (!map) return;
+                    const bounds = new google.maps.LatLngBounds();
+                    smoothDrivers
+                      .filter((x) => b.ids.includes(x.id))
+                      .forEach((x) => bounds.extend({ lat: x.lat, lng: x.lng }));
+                    map.fitBounds(bounds, { top: 80, bottom: 320, left: 60, right: 60 });
+                    const cur = map.getZoom() ?? 14;
+                    if (cur < 15) map.setZoom(Math.max(cur + 2, 15));
+                  }}
+                />
+              );
+            }
+          }
+          return out;
+        })()}
 
         {/* Driver → Pickup dashed line (only when premium overlay is NOT handling it) */}
         {!hasPremiumOverlay && driverLocation && pickup && (
