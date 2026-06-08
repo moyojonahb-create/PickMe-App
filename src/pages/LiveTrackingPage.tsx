@@ -121,7 +121,7 @@ export default function LiveTrackingPage() {
         .select(
           `id, pickup_address, dropoff_address, status, driver_id,
            pickup_lat, pickup_lon, dropoff_lat, dropoff_lon,
-           fare, passenger_name, payment_method, student_discount_applied`,
+           fare, passenger_name, payment_method`,
         )
         .eq("id", tripId)
         .maybeSingle();
