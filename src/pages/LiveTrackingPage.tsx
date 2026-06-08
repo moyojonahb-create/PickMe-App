@@ -138,7 +138,7 @@ export default function LiveTrackingPage() {
         const { data: driverData } = await supabase
           .from("drivers")
           .select(
-            `vehicle_make, vehicle_model, vehicle_color, plate_number, vehicle_type, user_id, rating, total_trips`,
+            `vehicle_make, vehicle_model, vehicle_color, plate_number, vehicle_type, user_id, total_trips`,
           )
           .eq("id", rideData.driver_id)
           .maybeSingle();
