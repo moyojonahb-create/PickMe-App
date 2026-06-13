@@ -1,19 +1,26 @@
 import { supabase } from "@/integrations/supabase/client";
+import {
+  walletPayRide,
+  walletTransfer,
+  walletRequestWithdrawal,
+  walletLookupByPickmeAccount,
+} from "@/lib/backendClient";
+
+/**
+ * Wallet Phase B: all wallet business logic is owned by the Go backend.
+ * Supabase remains the system-of-record for persistence and auth, but the
+ * frontend no longer invokes Supabase RPCs directly for wallet operations.
+ *
+ * Admin approve/reject withdrawal helpers continue to call admin RPCs for
+ * now — those are scheduled to move behind /api/admin/* in a later phase.
+ */
 
 export async function payRideFromWallet(rideId: string) {
-  const { data, error } = await supabase.rpc("pay_ride_from_wallet", { p_ride_id: rideId });
-  if (error) throw error;
-  return data as { ok: boolean; reason?: string; amount?: number; already_paid?: boolean };
+  return walletPayRide(rideId);
 }
 
 export async function transferFunds(receiverId: string, amount: number, note?: string) {
-  const { data, error } = await supabase.rpc("transfer_funds", {
-    p_receiver_id: receiverId,
-    p_amount: amount,
-    p_note: note ?? null,
-  });
-  if (error) throw error;
-  return data as { ok: boolean; reason?: string; amount?: number };
+  return walletTransfer(receiverId, amount, note);
 }
 
 export async function requestWithdrawal(
@@ -22,14 +29,7 @@ export async function requestWithdrawal(
   destination: string,
   accountName?: string
 ) {
-  const { data, error } = await supabase.rpc("request_withdrawal", {
-    p_amount: amount,
-    p_method: method,
-    p_destination: destination,
-    p_account_name: accountName ?? null,
-  });
-  if (error) throw error;
-  return data as { ok: boolean; reason?: string; id?: string };
+  return walletRequestWithdrawal(amount, method, destination, accountName);
 }
 
 export async function adminApproveWithdrawal(id: string, note = "") {
@@ -44,7 +44,7 @@ export async function adminRejectWithdrawal(id: string, note = "") {
   return data as { ok: boolean; reason?: string; refunded?: number };
 }
 
-/** Look up a user by phone for transfers. Tries profiles first. */
+/** Look up a user by phone for transfers. Persistence read — stays on Supabase. */
 export async function lookupUserByPhone(phone: string) {
   const cleaned = phone.replace(/\s+/g, "");
   const { data } = await supabase
@@ -55,16 +55,11 @@ export async function lookupUserByPhone(phone: string) {
   return data as { user_id: string; full_name: string | null; phone: string | null } | null;
 }
 
-/** Look up a user by their PickMe Account number (PMR######R) for wallet-to-wallet transfers. */
+/** Look up a user by PickMe Account — routed through Go for rate-limiting/audit. */
 export async function lookupUserByPickmeAccount(account: string) {
-  const cleaned = account.trim().toUpperCase();
-  const { data, error } = await supabase.rpc("lookup_user_by_pickme_account", {
-    p_account: cleaned,
-  });
-  if (error) return null;
-  const row = Array.isArray(data) ? data[0] : data;
-  return row
-    ? (row as { user_id: string; full_name: string | null; pickme_account: string })
-    : null;
+  try {
+    return await walletLookupByPickmeAccount(account);
+  } catch {
+    return null;
+  }
 }
-
