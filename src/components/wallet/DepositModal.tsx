@@ -110,23 +110,16 @@ export default function DepositModal({ isOpen, onClose, currentBalance }: Deposi
         proofPath = path;
       }
 
-      const { error: insertErr } = await supabase
-        .from('rider_deposit_requests')
-        .insert({
-          user_id: user.id,
-          amount_usd: amount,
-          payment_method: selectedMethod,
-          phone_number: phone.trim(),
-          reference: paymentCode, // ← system-generated unique code
-          proof_path: proofPath,
-        });
+      const res = await walletCreateRiderDeposit({
+        amount_usd: amount,
+        payment_method: selectedMethod,
+        phone_number: phone.trim(),
+        reference: paymentCode, // ← system-generated unique code
+        proof_path: proofPath,
+      });
 
-      if (insertErr) {
-        // Extremely unlikely 8-char collision — regenerate and retry once
-        if (insertErr.code === '23505') {
-          throw new Error('Code collision, please tap Submit again');
-        }
-        throw insertErr;
+      if (!res?.ok) {
+        throw new Error(res?.reason || 'Failed to submit deposit');
       }
 
       setStep('done');
