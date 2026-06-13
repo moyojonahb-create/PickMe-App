@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Plus, Minus, X, Upload, Phone, CheckCircle, Copy, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { walletCreateRiderDeposit } from '@/lib/backendClient';
 import { useAuth } from '@/hooks/useAuth';
 import ecocashLogo from '@/assets/payment-ecocash.png';
 import innbucksLogo from '@/assets/payment-innbucks.png';
