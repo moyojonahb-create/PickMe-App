@@ -81,60 +81,23 @@ export default function RiderOffersScreen() {
   }, [requestId]);
 
   async function handleAccept(offer: RideOffer) {
-    if (!user || !request) return;
+    if (!user || !request || !requestId) return;
     setAccepting(offer.id);
 
-    // Resolve the driver's drivers.id (FK) from their auth user_id (offer.driver_id)
-    const { data: driverRow, error: driverErr } = await supabase
-      .from('drivers')
-      .select('id')
-      .eq('user_id', offer.driver_id)
-      .maybeSingle();
-
-    if (driverErr || !driverRow) {
-      toast({ title: 'Driver not found', description: 'Could not find driver profile. They may not be registered as a driver.', variant: 'destructive' });
+    try {
+      const { acceptRideRequestOffer } = await import('@/lib/backendClient');
+      const res = await acceptRideRequestOffer(requestId, offer.id);
+      if (!res?.ride_id) {
+        throw new Error('Backend did not return a ride id');
+      }
+      setAcceptedRideId(res.ride_id);
+      toast({ title: 'Ride Accepted!', description: `Driver's offer of $${offer.offer_fare} accepted.` });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Could not accept offer';
+      toast({ title: 'Error accepting offer', description: msg, variant: 'destructive' });
+    } finally {
       setAccepting(null);
-      return;
     }
-
-    // Insert into rides with correct driver_id (drivers table FK)
-    const { data: rideData, error: rideErr } = await supabase
-      .from('rides')
-      .insert({
-        user_id: user.id,
-        driver_id: driverRow.id,
-        pickup_address: request.pickup,
-        dropoff_address: request.dropoff,
-        pickup_lat: 0,
-        pickup_lon: 0,
-        dropoff_lat: 0,
-        dropoff_lon: 0,
-        fare: offer.offer_fare,
-        distance_km: 0,
-        duration_minutes: 0,
-        status: 'accepted',
-        vehicle_type: 'economy',
-        passenger_count: 1,
-      })
-      .select('id')
-      .single();
-
-    if (rideErr) {
-      toast({ title: 'Error creating ride', description: rideErr.message, variant: 'destructive' });
-      setAccepting(null);
-      return;
-    }
-
-    // Update request status, accept this offer, reject all others
-    await Promise.all([
-      supabase.from('ride_requests').update({ status: 'accepted' }).eq('id', requestId),
-      supabase.from('ride_offers').update({ status: 'accepted' }).eq('id', offer.id),
-      supabase.from('ride_offers').update({ status: 'rejected' }).eq('request_id', requestId).neq('id', offer.id),
-    ]);
-
-    setAcceptedRideId(rideData.id);
-    setAccepting(null);
-    toast({ title: 'Ride Accepted!', description: `Driver's offer of $${offer.offer_fare} accepted.` });
   }
 
   if (acceptedRideId) {
