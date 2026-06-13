@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Plus, Minus, X, Upload, Phone, CheckCircle, Copy, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { walletCreateRiderDeposit } from '@/lib/backendClient';
 import { useAuth } from '@/hooks/useAuth';
 import ecocashLogo from '@/assets/payment-ecocash.png';
 import innbucksLogo from '@/assets/payment-innbucks.png';
@@ -109,23 +110,16 @@ export default function DepositModal({ isOpen, onClose, currentBalance }: Deposi
         proofPath = path;
       }
 
-      const { error: insertErr } = await supabase
-        .from('rider_deposit_requests')
-        .insert({
-          user_id: user.id,
-          amount_usd: amount,
-          payment_method: selectedMethod,
-          phone_number: phone.trim(),
-          reference: paymentCode, // ← system-generated unique code
-          proof_path: proofPath,
-        });
+      const res = await walletCreateRiderDeposit({
+        amount_usd: amount,
+        payment_method: selectedMethod,
+        phone_number: phone.trim(),
+        reference: paymentCode, // ← system-generated unique code
+        proof_path: proofPath,
+      });
 
-      if (insertErr) {
-        // Extremely unlikely 8-char collision — regenerate and retry once
-        if (insertErr.code === '23505') {
-          throw new Error('Code collision, please tap Submit again');
-        }
-        throw insertErr;
+      if (!res?.ok) {
+        throw new Error(res?.reason || 'Failed to submit deposit');
       }
 
       setStep('done');

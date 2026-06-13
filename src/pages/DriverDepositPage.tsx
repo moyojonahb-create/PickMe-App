@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { walletCreateDriverDeposit } from "@/lib/backendClient";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,16 +35,14 @@ export default function DriverDepositPage() {
       const up = await supabase.storage.from("deposit-proofs").upload(path, file, { upsert: false });
       if (up.error) throw up.error;
 
-      // Create request
-      const { error } = await supabase.from("deposit_requests").insert({
-        driver_id: user.id,
+      // Create request via Go (Phase B: wallet writes are backend-owned)
+      const res = await walletCreateDriverDeposit({
         amount_usd: amt,
         ecocash_phone: phone.trim(),
         ecocash_reference: ref.trim(),
         proof_path: path,
-        status: "pending",
       });
-      if (error) throw error;
+      if (!res?.ok) throw new Error(res?.reason || "Failed to submit deposit");
 
       toast.success("Deposit request submitted! Admin will verify and credit your wallet.");
       setRef("");
