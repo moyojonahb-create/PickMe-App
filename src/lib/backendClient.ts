@@ -120,6 +120,13 @@ export function updateRideFare(rideId: string, fare: number) {
   return backendPost<{ ok?: boolean; fare?: number }>(`/api/rides/${encodeURIComponent(rideId)}/fare`, { fare });
 }
 
+export function acceptRideRequestOffer(requestId: string, offerId: string) {
+  return backendPost<{ ok?: boolean; ride_id?: string }>(
+    `/api/ride-requests/${encodeURIComponent(requestId)}/accept-offer`,
+    { offer_id: offerId }
+  );
+}
+
 export async function connectBackendWs(path = ""): Promise<WebSocket> {
   if (!WS_URL) {
     throw new BackendError("Missing required environment variable: VITE_WS_URL", "config_error");
