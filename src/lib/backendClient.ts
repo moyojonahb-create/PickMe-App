@@ -127,6 +127,77 @@ export function acceptRideRequestOffer(requestId: string, offerId: string) {
   );
 }
 
+// ===== Wallet (Phase B) =====
+export interface WalletOpResult {
+  ok: boolean;
+  reason?: string;
+  amount?: number;
+  already_paid?: boolean;
+  reference?: string;
+  id?: string;
+}
+
+export function walletPayRide(rideId: string) {
+  return backendPost<WalletOpResult>("/api/wallet/pay-ride", { ride_id: rideId });
+}
+
+export function walletTransfer(receiverId: string, amount: number, note?: string) {
+  return backendPost<WalletOpResult>("/api/wallet/transfer", {
+    receiver_id: receiverId,
+    amount,
+    note: note ?? null,
+  });
+}
+
+export function walletRequestWithdrawal(
+  amount: number,
+  method: "ecocash" | "bank" | "innbucks",
+  destination: string,
+  accountName?: string,
+) {
+  return backendPost<WalletOpResult>("/api/wallet/withdrawals", {
+    amount,
+    method,
+    destination,
+    account_name: accountName ?? null,
+  });
+}
+
+export function walletLookupByPickmeAccount(account: string) {
+  return backendPost<{
+    user_id: string;
+    full_name: string | null;
+    pickme_account: string;
+  } | null>("/api/wallet/lookup-user", { pickme_account: account.trim().toUpperCase() });
+}
+
+export interface DriverDepositPayload {
+  amount_usd: number;
+  ecocash_phone: string;
+  ecocash_reference: string;
+  proof_path: string | null;
+}
+export function walletCreateDriverDeposit(payload: DriverDepositPayload) {
+  return backendPost<{ ok: boolean; id?: string; reason?: string }>(
+    "/api/wallet/deposits",
+    payload,
+  );
+}
+
+export interface RiderDepositPayload {
+  amount_usd: number;
+  payment_method: string;
+  phone_number: string;
+  reference: string;
+  proof_path: string | null;
+}
+export function walletCreateRiderDeposit(payload: RiderDepositPayload) {
+  return backendPost<{ ok: boolean; id?: string; reason?: string }>(
+    "/api/wallet/rider-deposits",
+    payload,
+  );
+}
+
 export async function connectBackendWs(path = ""): Promise<WebSocket> {
   if (!WS_URL) {
     throw new BackendError("Missing required environment variable: VITE_WS_URL", "config_error");
