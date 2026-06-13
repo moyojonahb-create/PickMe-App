@@ -30,6 +30,7 @@ import RamzCodeScanPanel from '@/components/admin/RamzCodeScanPanel';
 import LoadPulsePanel from '@/components/admin/LoadPulsePanel';
 import UserIncidentsPanel from '@/components/admin/UserIncidentsPanel';
 import { generateLovablePrompt } from '@/lib/ramzPrompt';
+import { getAdminFinanceHealth } from '@/lib/walletApi';
 
 interface HealthCheck {
   id: string;
@@ -162,6 +163,8 @@ export default function AdminSystemHealth() {
     const now = new Date();
 
     try {
+      const financeHealth = await getAdminFinanceHealth();
+
       // === CORE CHECKS ===
 
       // 1. Stale pending rides
@@ -187,10 +190,7 @@ export default function AdminSystemHealth() {
       }
 
       // 2. Low wallet drivers
-      const { count: lowBalCount } = await supabase
-        .from('driver_wallets')
-        .select('driver_id', { count: 'exact', head: true })
-        .lt('balance_usd', 0.5);
+      const lowBalCount = financeHealth.low_balance_drivers;
 
       if (lowBalCount && lowBalCount > 0) {
         findings.push({
@@ -472,11 +472,7 @@ export default function AdminSystemHealth() {
       }
 
       // 14. Check for deposit requests pending > 2 hours
-      const { count: pendingDeposits } = await supabase
-        .from('deposit_requests')
-        .select('id', { count: 'exact', head: true })
-        .eq('status', 'pending')
-        .lt('created_at', subHours(now, 2).toISOString());
+      const pendingDeposits = financeHealth.pending_driver_deposits_over_2h;
 
       if (pendingDeposits && pendingDeposits > 0) {
         findings.push({
@@ -493,11 +489,7 @@ export default function AdminSystemHealth() {
       }
 
       // 15. Check rider deposit requests pending
-      const { count: riderPendingDeposits } = await supabase
-        .from('rider_deposit_requests')
-        .select('id', { count: 'exact', head: true })
-        .eq('status', 'pending')
-        .lt('created_at', subHours(now, 2).toISOString());
+      const riderPendingDeposits = financeHealth.pending_rider_deposits_over_2h;
 
       if (riderPendingDeposits && riderPendingDeposits > 0) {
         findings.push({

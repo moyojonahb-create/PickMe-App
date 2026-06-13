@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { ArrowLeft, Upload } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { walletDeposit } from "@/lib/walletApi";
 
 const ECASH_NUMBER = "+263 778 553 169";
 
@@ -34,16 +35,13 @@ export default function DriverDepositPage() {
       const up = await supabase.storage.from("deposit-proofs").upload(path, file, { upsert: false });
       if (up.error) throw up.error;
 
-      // Create request
-      const { error } = await supabase.from("deposit_requests").insert({
-        driver_id: user.id,
-        amount_usd: amt,
+      await walletDeposit({
+        amount: amt,
+        wallet_type: "driver",
         ecocash_phone: phone.trim(),
         ecocash_reference: ref.trim(),
         proof_path: path,
-        status: "pending",
       });
-      if (error) throw error;
 
       toast.success("Deposit request submitted! Admin will verify and credit your wallet.");
       setRef("");

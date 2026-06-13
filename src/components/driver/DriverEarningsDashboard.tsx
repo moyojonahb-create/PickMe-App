@@ -8,6 +8,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line, AreaChart,
 import { DollarSign, TrendingUp, Car, Calendar, Star, Percent } from 'lucide-react';
 import { format, subDays, eachDayOfInterval, eachHourOfInterval, startOfDay, endOfDay } from 'date-fns';
 import { motion } from 'framer-motion';
+import { getDriverEarnings } from '@/lib/walletApi';
 
 interface EarningsData {
   date: string;
@@ -57,12 +58,7 @@ export default function DriverEarningsDashboard() {
           .eq('status', 'completed')
           .gte('created_at', since)
           .order('created_at', { ascending: true }),
-        supabase
-          .from('admin_earnings')
-          .select('platform_fee, driver_earnings, fare_amount, created_at')
-          .eq('driver_id', user.id)
-          .gte('created_at', since)
-          .order('created_at', { ascending: true }),
+        getDriverEarnings(period),
         supabase
           .from('driver_ratings')
           .select('rating, created_at')
@@ -72,7 +68,7 @@ export default function DriverEarningsDashboard() {
       ]);
 
       setRides(ridesRes.data || []);
-      setEarnings(earningsRes.data || []);
+      setEarnings(earningsRes || []);
       setRatings(ratingsRes.data || []);
       setLoading(false);
     };

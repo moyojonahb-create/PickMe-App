@@ -1,6 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/hooks/useAuth';
+import {
+  getAdminEarnings,
+  getWalletMe,
+  getWalletTransactions,
+  walletDeposit,
+  walletWithdraw,
+} from '@/lib/walletApi';
 
 interface Wallet {
   id: string;
@@ -47,40 +53,11 @@ export const useWallet = () => {
     try {
       setError(null);
       
-      // Try to fetch existing wallet
-      const { data: initialWalletData, error: walletError } = await supabase
-        .from('wallets')
-        .select('id, user_id, balance, is_locked, locked_reason, created_at, updated_at')
-        .eq('user_id', user.id)
-        .maybeSingle();
-      let walletData = initialWalletData;
-
-      // If no wallet exists, create one
-      if (!walletData && !walletError) {
-        const { data: newWallet, error: createError } = await supabase
-          .from('wallets')
-          .insert({ user_id: user.id, balance: 0 })
-          .select('id, user_id, balance, is_locked, locked_reason, created_at, updated_at')
-          .maybeSingle();
-
-        if (createError) throw createError;
-        walletData = newWallet;
-      } else if (walletError) {
-        throw walletError;
-      }
-
+      const walletData = await getWalletMe();
       setWallet(walletData);
 
-      // Fetch transactions
       if (walletData) {
-        const { data: txData, error: txError } = await supabase
-          .from('wallet_transactions')
-          .select('*')
-          .eq('wallet_id', walletData.id)
-          .order('created_at', { ascending: false })
-          .limit(50);
-
-        if (txError) throw txError;
+        const txData = await getWalletTransactions(50);
         setTransactions(txData || []);
       }
     } catch (e: unknown) {
@@ -94,28 +71,7 @@ export const useWallet = () => {
     if (!wallet || !user || amount <= 0) return { error: 'Invalid deposit' };
 
     try {
-      // Update wallet balance
-      const newBalance = Number(wallet.balance) + amount;
-      const { error: updateError } = await supabase
-        .from('wallets')
-        .update({ balance: newBalance })
-        .eq('id', wallet.id);
-
-      if (updateError) throw updateError;
-
-      // Record transaction
-      const { error: txError } = await supabase
-        .from('wallet_transactions')
-        .insert({
-          wallet_id: wallet.id,
-          user_id: user.id,
-          amount: amount,
-          transaction_type: 'deposit',
-          description: description || 'Wallet deposit',
-        });
-
-      if (txError) throw txError;
-
+      await walletDeposit({ amount, payment_method: 'manual', reference: description });
       await fetchWallet();
       return { error: null };
     } catch (e: unknown) {
@@ -128,26 +84,7 @@ export const useWallet = () => {
     if (Number(wallet.balance) < amount) return { error: 'Insufficient balance' };
 
     try {
-      const newBalance = Number(wallet.balance) - amount;
-      const { error: updateError } = await supabase
-        .from('wallets')
-        .update({ balance: newBalance })
-        .eq('id', wallet.id);
-
-      if (updateError) throw updateError;
-
-      const { error: txError } = await supabase
-        .from('wallet_transactions')
-        .insert({
-          wallet_id: wallet.id,
-          user_id: user.id,
-          amount: -amount,
-          transaction_type: 'withdrawal',
-          description: description || 'Wallet withdrawal',
-        });
-
-      if (txError) throw txError;
-
+      await walletWithdraw({ amount, method: 'ecocash', destination: description || 'Wallet withdrawal' });
       await fetchWallet();
       return { error: null };
     } catch (e: unknown) {
@@ -182,14 +119,7 @@ export const useAdminEarnings = () => {
     try {
       setError(null);
       
-      const { data, error: fetchError } = await supabase
-        .from('admin_earnings')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(100);
-
-      if (fetchError) throw fetchError;
-
+      const data = await getAdminEarnings(100);
       setEarnings(data || []);
       
       // Calculate totals

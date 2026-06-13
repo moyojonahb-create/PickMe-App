@@ -10,6 +10,7 @@ import { usePricingSettings } from '@/hooks/usePricingSettings';
 import { useLandmarks } from '@/hooks/useLandmarks';
 import { supabase } from '@/lib/supabaseClient';
 import { requestRide } from '@/lib/requestRide';
+import { goBackend } from '@/lib/goBackendClient';
 import { searchZW, reverseZW } from '@/lib/geo_osm';
 import { cachePlaceFromNominatim } from '@/lib/placeCache';
 import { searchCachedPlacesPrefix } from '@/lib/placeCache';
@@ -516,7 +517,7 @@ export default function RideView() {
 
   const handleAcceptOffer = async (offerId: string) => {setRideStatus('driver_assigned');setOffersOpen(false);toast({ title: 'Driver accepted!' });setMatchedDriver({ name: 'Sipho Ndlovu', car: 'Toyota Corolla', plate: 'ACB 2345', rating: 4.8, eta: 3 });setTimeout(() => setRideStatus('driver_arriving'), 2000);};
   const handleDeclineOffer = async (offerId: string) => {setOffers((prev) => prev.filter((o) => o.offerId !== offerId));if (offers.length <= 1) setRideStatus('searching');};
-  const handleCancelRide = async () => {if (currentRideId) await supabase.from('rides').update({ status: 'cancelled' }).eq('id', currentRideId);setRideStatus('idle');setCurrentRideId(null);setOffers([]);setViewingDrivers([]);setMatchedDriver(null);toast({ title: 'Ride cancelled' });};
+  const handleCancelRide = async () => {if (currentRideId) await goBackend.post(`/api/rides/${currentRideId}/status`, { status: 'cancelled' });setRideStatus('idle');setCurrentRideId(null);setOffers([]);setViewingDrivers([]);setMatchedDriver(null);toast({ title: 'Ride cancelled' });};
 
   const handleSearchChange = (value: string) => {
     setSearchQuery(value);

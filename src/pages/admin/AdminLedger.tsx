@@ -5,8 +5,8 @@ import AdminGuard from '@/components/admin/AdminGuard';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
-import { supabase } from '@/lib/supabaseClient';
 import { format } from 'date-fns';
+import { adminListLedger } from '@/lib/walletApi';
 import {
   Select,
   SelectContent,
@@ -36,23 +36,7 @@ const AdminLedger = () => {
   useEffect(() => {
     const fetchLedger = async () => {
       setLoading(true);
-      let query = supabase
-        .from('platform_ledger')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(200);
-
-      if (dateFilter === '7') {
-        const d = new Date();
-        d.setDate(d.getDate() - 7);
-        query = query.gte('created_at', d.toISOString());
-      } else if (dateFilter === '30') {
-        const d = new Date();
-        d.setDate(d.getDate() - 30);
-        query = query.gte('created_at', d.toISOString());
-      }
-
-      const { data } = await query;
+      const data = await adminListLedger(dateFilter);
       setRows(data || []);
       setLoading(false);
     };

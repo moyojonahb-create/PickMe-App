@@ -6,6 +6,8 @@ import { toast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ArrowLeft, MapPin, Navigation, RefreshCw } from 'lucide-react';
+import { goBackend } from '@/lib/goBackendClient';
+import { decimalToMinor } from '@/lib/money';
 
 type RideRequest = {
   id: string;
@@ -87,19 +89,18 @@ export default function DriverRequestsScreen() {
     }
 
     setSending(requestId);
-    const { error } = await supabase
-      .from('ride_offers')
-      .upsert(
-        { request_id: requestId, driver_id: user.id, offer_fare: fare, status: 'pending' },
-        { onConflict: 'request_id,driver_id' }
-      );
-
-    setSending(null);
-    if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    } else {
+    try {
+      await goBackend.post(`/api/rides/${requestId}/offers`, {
+        offer_fare_minor: decimalToMinor(fare),
+        price_minor: decimalToMinor(fare),
+        status: 'pending',
+      });
       toast({ title: 'Offer sent!', description: `Your offer of $${fare} was submitted.` });
       setOfferFares(prev => ({ ...prev, [requestId]: '' }));
+    } catch (e: unknown) {
+      toast({ title: 'Error', description: (e as Error).message, variant: 'destructive' });
+    } finally {
+      setSending(null);
     }
   }
 

@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { goBackend, type GoDriverLocationRequest } from "@/lib/goBackendClient";
 
 // Cache userId to avoid repeated auth calls (10K drivers × every 10s = 100K calls/min)
 let cachedUserId: string | null = null;
@@ -38,23 +39,16 @@ export async function updateDriverLocation(lat: number, lng: number): Promise<vo
     return;
   }
 
-  const { error } = await supabase.from("live_locations").upsert(
-    {
-      user_id: userId,
+  try {
+    const payload: GoDriverLocationRequest = {
       latitude: lat,
       longitude: lng,
-      user_type: "driver",
-      is_online: true,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "user_id" }
-  );
-
-  if (error) {
-    console.error("[DriverLocation] Failed to update location:", error);
-  } else {
+    };
+    await goBackend.post("/api/drivers/me/location", payload);
     lastSentLat = lat;
     lastSentLng = lng;
+  } catch (error) {
+    console.error("[DriverLocation] Failed to update location:", error);
   }
 }
 

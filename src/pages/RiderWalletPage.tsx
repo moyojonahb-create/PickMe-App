@@ -8,6 +8,7 @@ import { useWallet } from '@/hooks/useWallet';
 import { useWalletPin } from '@/hooks/useWalletPin';
 import { usePickmeAccount } from '@/hooks/usePickmeAccount';
 import { supabase } from '@/integrations/supabase/client';
+import { listWalletDeposits } from '@/lib/walletApi';
 import DepositModal from '@/components/wallet/DepositModal';
 import WalletPinModal from '@/components/wallet/WalletPinModal';
 import WalletSettings from '@/components/wallet/WalletSettings';
@@ -82,13 +83,20 @@ export default function RiderWalletPage() {
   const loadDeposits = useCallback(async () => {
     if (!user) return;
     setLoadingDeposits(true);
-    const { data } = await supabase
-      .from('rider_deposit_requests')
-      .select('id,amount_usd,payment_method,reference,status,created_at')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
-      .limit(20);
-    setDeposits((data as RiderDeposit[]) ?? []);
+    try {
+      const data = await listWalletDeposits({ type: 'rider', limit: 20 });
+      setDeposits(data.map((d) => ({
+        id: d.id,
+        amount_usd: d.amount_usd,
+        payment_method: d.payment_method ?? 'deposit',
+        reference: d.reference ?? d.ecocash_reference ?? '',
+        status: d.status,
+        created_at: d.created_at,
+      })));
+    } catch (e) {
+      toast.error((e as Error).message || 'Failed to load deposits');
+      setDeposits([]);
+    }
     setLoadingDeposits(false);
   }, [user]);
 

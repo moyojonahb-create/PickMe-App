@@ -1,11 +1,11 @@
 import { useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ArrowLeft } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import AdminGuard from "@/components/admin/AdminGuard";
+import { adminSetFxRate } from "@/lib/walletApi";
 
 function AdminRatePageInner() {
   const navigate = useNavigate();
@@ -18,9 +18,8 @@ function AdminRatePageInner() {
       const rate = Number(zarPerUsd);
       if (!isFinite(rate) || rate <= 0) throw new Error("Enter a valid number e.g. 16");
 
-      const { data, error } = await supabase.rpc("admin_set_fx_rate", { p_zar_per_usd: rate });
-      if (error) throw error;
-      if (!(data as Record<string, unknown>)?.ok) throw new Error("Failed to save rate");
+      const data = await adminSetFxRate(rate);
+      if (!data.ok) throw new Error(data.reason || "Failed to save rate");
 
       toast.success(`Saved: $1 = ${rate} ZAR`);
     } catch (e: unknown) {

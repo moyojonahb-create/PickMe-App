@@ -6,11 +6,11 @@ import LocationPanel from '@/components/LocationPanel';
 import VehicleTypeSelector, { VEHICLE_TYPES, type VehicleType } from '@/components/VehicleTypeSelector';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/lib/supabaseClient';
 import { toast } from 'sonner';
 import { calculateRecommendedFare } from '@/hooks/useTownPricing';
 import { usePricingSettings } from '@/hooks/usePricingSettings';
 import { useGoogleRoute } from '@/hooks/useGoogleRoute';
+import { requestRide } from '@/lib/requestRide';
 
 interface HeroSectionProps {
   onLoginClick?: () => void;
@@ -113,23 +113,21 @@ const HeroSection = ({ onLoginClick }: HeroSectionProps) => {
     setIsRequesting(true);
 
     try {
-      const { error } = await supabase.from('rides').insert({
-        user_id: user.id,
+      const result = await requestRide({
         pickup_address: pickupLocation,
         pickup_lat: pickupCoords.lat,
-        pickup_lon: pickupCoords.lng,
+        pickup_lng: pickupCoords.lng,
         dropoff_address: dropoffLocation,
         dropoff_lat: dropoffCoords.lat,
-        dropoff_lon: dropoffCoords.lng,
+        dropoff_lng: dropoffCoords.lng,
         distance_km: routeInfo.distance,
         duration_minutes: routeInfo.duration,
         fare: currentFare,
         vehicle_type: selectedVehicle.id,
         route_polyline: null, // No polyline without map API
-        status: 'requested',
       });
 
-      if (error) throw error;
+      if (!result.ok) throw new Error(result.error);
 
       toast.success(
         `Ride confirmed! ${selectedVehicle.name} • $${currentFare} • ${routeInfo.distance}km`,

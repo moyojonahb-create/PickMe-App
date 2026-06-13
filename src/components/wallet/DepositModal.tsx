@@ -5,6 +5,7 @@ import { Plus, Minus, X, Upload, Phone, CheckCircle, Copy, Check } from 'lucide-
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { walletDeposit } from '@/lib/walletApi';
 import ecocashLogo from '@/assets/payment-ecocash.png';
 import innbucksLogo from '@/assets/payment-innbucks.png';
 import cardLogo from '@/assets/payment-card.png';
@@ -109,24 +110,14 @@ export default function DepositModal({ isOpen, onClose, currentBalance }: Deposi
         proofPath = path;
       }
 
-      const { error: insertErr } = await supabase
-        .from('rider_deposit_requests')
-        .insert({
-          user_id: user.id,
-          amount_usd: amount,
-          payment_method: selectedMethod,
-          phone_number: phone.trim(),
-          reference: paymentCode, // ← system-generated unique code
-          proof_path: proofPath,
-        });
-
-      if (insertErr) {
-        // Extremely unlikely 8-char collision — regenerate and retry once
-        if (insertErr.code === '23505') {
-          throw new Error('Code collision, please tap Submit again');
-        }
-        throw insertErr;
-      }
+      await walletDeposit({
+        amount,
+        wallet_type: 'rider',
+        payment_method: selectedMethod,
+        phone_number: phone.trim(),
+        reference: paymentCode,
+        proof_path: proofPath,
+      });
 
       setStep('done');
     } catch (e: unknown) {

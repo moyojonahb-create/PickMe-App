@@ -14,6 +14,8 @@ import { searchZW } from '@/lib/geo_osm';
 import { cachePlaceFromNominatim } from '@/lib/placeCache';
 import QuickPickChips from '@/components/ride/QuickPickChips';
 import ProximityFilter from '@/components/ride/ProximityFilter';
+import { goBackend } from '@/lib/goBackendClient';
+import { decimalToMinor } from '@/lib/money';
 
 interface SelectedLocation {
   name: string;
@@ -173,25 +175,31 @@ export default function RiderRequestScreen() {
     }
 
     setLoading(true);
-    const { data, error } = await supabase
-      .from('ride_requests')
-      .insert({
-        rider_id: user.id,
-        pickup: pickup.name,
-        dropoff: dropoff.name,
-        offered_fare: fare,
+    try {
+      const data = await goBackend.post<{ id?: string; ride_id?: string; request_id?: string; ride?: { id?: string } }>('/api/rides', {
+        pickup_address: pickup.name,
+        pickup_lat: pickup.lat,
+        pickup_lng: pickup.lng,
+        dropoff_address: dropoff.name,
+        dropoff_lat: dropoff.lat,
+        dropoff_lng: dropoff.lng,
+        offered_fare_minor: decimalToMinor(fare),
+        fare_minor: decimalToMinor(fare),
         currency: 'USD',
         status: 'negotiating',
-      })
-      .select('id')
-      .single();
-
-    setLoading(false);
-    if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
-      return;
+        passenger_count: passengerCount,
+        distance_km: fareEstimate?.distanceKm ?? 0,
+        duration_minutes: fareEstimate?.durationMinutes ?? 0,
+      });
+      const id = data.request_id ?? data.ride_id ?? data.ride?.id ?? data.id;
+      if (!id) throw new Error('Backend did not return a ride id');
+      navigate(`/negotiate/offers/${id}`);
+    } catch (e: unknown) {
+      toast({ title: 'Error', description: (e as Error).message, variant: 'destructive' });
+    } finally {
+      setLoading(false);
     }
-    navigate(`/negotiate/offers/${data.id}`);
+      return;
   }
 
   // Fare adjustment helpers ($0.50 steps)

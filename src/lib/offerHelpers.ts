@@ -2,6 +2,8 @@
 import { supabase } from '@/lib/supabaseClient';
 import { resolveAvatarUrl } from '@/lib/avatarUrl';
 import { getCached, setCache } from '@/lib/queryCache';
+import { goBackend, type GoOfferCreateRequest } from '@/lib/goBackendClient';
+import { decimalToMinor } from '@/lib/money';
 
 export type Offer = {
   id: string;
@@ -161,65 +163,34 @@ export async function submitOffer(input: {
   eta_minutes: number;
   message?: string;
 }): Promise<Offer> {
-  const user = await getUserOrThrow();
-  
-  const payload = {
+  await getUserOrThrow();
+
+  const payload: GoOfferCreateRequest = {
     ride_id: input.ride_id,
-    driver_id: user.id,
     price: input.price,
+    price_minor: decimalToMinor(input.price),
     eta_minutes: input.eta_minutes,
     message: input.message || null,
     status: 'pending',
   };
-  
-  const { data, error } = await supabase
-    .from("offers")
-    .insert(payload as never)
-    .select("id, ride_id, driver_id, price, eta_minutes, message, status, created_at")
-    .maybeSingle();
 
-  if (error) throw new Error(error.message);
-  if (!data) throw new Error("Failed to create offer");
-  return data as Offer;
+  const data = await goBackend.post<Offer | { offer: Offer }>(`/api/rides/${input.ride_id}/offers`, payload);
+  const offer = "offer" in data ? data.offer : data;
+  if (!offer?.id) throw new Error("Failed to create offer");
+  return offer as Offer;
 }
 
 // Decline an offer
-export async function declineOffer(offerId: string): Promise<void> {
-  const { error } = await supabase.from("offers").update({ status: "rejected" } as never).eq("id", offerId);
-  if (error) throw new Error(error.message);
+export async function declineOffer(offerId: string, rideId?: string): Promise<void> {
+  const path = rideId
+    ? `/api/rides/${rideId}/offers/${offerId}/reject`
+    : `/api/rides/offers/${offerId}/reject`;
+  await goBackend.post(path);
 }
 
 // Accept an offer
 export async function acceptOffer(rideId: string, offerOrId: string | Offer) {
   const offerId = typeof offerOrId === 'string' ? offerOrId : offerOrId.id;
-  const user = await getUserOrThrow();
-
-  // Get the offer to find driver_id
-  const { data: offer, error: offerErr } = await supabase
-    .from("offers")
-    .select("driver_id")
-    .eq("id", offerId)
-    .maybeSingle();
-
-  if (offerErr || !offer) throw new Error("Offer not found");
-
-  // Get driver record id
-  const { data: driver } = await supabase
-    .from("drivers")
-    .select("id")
-    .eq("user_id", offer.driver_id)
-    .maybeSingle();
-
-  if (!driver) throw new Error("Driver not found");
-
-  // Update offer status, ride status, and reject other offers in parallel
-  const [acceptRes, rideRes, rejectRes] = await Promise.all([
-    supabase.from("offers").update({ status: "accepted" } as never).eq("id", offerId),
-    supabase.from("rides").update({ status: "accepted", driver_id: driver.id } as never).eq("id", rideId),
-    supabase.from("offers").update({ status: "rejected" } as never).eq("ride_id", rideId).neq("id", offerId),
-  ]);
-
-  if (acceptRes.error) throw new Error(acceptRes.error.message);
-  if (rideRes.error) throw new Error(rideRes.error.message);
-  // Reject errors are non-critical
+  await getUserOrThrow();
+  return goBackend.post(`/api/rides/${rideId}/offers/${offerId}/accept`);
 }

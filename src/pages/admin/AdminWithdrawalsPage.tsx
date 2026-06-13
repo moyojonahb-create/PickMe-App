@@ -1,11 +1,11 @@
 import { useEffect, useState, useCallback } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { CheckCircle, XCircle, RefreshCw, Smartphone, Building2, Banknote } from "lucide-react";
 import AdminLayout from "@/components/admin/AdminLayout";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { adminApproveWithdrawal, adminRejectWithdrawal } from "@/lib/walletPayments";
+import { adminListWithdrawals } from "@/lib/walletApi";
 
 interface WithdrawalRow {
   id: string;
@@ -32,14 +32,23 @@ export default function AdminWithdrawalsPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from("withdrawals")
-      .select("*")
-      .eq("status", filter)
-      .order("created_at", { ascending: false })
-      .limit(100);
-    if (error) toast.error(error.message);
-    setRows((data as WithdrawalRow[]) ?? []);
+    try {
+      const data = await adminListWithdrawals(filter, 100);
+      setRows(data.map((row) => ({
+        id: row.id,
+        driver_id: row.driver_id ?? row.user_id ?? "",
+        amount_usd: row.amount_usd,
+        method: row.method,
+        destination: row.destination,
+        account_name: row.account_name,
+        status: row.status,
+        admin_note: row.admin_note ?? null,
+        created_at: row.created_at,
+      })));
+    } catch (e) {
+      toast.error((e as Error).message);
+      setRows([]);
+    }
     setLoading(false);
   }, [filter]);
 

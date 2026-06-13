@@ -23,6 +23,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { supabase } from '@/lib/supabaseClient';
 import { toast } from 'sonner';
 import { format, subDays, startOfDay } from 'date-fns';
+import { adminListLedger } from '@/lib/walletApi';
 import {
   LineChart,
   Line,
@@ -69,8 +70,7 @@ const AdminReports = () => {
 
   useEffect(() => {
     const fetchSettlements = async () => {
-      const { data } = await supabase.from('platform_ledger').select('amount, created_at');
-      if (!data) return;
+      const data = await adminListLedger('all');
       const now = new Date();
       const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       const weekStart = new Date(todayStart);

@@ -5,8 +5,9 @@
  */
 
 import { useCallback, useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/hooks/useAuth';
+import { walletPin } from '@/lib/walletApi';
+import { GoBackendError } from '@/lib/goBackendClient';
 
 export function useWalletPin() {
   const { user, session } = useAuth();
@@ -16,26 +17,7 @@ export function useWalletPin() {
   const callPinApi = useCallback(async (action: string, pin?: string) => {
     if (!session?.access_token) throw new Error('Not authenticated');
 
-    const res = await fetch(
-      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/wallet-pin`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({ action, pin }),
-      }
-    );
-
-    const data = await res.json();
-    if (!res.ok && res.status === 429) {
-      throw new Error(data.error || 'Too many attempts');
-    }
-    if (!res.ok) {
-      throw new Error(data.error || 'PIN operation failed');
-    }
-    return data;
+    return walletPin(action, pin);
   }, [session]);
 
   const checkPin = useCallback(async () => {
@@ -45,7 +27,7 @@ export function useWalletPin() {
     }
     try {
       const data = await callPinApi('check');
-      setHasPin(data.hasPin);
+      setHasPin(Boolean(data.hasPin ?? data.has_pin));
     } catch {
       // Fallback: assume no PIN
       setHasPin(false);
@@ -77,7 +59,10 @@ export function useWalletPin() {
       return data.ok === true;
     } catch (err) {
       // Re-throw rate limit errors so UI can show lockout message
-      if (err instanceof Error && err.message.includes('Too many attempts')) {
+      if (
+        (err instanceof GoBackendError && err.code === 'RATE_LIMITED') ||
+        (err instanceof Error && err.message.includes('Too many attempts'))
+      ) {
         throw err;
       }
       return false;

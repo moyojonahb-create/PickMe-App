@@ -6,6 +6,7 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import AdminGuard from "@/components/admin/AdminGuard";
+import { adminApproveDeposit, adminListDeposits, adminRejectDeposit } from "@/lib/walletApi";
 
 interface RiderDepositRow {
   id: string;
@@ -26,14 +27,23 @@ function AdminRiderDepositsInner() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from("rider_deposit_requests")
-      .select("*")
-      .eq("status", "pending")
-      .order("created_at", { ascending: false })
-      .limit(50);
-    if (error) toast.error(error.message);
-    setRows((data as RiderDepositRow[]) ?? []);
+    try {
+      const data = await adminListDeposits("rider", "pending", 50);
+      setRows(data.map((row) => ({
+        id: row.id,
+        user_id: row.user_id ?? "",
+        amount_usd: row.amount_usd,
+        payment_method: row.payment_method ?? "deposit",
+        phone_number: row.phone_number ?? row.ecocash_phone ?? "",
+        reference: row.reference ?? row.ecocash_reference ?? "",
+        proof_path: row.proof_path,
+        created_at: row.created_at,
+        status: row.status,
+      })));
+    } catch (e) {
+      toast.error((e as Error).message);
+      setRows([]);
+    }
     setLoading(false);
   }, []);
 
@@ -48,22 +58,15 @@ function AdminRiderDepositsInner() {
   };
 
   const approve = async (id: string) => {
-    const { data, error } = await supabase.rpc("admin_approve_rider_deposit", {
-      p_deposit_id: id,
-      p_note: "Approved",
-    });
-    if (error) { toast.error(error.message); return; }
-    if (!(data as Record<string, unknown>)?.ok) { toast.error("Approval failed"); return; }
+    const data = await adminApproveDeposit(id, "Approved", "rider");
+    if (!data.ok) { toast.error(data.reason || "Approval failed"); return; }
     toast.success("Rider deposit approved & wallet credited!");
     await load();
   };
 
   const reject = async (id: string) => {
-    const { error } = await supabase
-      .from("rider_deposit_requests")
-      .update({ status: "rejected", admin_note: "Rejected by admin" })
-      .eq("id", id);
-    if (error) { toast.error(error.message); return; }
+    const data = await adminRejectDeposit(id, "Rejected by admin", "rider");
+    if (!data.ok) { toast.error(data.reason || "Deposit rejection failed"); return; }
     toast.success("Deposit rejected");
     await load();
   };

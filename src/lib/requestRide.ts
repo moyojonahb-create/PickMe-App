@@ -1,5 +1,6 @@
-// ✅ Request Ride utility - RLS safe implementation with offline support & rate limiting
 import { supabase } from '@/lib/supabaseClient';
+import { goBackend, type GoRideCreateRequest, type GoRideResponse } from '@/lib/goBackendClient';
+import { decimalToMinor } from '@/lib/money';
 import { queueOfflineRide } from '@/lib/offlineQueue';
 import { detectSuspiciousPatterns, reportFraudFlag } from '@/lib/fraudDetection';
 import { isRateLimited } from '@/lib/rateLimit';
@@ -36,12 +37,10 @@ export async function requestRide(input: RequestRideInput) {
   const user = authData?.user;
   if (!user) return { ok: false as const, error: "You must be logged in to request a ride." };
 
-  // Rate limit: max 5 ride requests per minute per user
   if (isRateLimited(`ride-request-${user.id}`, 5, 60000)) {
     return { ok: false as const, error: "Too many ride requests. Please wait a moment and try again." };
   }
 
-  // Email verification gate — phone-auth users are exempt
   if (user.email && !user.email_confirmed_at) {
     return { ok: false as const, error: "Please verify your email address before requesting a ride. Check your inbox for a verification link." };
   }
@@ -62,17 +61,19 @@ export async function requestRide(input: RequestRideInput) {
   if (!Number.isFinite(input.dropoff_lat) || !Number.isFinite(input.dropoff_lng)) return { ok: false as const, error: "Drop-off coordinates are required." };
   if (!["cash", "wallet"].includes(paymentMethod)) return { ok: false as const, error: "Select a valid payment method." };
 
-  // Run fraud checks in background (don't block ride request)
   detectSuspiciousPatterns(user.id).then(flags => {
     for (const flag of flags) reportFraudFlag(user.id, flag).catch(() => {});
   }).catch(() => {});
 
-  const insertPayload = {
+  const ridePayload: GoRideCreateRequest = {
     user_id: user.id,
     status: input.scheduled_at ? "scheduled" : "pending",
     pickup_address,
     dropoff_address,
     fare,
+    estimated_fare_minor: decimalToMinor(fare),
+    fare_minor: decimalToMinor(fare),
+    currency: "USD",
     distance_km,
     duration_minutes,
     pickup_lat: input.pickup_lat,
@@ -90,11 +91,9 @@ export async function requestRide(input: RequestRideInput) {
     ...(input.scheduled_at ? { scheduled_at: input.scheduled_at } : {}),
   };
 
-  // If offline, queue the ride for later
   if (!navigator.onLine) {
     try {
-      const queuedId = await queueOfflineRide(insertPayload as Record<string, unknown>);
-      // Try to register background sync
+      const queuedId = await queueOfflineRide(ridePayload as Record<string, unknown>);
       if ('serviceWorker' in navigator && 'SyncManager' in window) {
         const reg = await navigator.serviceWorker.ready;
         await (reg as unknown as { sync: { register: (tag: string) => Promise<void> } }).sync.register('sync-rides');
@@ -105,95 +104,16 @@ export async function requestRide(input: RequestRideInput) {
     }
   }
 
-  let data: RideRow | null = null;
-  let error: { message: string; details?: string; hint?: string } | null = null;
-
-  // Wallet rides go through atomic RPC that re-validates balance + lock server-side
-  if (insertPayload.payment_method === 'wallet') {
-    const { data: rpcData, error: rpcErr } = await supabase.rpc('request_wallet_ride', {
-      p_payload: insertPayload as never,
-    });
-    if (rpcErr) {
-      return { ok: false as const, error: `Ride request failed: ${rpcErr.message}` };
-    }
-    const result = rpcData as { ok?: boolean; reason?: string; ride_id?: string; balance?: number; fare?: number } | null;
-    if (!result?.ok) {
-      return { ok: false as const, error: result?.reason || 'Wallet ride could not be created' };
-    }
-    // Fetch the inserted ride row
-    const fetched = await supabase
-      .from('rides')
-      .select('id, user_id, status, pickup_address, dropoff_address, fare, distance_km, duration_minutes, pickup_lat, pickup_lon, dropoff_lat, dropoff_lon, vehicle_type, payment_method, town_id, scheduled_at, created_at')
-      .eq('id', result.ride_id)
-      .maybeSingle();
-    return { ok: true as const, ride: (fetched.data ?? { id: result.ride_id }) as RideRow };
-  }
-
-  const firstInsert = await supabase
-    .from("rides")
-    .insert(insertPayload as never)
-    .select("id, user_id, status, pickup_address, dropoff_address, fare, distance_km, duration_minutes, pickup_lat, pickup_lon, dropoff_lat, dropoff_lon, vehicle_type, payment_method, town_id, scheduled_at, created_at")
-    .maybeSingle();
-
-  data = firstInsert.data as RideRow | null;
-  error = firstInsert.error
-    ? {
-        message: firstInsert.error.message,
-        details: firstInsert.error.details ?? undefined,
-        hint: firstInsert.error.hint ?? undefined,
-      }
-    : null;
-
-  // Backward-compatible fallback for environments where passenger fields don't exist yet
-  if (error && /passenger_name|passenger_phone|column .* does not exist/i.test(error.message)) {
-    const { passenger_name, passenger_phone, ...fallbackPayload } = insertPayload as Record<string, unknown>;
-    const fallbackInsert = await supabase
-      .from("rides")
-      .insert(fallbackPayload as never)
-      .select("id, user_id, status, pickup_address, dropoff_address, fare, distance_km, duration_minutes, pickup_lat, pickup_lon, dropoff_lat, dropoff_lon, vehicle_type, payment_method, town_id, scheduled_at, created_at")
-      .maybeSingle();
-
-    data = fallbackInsert.data as RideRow | null;
-    error = fallbackInsert.error
-      ? {
-          message: fallbackInsert.error.message,
-          details: fallbackInsert.error.details ?? undefined,
-          hint: fallbackInsert.error.hint ?? undefined,
-        }
-      : null;
-  }
-
-  if (error) {
-    const msg = `Ride request failed: ${error.message}` +
-      (error.details ? ` | Details: ${error.details}` : "") +
-      (error.hint ? ` | Hint: ${error.hint}` : "");
-    console.error("SUPABASE INSERT ERROR:", error);
-    return { ok: false as const, error: msg };
-  }
-
-  // Send push notification to online drivers (fire-and-forget)
   try {
-    const session = (await supabase.auth.getSession()).data.session;
-    if (session?.access_token) {
-      fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-notification`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({
-            type: 'ride_requested',
-            title: `New ride: ${input.pickup_address} → ${input.dropoff_address}`,
-            rideId: (data as RideRow).id,
-          }),
-        }
-      ).catch(() => {}); // Don't block on notification failure
+    const created = await goBackend.post<GoRideResponse>("/api/rides", ridePayload);
+    if (created.ok === false) {
+      return { ok: false as const, error: created.reason || "Ride request failed" };
     }
-  } catch {
-    // Notification is best-effort
+    const ride = (created.ride ?? created) as RideRow;
+    const rideId = ride.id ?? created.ride_id ?? created.id;
+    if (!rideId) return { ok: false as const, error: "Ride request failed: backend did not return a ride id" };
+    return { ok: true as const, ride: { ...ride, id: rideId } as RideRow };
+  } catch (e: unknown) {
+    return { ok: false as const, error: `Ride request failed: ${(e as Error).message}` };
   }
-
-  return { ok: true as const, ride: data as RideRow };
 }

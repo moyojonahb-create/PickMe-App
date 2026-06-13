@@ -10,6 +10,8 @@ import { useDriverTracking } from "@/hooks/useDriverTracking";
 import { useNearbyDrivers } from "@/hooks/useNearbyDrivers";
 import { useAgoraCall } from "@/hooks/useAgoraCall";
 import { getSecondsRemaining } from "@/lib/rideExpiry";
+import { goBackend } from "@/lib/goBackendClient";
+import { decimalToMinor } from "@/lib/money";
 import {
   fetchPendingOffers,
   fetchDriversByIds,
@@ -244,8 +246,9 @@ export default function RiderRideDetail() {
     if (clampedFare === ride.fare) return;
     setUpdatingFare(true);
     try {
-      const { error } = await supabase.from("rides").update({ fare: clampedFare }).eq("id", rideId);
-      if (error) throw error;
+      await goBackend.patch(`/api/rides/${rideId}`, {
+        fare_minor: decimalToMinor(clampedFare),
+      });
       setRide({ ...ride, fare: clampedFare });
       toast.success(`Fare updated to $${clampedFare.toFixed(2)}`);
     } catch (e: unknown) { toast.error("Failed to update fare", { description: (e as Error).message }); }
@@ -266,15 +269,14 @@ export default function RiderRideDetail() {
   };
 
   const handleDeclineOffer = async (offerId: string) => {
-    try { await declineOffer(offerId); toast.info("Offer declined"); await refreshOffers(); }
+    try { await declineOffer(offerId, rideId); toast.info("Offer declined"); await refreshOffers(); }
     catch (e: unknown) { toast.error("Failed to decline offer", { description: (e as Error).message }); }
   };
 
   const handleCancelRide = async () => {
     if (!rideId) return;
     try {
-      const { error } = await supabase.from("rides").update({ status: "cancelled" }).eq("id", rideId);
-      if (error) throw error;
+      await goBackend.post(`/api/rides/${rideId}/status`, { status: "cancelled" });
       toast.info("Ride cancelled");
       nav("/ride");
     } catch (e: unknown) { toast.error("Failed to cancel ride", { description: (e as Error).message }); }

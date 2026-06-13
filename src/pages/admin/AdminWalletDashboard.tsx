@@ -23,6 +23,17 @@ import {
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { useNavigate } from "react-router-dom";
+import {
+  adminApproveDeposit,
+  adminApproveWithdrawalGo,
+  adminFlagUser,
+  adminLockWallet,
+  adminRejectWithdrawalGo,
+  adminResolveFraudFlag,
+  adminReverseTransaction,
+  adminUnlockWallet,
+  getAdminWalletDashboard,
+} from "@/lib/walletApi";
 
 interface Tx {
   id: string;
@@ -78,65 +89,64 @@ function AdminWalletDashboardInner() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [txRes, depRes, wdRes, flagRes, failRes, lockRes] = await Promise.all([
-      supabase.from("wallet_transactions")
-        .select("id,user_id,amount,transaction_type,description,reference_code,created_at")
-        .order("created_at", { ascending: false }).limit(100),
-      supabase.from("deposit_requests")
-        .select("id,driver_id,amount_usd,ecocash_phone,ecocash_reference,proof_path,created_at,status")
-        .eq("status", "pending").order("created_at", { ascending: false }).limit(50),
-      supabase.from("withdrawals")
-        .select("id,driver_id,amount_usd,method,destination,account_name,status,created_at")
-        .eq("status", "pending").order("created_at", { ascending: false }).limit(50),
-      supabase.from("fraud_flags")
-        .select("id,user_id,flag_type,severity,details,resolved,created_at")
-        .eq("resolved", false).order("created_at", { ascending: false }).limit(50),
-      supabase.from("rides")
-        .select("id,user_id,fare,payment_failure_reason,pickup_address,dropoff_address,created_at")
-        .eq("payment_failed", true).order("created_at", { ascending: false }).limit(50),
-      supabase.from("wallets")
-        .select("id,user_id,balance,locked_reason,locked_at")
-        .eq("is_locked", true).order("locked_at", { ascending: false }).limit(50),
-    ]);
-    if (txRes.error) toast.error(txRes.error.message);
-    setTxs((txRes.data as Tx[]) ?? []);
-    setDeposits((depRes.data as Deposit[]) ?? []);
-    setWithdrawals((wdRes.data as Withdrawal[]) ?? []);
-    setFlags((flagRes.data as FraudFlag[]) ?? []);
-    setFailed((failRes.data as FailedRide[]) ?? []);
-    setLocked((lockRes.data as LockedWallet[]) ?? []);
+    try {
+      const data = await getAdminWalletDashboard();
+      setTxs(data.transactions as Tx[]);
+      setDeposits(data.deposits.map((row) => ({
+        id: row.id,
+        driver_id: row.driver_id ?? row.user_id ?? "",
+        amount_usd: row.amount_usd,
+        ecocash_phone: row.ecocash_phone ?? row.phone_number ?? "",
+        ecocash_reference: row.ecocash_reference ?? row.reference ?? "",
+        proof_path: row.proof_path,
+        created_at: row.created_at,
+        status: row.status,
+      })));
+      setWithdrawals(data.withdrawals.map((row) => ({
+        id: row.id,
+        driver_id: row.driver_id ?? row.user_id ?? "",
+        amount_usd: row.amount_usd,
+        method: row.method,
+        destination: row.destination,
+        account_name: row.account_name,
+        status: row.status,
+        created_at: row.created_at,
+      })));
+      setFlags(data.flags as unknown as FraudFlag[]);
+      setFailed(data.failed_rides as unknown as FailedRide[]);
+      setLocked(data.locked_wallets as unknown as LockedWallet[]);
+    } catch (e) {
+      toast.error((e as Error).message);
+      setTxs([]);
+      setDeposits([]);
+      setWithdrawals([]);
+      setFlags([]);
+      setFailed([]);
+      setLocked([]);
+    }
     setLoading(false);
   }, []);
 
   useEffect(() => { load(); }, [load]);
 
   const approveDeposit = async (id: string) => {
-    const { data, error } = await supabase.rpc("admin_approve_deposit", {
-      p_deposit_id: id, p_note: "Approved via wallet dashboard",
-    });
-    if (error) return toast.error(error.message);
-    if (!(data as Record<string, unknown>)?.ok) return toast.error("Approval failed");
+    const data = await adminApproveDeposit(id, "Approved via wallet dashboard", "driver");
+    if (!data.ok) return toast.error(data.reason || "Approval failed");
     toast.success("Deposit approved");
     load();
   };
 
   const approveWithdrawal = async (id: string) => {
-    const { data, error } = await supabase.rpc("admin_approve_withdrawal", {
-      p_id: id, p_note: "Approved via wallet dashboard",
-    });
-    if (error) return toast.error(error.message);
-    if (!(data as Record<string, unknown>)?.ok) return toast.error("Approval failed");
+    const data = await adminApproveWithdrawalGo(id, "Approved via wallet dashboard");
+    if (!data.ok) return toast.error(data.reason || "Approval failed");
     toast.success("Withdrawal approved");
     load();
   };
 
   const rejectWithdrawal = async (id: string) => {
     const note = window.prompt("Reason for rejection?") || "Rejected";
-    const { data, error } = await supabase.rpc("admin_reject_withdrawal", {
-      p_id: id, p_note: note,
-    });
-    if (error) return toast.error(error.message);
-    if (!(data as Record<string, unknown>)?.ok) return toast.error("Rejection failed");
+    const data = await adminRejectWithdrawalGo(id, note);
+    if (!data.ok) return toast.error(data.reason || "Rejection failed");
     toast.success("Withdrawal rejected & refunded");
     load();
   };
@@ -146,40 +156,33 @@ function AdminWalletDashboardInner() {
       return toast.error("User ID and reason required");
     }
     setFlagging(true);
-    const { data, error } = await supabase.rpc("admin_flag_user", {
-      p_user_id: flagUserId.trim(),
-      p_reason: flagReason.trim(),
-      p_severity: flagSeverity,
-    });
+    const data = await adminFlagUser(flagUserId.trim(), flagReason.trim(), flagSeverity);
     setFlagging(false);
-    if (error) return toast.error(error.message);
-    if (!(data as Record<string, unknown>)?.ok) return toast.error("Flag failed");
+    if (!data.ok) return toast.error(data.reason || "Flag failed");
     toast.success("User flagged");
     setFlagOpen(false); setFlagUserId(""); setFlagReason("");
     load();
   };
 
   const resolveFlag = async (id: string) => {
-    const { error } = await supabase.rpc("admin_resolve_fraud_flag", { p_flag_id: id });
-    if (error) return toast.error(error.message);
+    const data = await adminResolveFraudFlag(id);
+    if (!data.ok) return toast.error(data.reason || "Flag resolution failed");
     toast.success("Flag resolved");
     load();
   };
 
   const lockWallet = async (userId: string) => {
     const reason = window.prompt("Lock reason?") || "Admin lock";
-    const { data, error } = await supabase.rpc("admin_lock_wallet", { p_user_id: userId, p_reason: reason });
-    if (error) return toast.error(error.message);
-    if (!(data as Record<string, unknown>)?.ok) return toast.error("Lock failed");
+    const data = await adminLockWallet(userId, reason);
+    if (!data.ok) return toast.error(data.reason || "Lock failed");
     toast.success("Wallet locked");
     load();
   };
 
   const unlockWallet = async (userId: string) => {
     if (!window.confirm("Unlock this wallet?")) return;
-    const { data, error } = await supabase.rpc("admin_unlock_wallet", { p_user_id: userId });
-    if (error) return toast.error(error.message);
-    if (!(data as Record<string, unknown>)?.ok) return toast.error("Unlock failed");
+    const data = await adminUnlockWallet(userId);
+    if (!data.ok) return toast.error(data.reason || "Unlock failed");
     toast.success("Wallet unlocked");
     load();
   };
@@ -187,9 +190,7 @@ function AdminWalletDashboardInner() {
   const reverseTx = async (txId: string) => {
     const reason = window.prompt("Reason for reversal?");
     if (!reason) return;
-    const { data, error } = await supabase.rpc("admin_reverse_transaction", { p_tx_id: txId, p_reason: reason });
-    if (error) return toast.error(error.message);
-    const r = data as { ok?: boolean; reason?: string; reference?: string };
+    const r = await adminReverseTransaction(txId, reason) as { ok?: boolean; reason?: string; reference?: string };
     if (!r?.ok) return toast.error(r?.reason || "Reversal failed");
     toast.success(`Reversed (${r.reference})`);
     load();

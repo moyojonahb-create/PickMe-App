@@ -30,6 +30,7 @@ import { toast } from "sonner";
 import { completeTrip } from "@/lib/completeTrip";
 import { useVoiceNavigation } from "@/hooks/useVoiceNavigation";
 import { RideCommunication } from "@/components/ride/RideCommunication";
+import { goBackend } from "@/lib/goBackendClient";
 import type { Coordinates } from "@/lib/osrm";
 
 // ── Types ──
@@ -395,7 +396,7 @@ export default function FullScreenNavigation({
   // ── Trip Actions ──
 
   const handleStatusUpdate = async (newStatus: string, message: string, voiceMsg?: string) => {
-    await supabase.from("rides").update({ status: newStatus }).eq("id", activeTrip.id);
+    await goBackend.post(`/api/rides/${activeTrip.id}/status`, { status: newStatus });
     onTripUpdate({ ...activeTrip, status: newStatus });
     toast.info(message);
     if (voiceEnabled && voiceMsg) speak(voiceMsg, true);

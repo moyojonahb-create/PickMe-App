@@ -11,6 +11,7 @@
  */
 import { supabase } from '@/lib/supabaseClient';
 import { subDays, subHours } from 'date-fns';
+import { adminSendLowBalanceReminders } from '@/lib/walletApi';
 
 export interface RamzAction {
   /** Button label shown to admin */
@@ -120,21 +121,12 @@ export const RAMZ_ACTIONS: Record<string, RamzAction> = {
   'low-balance-drivers': {
     label: 'Send top-up reminder',
     run: async () => {
-      const { data: lowDrivers } = await supabase
-        .from('driver_wallets')
-        .select('driver_id')
-        .lt('balance_usd', 0.5);
-      if (!lowDrivers?.length) return 'No low-balance drivers.';
-
-      const notifs = lowDrivers.map(d => ({
-        user_id: d.driver_id,
-        title: 'Top up your wallet',
-        body: 'Your wallet balance is below $0.50. Top up via EcoCash to keep accepting rides.',
-        notification_type: 'wallet_low',
-      }));
-      const { error } = await supabase.from('notifications').insert(notifs);
-      if (error) throw error;
-      return `Reminder sent to ${notifs.length} driver${notifs.length > 1 ? 's' : ''}.`;
+      const result = await adminSendLowBalanceReminders();
+      if (!result.ok) throw new Error(result.reason || 'Failed to send reminders.');
+      const count = Number(result.count ?? result.sent ?? 0);
+      return count > 0
+        ? `Reminder sent to ${count} driver${count > 1 ? 's' : ''}.`
+        : 'No low-balance drivers.';
     },
   },
 

@@ -18,6 +18,8 @@ import RideCompleteSummary from "@/components/ride/RideCompleteSummary";
 import TripReceiptButton from "@/components/ride/TripReceiptButton";
 import DisputeForm from "@/components/ride/DisputeForm";
 import TopFlashBanner from "@/components/ui/top-flash-banner";
+import { goBackend } from "@/lib/goBackendClient";
+import { getRideSettlement, settleRideThroughGo } from "@/lib/walletApi";
 
 
 /** Avatar with automatic fallback to initial when image fails or is missing. */
@@ -52,26 +54,24 @@ function SettlementInfo({ tripId, onSettled }: { tripId: string; onSettled?: () 
   const [settling, setSettling] = useState(false);
 
   useEffect(() => {
-    supabase
-      .from("platform_ledger")
-      .select("status, created_at")
-      .eq("trip_id", tripId)
-      .maybeSingle()
-      .then(({ data }) => {
+    getRideSettlement(tripId)
+      .then((data) => {
         setSettlement(data);
         setLoading(false);
         if (data) onSettled?.();
+      })
+      .catch((err) => {
+        console.warn("Settlement fetch failed:", err);
+        setLoading(false);
       });
   }, [tripId]);
 
   const handleSettle = async () => {
     setSettling(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) return;
-      await supabase.functions.invoke("settle-trip", { body: { tripId } });
-      const { data } = await supabase.from("platform_ledger").select("status, created_at").eq("trip_id", tripId).maybeSingle();
-      setSettlement(data);
+      await settleRideThroughGo(tripId);
+      const data = await getRideSettlement(tripId);
+      setSettlement(data ?? { status: "settled", created_at: new Date().toISOString() });
       onSettled?.();
     } catch (err: unknown) { console.warn("Settlement fetch failed:", err); }
     setSettling(false);
@@ -285,12 +285,7 @@ export default function RideDetail() {
     if (!ride || !rideId || !canAcceptNow(offer)) { setToast("This offer expired."); return; }
     setAcceptingOfferId(offer.id);
     try {
-      const { data: driverData, error: driverErr } = await supabase.from("drivers").select("id").eq("user_id", offer.driver_id).maybeSingle();
-      if (driverErr) throw new Error(driverErr.message);
-      if (!driverData) throw new Error("Driver record not found");
-      await supabase.from("offers").update({ status: "accepted" }).eq("id", offer.id);
-      await supabase.from("offers").update({ status: "rejected" }).eq("ride_id", rideId).neq("id", offer.id);
-      await supabase.from("rides").update({ driver_id: driverData.id, status: "accepted" }).eq("id", rideId);
+      await goBackend.post(`/api/rides/${rideId}/offers/${offer.id}/accept`);
       setToast("Driver accepted ✅");
       setShowOffersModal(false);
     } catch (e: unknown) { setToast((e as Error)?.message || "Failed to accept offer."); } finally { setAcceptingOfferId(null); }
@@ -769,7 +764,7 @@ export default function RideDetail() {
               onClick={async () => {
                 if (!rideId) return;
                 if (!window.confirm("Cancel this ride request?")) return;
-                await supabase.from("rides").update({ status: "cancelled" }).eq("id", rideId);
+                await goBackend.post(`/api/rides/${rideId}/status`, { status: "cancelled" });
                 nav("/ride");
               }}
               className="w-full h-12 rounded-2xl border-2 border-destructive/30 bg-destructive/10 text-destructive font-bold text-sm inline-flex items-center justify-center gap-2 active:scale-[0.97] transition-all hover:bg-destructive/20">
@@ -848,11 +843,11 @@ export default function RideDetail() {
           if (offer) await acceptOffer(offer);
         }}
         onDecline={async (offerId) => {
-          await supabase.from("offers").update({ status: "rejected" }).eq("id", offerId);
+          if (rideId) await goBackend.post(`/api/rides/${rideId}/offers/${offerId}/reject`);
           setPremiumOffers((prev) => prev.filter((o) => o.offerId !== offerId));
         }}
         onCancel={async () => {
-          if (rideId) await supabase.from("rides").update({ status: "cancelled" }).eq("id", rideId);
+          if (rideId) await goBackend.post(`/api/rides/${rideId}/status`, { status: "cancelled" });
           nav("/ride");
         }}
         onClose={() => setShowOffersModal(false)} />

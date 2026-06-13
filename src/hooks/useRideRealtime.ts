@@ -1,11 +1,8 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import { useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabaseClient';
+import { connectGoRideSocket } from '@/lib/goRideSocket';
 
-/**
- * Single consolidated channel per ride — handles rides, offers, and messages.
- * Replaces multiple separate subscriptions with ONE channel.
- */
 export function useRideRealtime(
   rideId: string | null,
   callbacks: {
@@ -20,19 +17,19 @@ export function useRideRealtime(
   useEffect(() => {
     if (!rideId) return;
 
-    // ONE channel for all three tables — reduces connection count by 3x
+    let disconnectGo: (() => void) | null = null;
+    connectGoRideSocket(rideId, (message) => {
+      if (message.type === "ride_offer") callbacksRef.current.onOfferChange?.();
+      if (message.type === "ride_accepted" || message.type === "ride_started" || message.type === "ride_completed") {
+        callbacksRef.current.onRideChange?.();
+      }
+      if (message.type === "driver_location") {
+        callbacksRef.current.onRideChange?.();
+      }
+    }).then((disconnect) => { disconnectGo = disconnect; });
+
     const channel = supabase
-      .channel(`ride-${rideId}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "rides", filter: `id=eq.${rideId}` },
-        () => callbacksRef.current.onRideChange?.()
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "offers", filter: `ride_id=eq.${rideId}` },
-        () => callbacksRef.current.onOfferChange?.()
-      )
+      .channel(`ride-messages-${rideId}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "messages", filter: `ride_id=eq.${rideId}` },
@@ -41,13 +38,15 @@ export function useRideRealtime(
       .subscribe();
 
     return () => {
+      disconnectGo?.();
       supabase.removeChannel(channel);
     };
   }, [rideId]);
 }
 
 /**
- * Single channel for driver dashboard — rides + offers combined.
+ * Still Supabase-backed because the current Go websocket contract is ride-room
+ * scoped and does not define a global driver marketplace room yet.
  */
 export function useOpenRidesRealtime(onUpdate: () => void) {
   const onUpdateRef = useRef(onUpdate);
@@ -75,7 +74,9 @@ export function useOpenRidesRealtime(onUpdate: () => void) {
 }
 
 /**
- * New ride INSERT listener for driver notifications.
+ * Deprecated for business events. Use the Go ride websocket when a ride id is
+ * known; this remains for legacy notification UI until a Go marketplace room
+ * exists.
  */
 export function useRealtimeRideRequests(onNewRide: (ride: unknown) => void) {
   const onNewRideRef = useRef(onNewRide);
@@ -105,9 +106,6 @@ export function useRealtimeRideRequests(onNewRide: (ride: unknown) => void) {
   }, []);
 }
 
-/**
- * Offer INSERT listener for a specific ride.
- */
 export function useRealtimeOffers(rideId: string | null, onOffer: (offer: unknown) => void) {
   const onOfferRef = useRef(onOffer);
   onOfferRef.current = onOffer;
@@ -115,24 +113,17 @@ export function useRealtimeOffers(rideId: string | null, onOffer: (offer: unknow
   useEffect(() => {
     if (!rideId) return;
 
-    const channel = supabase
-      .channel(`offers-${rideId}`)
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "offers", filter: `ride_id=eq.${rideId}` },
-        (payload) => onOfferRef.current(payload.new)
-      )
-      .subscribe();
+    let disconnectGo: (() => void) | null = null;
+    connectGoRideSocket(rideId, (message) => {
+      if (message.type === "ride_offer") onOfferRef.current(message.payload);
+    }).then((disconnect) => { disconnectGo = disconnect; });
 
     return () => {
-      supabase.removeChannel(channel);
+      disconnectGo?.();
     };
   }, [rideId]);
 }
 
-/**
- * Ride UPDATE listener for status changes.
- */
 export function useRealtimeRideStatus(rideId: string | null, onUpdate: (ride: unknown) => void) {
   const onUpdateRef = useRef(onUpdate);
   onUpdateRef.current = onUpdate;
@@ -140,17 +131,15 @@ export function useRealtimeRideStatus(rideId: string | null, onUpdate: (ride: un
   useEffect(() => {
     if (!rideId) return;
 
-    const channel = supabase
-      .channel(`ride-status-${rideId}`)
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "rides", filter: `id=eq.${rideId}` },
-        (payload) => onUpdateRef.current(payload.new)
-      )
-      .subscribe();
+    let disconnectGo: (() => void) | null = null;
+    connectGoRideSocket(rideId, (message) => {
+      if (message.type === "ride_accepted" || message.type === "ride_started" || message.type === "ride_completed") {
+        onUpdateRef.current(message.payload);
+      }
+    }).then((disconnect) => { disconnectGo = disconnect; });
 
     return () => {
-      supabase.removeChannel(channel);
+      disconnectGo?.();
     };
   }, [rideId]);
 }

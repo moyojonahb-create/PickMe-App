@@ -6,6 +6,7 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import AdminGuard from "@/components/admin/AdminGuard";
+import { adminApproveDeposit, adminListDeposits } from "@/lib/walletApi";
 
 interface DepositRow {
   id: string;
@@ -25,14 +26,22 @@ function AdminDepositsPageInner() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from("deposit_requests")
-      .select("id,driver_id,amount_usd,ecocash_phone,ecocash_reference,proof_path,created_at,status")
-      .eq("status", "pending")
-      .order("created_at", { ascending: false })
-      .limit(50);
-    if (error) toast.error(error.message);
-    setRows(data ?? []);
+    try {
+      const data = await adminListDeposits("driver", "pending", 50);
+      setRows(data.map((row) => ({
+        id: row.id,
+        driver_id: row.driver_id ?? row.user_id ?? "",
+        amount_usd: row.amount_usd,
+        ecocash_phone: row.ecocash_phone ?? row.phone_number ?? "",
+        ecocash_reference: row.ecocash_reference ?? row.reference ?? "",
+        proof_path: row.proof_path,
+        created_at: row.created_at,
+        status: row.status,
+      })));
+    } catch (e) {
+      toast.error((e as Error).message);
+      setRows([]);
+    }
     setLoading(false);
   }, []);
 
@@ -47,12 +56,8 @@ function AdminDepositsPageInner() {
   };
 
   const approve = async (id: string) => {
-    const { data, error } = await supabase.rpc("admin_approve_deposit", {
-      p_deposit_id: id,
-      p_note: "Approved after EcoCash confirmation",
-    });
-    if (error) { toast.error(error.message); return; }
-    if (!(data as Record<string, unknown>)?.ok) { toast.error("Approval failed"); return; }
+    const data = await adminApproveDeposit(id, "Approved after EcoCash confirmation", "driver");
+    if (!data.ok) { toast.error(data.reason || "Approval failed"); return; }
     toast.success("Deposit approved and credited!");
     await load();
   };

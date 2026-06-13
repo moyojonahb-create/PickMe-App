@@ -84,6 +84,8 @@ import DriverOfferModal from "@/components/driver/DriverOfferModal";
 import PassengerInfoCard from "@/components/driver/PassengerInfoCard";
 import TopFlashBanner from "@/components/ui/top-flash-banner";
 import { subscribeRiderComing } from "@/lib/rideSignals";
+import { goBackend, type GoDriverPresenceRequest, type GoRideStatusRequest } from "@/lib/goBackendClient";
+import { getDriverWalletSummary } from "@/lib/walletApi";
 import { Footprints } from "lucide-react";
 
 // Smart USD format: $4 for whole, $4.50 for halves
@@ -153,12 +155,8 @@ export default function DriverDashboard() {
   const [driverBalance, setDriverBalance] = useState(0);
   const fetchDriverBalance = useCallback(async () => {
     if (!user) return;
-    const { data } = await supabase
-      .from("driver_wallets")
-      .select("balance_usd")
-      .eq("driver_id", user.id)
-      .maybeSingle();
-    setDriverBalance(data?.balance_usd ?? 0);
+    const data = await getDriverWalletSummary();
+    setDriverBalance(data.balance ?? 0);
   }, [user]);
   useEffect(() => { fetchDriverBalance(); }, [fetchDriverBalance]);
   useEffect(() => { preloadAllTownPricing().then(setTownPricingMap); }, []);
@@ -304,9 +302,8 @@ export default function DriverDashboard() {
         }
       }
 
-      const { error: updateErr } = await supabase.from("drivers").update({ is_online: online }).eq("id", profile.id);
-
-      if (updateErr) throw new Error(updateErr.message);
+      const payload: GoDriverPresenceRequest = { is_online: online };
+      await goBackend.post("/api/drivers/me/presence", payload);
 
       setIsOnline(online);
       setProfile({ ...profile, is_online: online });
@@ -587,13 +584,11 @@ export default function DriverDashboard() {
 
     setStatusUpdating(true);
     try {
-      const { error } = await supabase
-        .from("rides")
-        .update({ status: nextStatus })
-        .eq("id", activeTrip.id)
-        .eq("status", expectedStatus);
-
-      if (error) throw new Error(error.message);
+      const payload: GoRideStatusRequest = {
+        status: nextStatus,
+        expected_status: expectedStatus,
+      };
+      await goBackend.post(`/api/rides/${activeTrip.id}/status`, payload);
 
       setActiveTrip((prev) => prev?.id === activeTrip.id ? { ...prev, status: nextStatus } : prev);
       toast.info(successMessage);
@@ -832,7 +827,7 @@ export default function DriverDashboard() {
             </Button>
             <WalletBalance
               balance={driverBalance}
-              onClick={() => nav("/drivers/wallet")}
+              onClick={() => nav("/driver/wallet")}
               size="sm"
             />
             <DriverSettingsSheet
@@ -1156,7 +1151,7 @@ export default function DriverDashboard() {
         isOpen={depositModalOpen}
         onClose={() => { setDepositModalOpen(false); fetchDriverBalance(); }}
         onDeposit={async (amount: number, desc?: string) => {
-          return { error: 'Use the deposit page at /drivers/deposit' };
+          return { error: 'Use the deposit page at /driver/deposit' };
         }}
         currentBalance={driverBalance}
       />

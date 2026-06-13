@@ -1,5 +1,4 @@
 import { useEffect, useState, useCallback } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, ArrowDownLeft, ArrowUpRight, Send, TrendingUp, Receipt, Percent, Plus } from "lucide-react";
@@ -12,6 +11,7 @@ import WalletPinModal from "@/components/wallet/WalletPinModal";
 import { useWalletPin } from "@/hooks/useWalletPin";
 import { usePickmeAccount } from "@/hooks/usePickmeAccount";
 import { toast } from "sonner";
+import { getDriverWalletSummary } from "@/lib/walletApi";
 
 
 interface DepositRecord {
@@ -76,20 +76,26 @@ export default function DriverWalletPage() {
     setMsg("");
     setLoading(true);
     try {
-      const [w, dep, earn, wd] = await Promise.all([
-        supabase.from("driver_wallets").select("balance_usd").eq("driver_id", user.id).maybeSingle(),
-        supabase.from("deposit_requests").select("id,amount_usd,status,created_at,ecocash_reference")
-          .eq("driver_id", user.id).order("created_at", { ascending: false }).limit(20),
-        supabase.from("admin_earnings").select("id,ride_id,fare_amount,platform_fee,driver_earnings,created_at")
-          .eq("driver_id", user.id).order("created_at", { ascending: false }).limit(50),
-        supabase.from("withdrawals").select("id,amount_usd,method,destination,status,admin_note,created_at,approved_at")
-          .eq("driver_id", user.id).order("created_at", { ascending: false }).limit(30),
-      ]);
-      if (w.error) throw w.error;
-      setBalance(Number(w.data?.balance_usd ?? 0));
-      if (!dep.error) setDeposits(dep.data ?? []);
-      if (!earn.error) setEarnings((earn.data ?? []) as EarningRecord[]);
-      if (!wd.error) setWithdrawals((wd.data ?? []) as WithdrawalRecord[]);
+      const w = await getDriverWalletSummary();
+      setBalance(Number(w.balance ?? 0));
+      setDeposits(w.deposits.map((d) => ({
+        id: d.id,
+        amount_usd: d.amount_usd,
+        status: d.status,
+        created_at: d.created_at,
+        ecocash_reference: d.ecocash_reference ?? d.reference ?? "",
+      })));
+      setEarnings(w.earnings as EarningRecord[]);
+      setWithdrawals(w.withdrawals.map((row) => ({
+        id: row.id,
+        amount_usd: row.amount_usd,
+        method: row.method,
+        destination: row.destination,
+        status: row.status,
+        admin_note: row.admin_note ?? null,
+        created_at: row.created_at,
+        approved_at: row.approved_at ?? null,
+      })));
     } catch (e: unknown) {
       setMsg((e as Error).message || "Failed to load wallet");
     } finally {
@@ -98,32 +104,6 @@ export default function DriverWalletPage() {
   }, [user]);
 
   useEffect(() => { load(); }, [load]);
-
-  // Realtime: balance + new earnings as they come in
-  useEffect(() => {
-    if (!user) return;
-    const channel = supabase
-      .channel(`driver-wallet-${user.id}`)
-      .on('postgres_changes',
-        { event: '*', schema: 'public', table: 'driver_wallets', filter: `driver_id=eq.${user.id}` },
-        (payload) => {
-          const next = (payload.new as { balance_usd?: number } | null)?.balance_usd;
-          if (typeof next === 'number') setBalance(Number(next));
-        }
-      )
-      .on('postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'admin_earnings', filter: `driver_id=eq.${user.id}` },
-        (payload) => {
-          setEarnings((prev) => [payload.new as EarningRecord, ...prev].slice(0, 50));
-        }
-      )
-      .on('postgres_changes',
-        { event: '*', schema: 'public', table: 'withdrawals', filter: `driver_id=eq.${user.id}` },
-        () => { load(); }
-      )
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [user, load]);
 
   const statusColor = (s: string) => {
     if (s === 'approved') return 'text-green-500';
