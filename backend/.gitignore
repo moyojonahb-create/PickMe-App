@@ -1,0 +1,9 @@
+.env
+node_modules
+dist
+tmp
+*.exe
+*.exe~
+*.log
+.vscode/
+.gocache/

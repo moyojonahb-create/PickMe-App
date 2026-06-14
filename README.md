@@ -1,3 +1,67 @@
+# PickMe Monorepo
+
+This repository now contains the PickMe frontend app at the root and the Go backend in `backend/`.
+
+## Run Locally
+
+Frontend:
+
+```sh
+bun install
+bun dev
+```
+
+Backend:
+
+```sh
+cd backend
+go run ./cmd/server
+```
+
+Backend tests:
+
+```sh
+cd backend
+go test ./...
+```
+
+## Environment Variables
+
+Frontend `.env`:
+
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_PUBLISHABLE_KEY`
+- `VITE_GOOGLE_MAPS_API_KEY`
+- `VITE_GO_BACKEND_URL` or `VITE_API_BASE_URL` or `VITE_BACKEND_URL`
+- Optional Datadog RUM values from `.env.example`
+
+Backend `backend/.env`:
+
+- `DATABASE_URL`
+- `SUPABASE_JWT_SECRET`
+- `PORT` defaults to `3000`
+- `APP_ENV` defaults to `production`
+- `SUPABASE_URL`, `SUPABASE_JWT_AUDIENCE`, `SUPABASE_JWT_ISSUER`
+- `CORS_ALLOW_ORIGINS`
+- `REDIS_URL`, `REDIS_ENABLED`, `REDIS_DRIVER_LOCATION_TTL_SECONDS`, `REDIS_DRIVER_PRESENCE_TTL_SECONDS`, `REDIS_POOL_SIZE`
+- `DISPATCH_MODE`, `DISPATCH_SHADOW_RADIUS_KM`, `DISPATCH_SHADOW_CANDIDATE_LIMIT`, `DISPATCH_SHADOW_SELECTED_LIMIT`, `DISPATCH_SHADOW_RANKING_VERSION`
+- Wallet flags such as `WALLET_ACTIVE_SETTLEMENT_ENABLED`, `WALLET_RIDE_AUTHORIZATION_ENABLED`, `PUBLIC_WALLET_PILOT_ENABLED`
+- Payment provider flags and secrets such as `PAYMENTS_PROVIDER_ENABLED`, `ONEMONEY_WEBHOOK_SECRET`, `ECOCASH_WEBHOOK_SECRET`, `INNBUCKS_WEBHOOK_SECRET`, `PAYPAL_WEBHOOK_SECRET`
+
+## Layout
+
+```text
+.
+├── backend/
+│   ├── cmd/
+│   ├── internal/
+│   ├── go.mod
+│   └── go.sum
+├── src/
+├── supabase/
+└── package.json
+```
+
 # Welcome to your Lovable project
 
 ## Project info

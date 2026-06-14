@@ -23,3 +23,8 @@ dist-ssr
 *.sln
 *.sw?
 .env
+
+# Go backend workspace
+backend/.gocache
+backend/tmp
+backend/*.exe
