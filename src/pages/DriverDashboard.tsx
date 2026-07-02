@@ -959,24 +959,27 @@ export default function DriverDashboard() {
       <div className="flex-1 overflow-y-auto overscroll-contain relative z-[1]">
       <div className="max-w-lg mx-auto p-5 space-y-5 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))]">
 
-        {/* Quick Stats */}
-        <div className="grid grid-cols-3 gap-1.5">
+        {/* Quick Stats — premium glass tiles */}
+        <div className="grid grid-cols-3 gap-2.5">
           {[
-            { icon: Star, value: profile.rating_avg?.toFixed(1) || '—', label: 'Rating' },
-            { icon: TrendingUp, value: String(profile.total_trips || 0), label: 'Trips' },
-            { icon: Zap, value: `$${driverBalance % 1 === 0 ? driverBalance : driverBalance.toFixed(2)}`, label: 'Wallet' },
+            { icon: Star, value: profile.rating_avg?.toFixed(1) || '—', label: 'Rating', accent: 'text-amber-400' },
+            { icon: TrendingUp, value: String(profile.total_trips || 0), label: 'Trips', accent: 'text-emerald-300' },
+            { icon: Wallet, value: `$${driverBalance % 1 === 0 ? driverBalance : driverBalance.toFixed(2)}`, label: 'Balance', accent: 'text-white' },
           ].map((stat, i) => (
             <motion.div
               key={stat.label}
-              initial={{ opacity: 0, y: 12 }}
+              initial={{ opacity: 0, y: 14 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.08, type: 'spring', stiffness: 400, damping: 30 }}
-              className="rounded-lg p-1.5 text-center flex flex-col items-center justify-center"
-              style={{ background: 'var(--gradient-primary)' }}
+              transition={{ delay: i * 0.07, type: 'spring', stiffness: 380, damping: 28 }}
+              className="relative overflow-hidden rounded-2xl p-3.5 flex flex-col items-start justify-center min-h-[78px] shadow-[0_8px_24px_-8px_hsl(224_71%_37%/0.35)]"
+              style={{ background: 'linear-gradient(135deg, hsl(var(--pickme-blue)) 0%, hsl(var(--pickme-blue-dark)) 100%)' }}
             >
-              <stat.icon className="h-3 w-3 text-primary-foreground/80 mb-0.5" />
-              <p className="text-sm font-extrabold tabular-nums text-primary-foreground leading-tight">{stat.value}</p>
-              <p className="text-[8px] text-primary-foreground/70 font-medium">{stat.label}</p>
+              <div className="absolute -top-6 -right-6 w-20 h-20 rounded-full bg-white/10 blur-2xl" aria-hidden />
+              <div className="relative flex items-center gap-1.5 mb-1">
+                <stat.icon className={`h-3.5 w-3.5 ${stat.accent}`} />
+                <p className="text-[10px] uppercase tracking-wider font-bold text-primary-foreground/70">{stat.label}</p>
+              </div>
+              <p className="relative text-lg font-black tabular-nums text-primary-foreground leading-none">{stat.value}</p>
             </motion.div>
           ))}
         </div>
