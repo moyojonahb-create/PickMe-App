@@ -719,19 +719,24 @@ export default function DriverDashboard() {
 
   if (authLoading || loading) {
     return (
-      <div className="flex flex-col h-[100dvh] bg-background">
-        <div className="shrink-0 bg-background/95 backdrop-blur-lg border-b border-border/60 px-5 py-3.5">
+      <div className="flex flex-col h-[100dvh] bg-gradient-to-b from-primary/[0.04] via-background to-background">
+        <div className="shrink-0 backdrop-blur-xl bg-background/80 border-b border-border/40 px-5 py-3.5">
           <div className="flex items-center justify-between max-w-lg mx-auto">
-            <div className="w-11 h-11 rounded-2xl bg-muted animate-pulse" />
-            <div className="h-5 w-36 rounded bg-muted animate-pulse" />
-            <div className="w-11 h-11 rounded-2xl bg-muted animate-pulse" />
+            <div className="w-11 h-11 rounded-2xl bg-primary/10 animate-pulse" />
+            <div className="h-5 w-40 rounded-full bg-primary/10 animate-pulse" />
+            <div className="w-11 h-11 rounded-2xl bg-primary/10 animate-pulse" />
           </div>
         </div>
-        <div className="flex-1 bg-muted/30 animate-pulse" />
-        <div className="p-4 space-y-3">
-          <div className="h-14 rounded-2xl bg-muted animate-pulse" />
-          <div className="h-20 rounded-2xl bg-muted animate-pulse" />
-          <div className="h-14 rounded-2xl bg-muted animate-pulse w-2/3" />
+        <div className="max-w-lg w-full mx-auto p-5 space-y-4">
+          <div className="grid grid-cols-3 gap-2">
+            {[0,1,2].map(i => (
+              <div key={i} className="h-20 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 animate-pulse" />
+            ))}
+          </div>
+          <div className="h-32 rounded-3xl bg-primary/5 animate-pulse" />
+          <div className="h-24 rounded-3xl bg-primary/5 animate-pulse" />
+          <div className="h-24 rounded-3xl bg-primary/5 animate-pulse" />
+          <div className="h-64 rounded-3xl bg-primary/5 animate-pulse" />
         </div>
       </div>
     );
