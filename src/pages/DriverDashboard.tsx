@@ -845,7 +845,10 @@ export default function DriverDashboard() {
   }
 
   return (
-    <div className="flex flex-col h-[100dvh] bg-background">
+    <div className="flex flex-col h-[100dvh] bg-gradient-to-b from-primary/[0.04] via-background to-background">
+      {/* Ambient glow */}
+      <div className="pointer-events-none fixed top-0 left-1/2 -translate-x-1/2 w-[520px] h-[280px] bg-primary/10 rounded-full blur-[120px] -z-0" aria-hidden />
+
       {/* Selfie Verification */}
       <DriverSelfieCheck
         open={selfieCheckOpen}
