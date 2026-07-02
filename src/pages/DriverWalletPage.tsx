@@ -230,48 +230,57 @@ export default function DriverWalletPage() {
         <WithdrawalModal isOpen={showWithdraw} onClose={() => setShowWithdraw(false)} balance={balance} onSuccess={load} />
         <TransferMoneyModal isOpen={showTransfer} onClose={() => setShowTransfer(false)} balance={balance} onSuccess={load} />
 
-        {/* Tabs */}
-        <div className="flex gap-1 bg-muted/50 rounded-xl p-1">
-          <button
-            onClick={() => setTab('earnings')}
-            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-colors ${tab === 'earnings' ? 'bg-background shadow-sm' : 'text-muted-foreground'}`}
-          >
-            Earnings ({earnings.length})
-          </button>
-          <button
-            onClick={() => setTab('deposits')}
-            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-colors ${tab === 'deposits' ? 'bg-background shadow-sm' : 'text-muted-foreground'}`}
-          >
-            Deposits ({deposits.length})
-          </button>
-          <button
-            onClick={() => setTab('withdrawals')}
-            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-colors ${tab === 'withdrawals' ? 'bg-background shadow-sm' : 'text-muted-foreground'}`}
-          >
-            Withdrawals ({withdrawals.length})
-          </button>
+        {/* Tabs — glass pills */}
+        <div className="flex gap-1 glass-card rounded-2xl p-1 border border-primary/10">
+          {([
+            { key: 'earnings', label: 'Earnings', count: earnings.length },
+            { key: 'deposits', label: 'Deposits', count: deposits.length },
+            { key: 'withdrawals', label: 'Withdrawals', count: withdrawals.length },
+          ] as const).map(t => (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className={`flex-1 py-2.5 text-[11px] font-black rounded-xl transition-all active:scale-95 ${
+                tab === t.key
+                  ? 'text-primary-foreground shadow-[0_4px_14px_-4px_hsl(224_71%_37%/0.5)]'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+              style={tab === t.key ? { background: 'linear-gradient(135deg, hsl(var(--pickme-blue)) 0%, hsl(var(--pickme-blue-dark)) 100%)' } : undefined}
+            >
+              {t.label} <span className={`ml-0.5 tabular-nums ${tab === t.key ? 'text-primary-foreground/80' : ''}`}>({t.count})</span>
+            </button>
+          ))}
         </div>
 
         {/* Earnings History */}
         {tab === 'earnings' && (
-          <div className="space-y-2">
+          <div className="space-y-2 animate-fade-in">
             {earnings.length === 0 && !loading && (
-              <div className="bg-card border rounded-xl p-6 text-center text-sm text-muted-foreground">
-                No completed rides yet. Earnings appear here automatically.
+              <div className="glass-card border border-primary/10 rounded-2xl p-8 text-center">
+                <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center mx-auto mb-3">
+                  <TrendingUp className="h-5 w-5 text-emerald-600" />
+                </div>
+                <p className="font-bold text-sm text-foreground">No earnings yet</p>
+                <p className="text-xs text-muted-foreground mt-1">Complete a ride — earnings appear here automatically.</p>
               </div>
             )}
             {earnings.map((e) => (
-              <div key={e.id} className="bg-card rounded-xl p-3 border">
+              <div key={e.id} className="glass-card rounded-2xl p-3.5 border border-primary/10 active:scale-[0.99] transition-transform">
                 <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="font-bold text-sm">+${Number(e.driver_earnings).toFixed(2)}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {format(new Date(e.created_at), 'dd MMM yyyy, HH:mm')}
+                  <div className="min-w-0 flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-emerald-500/10 flex items-center justify-center shrink-0">
+                      <ArrowDownLeft className="h-4 w-4 text-emerald-600" />
+                    </div>
+                    <div>
+                      <div className="font-black text-sm text-emerald-600 tabular-nums">+${Number(e.driver_earnings).toFixed(2)}</div>
+                      <div className="text-[11px] text-muted-foreground">
+                        {format(new Date(e.created_at), 'dd MMM yyyy, HH:mm')}
+                      </div>
                     </div>
                   </div>
                   <div className="text-right shrink-0">
-                    <div className="text-[10px] text-muted-foreground">Fare ${Number(e.fare_amount).toFixed(2)}</div>
-                    <div className="text-[10px] text-amber-600">−${Number(e.platform_fee).toFixed(2)} (15%)</div>
+                    <div className="text-[10px] text-muted-foreground tabular-nums">Fare ${Number(e.fare_amount).toFixed(2)}</div>
+                    <div className="text-[10px] text-destructive font-semibold tabular-nums">−${Number(e.platform_fee).toFixed(2)} · 15%</div>
                   </div>
                 </div>
               </div>
@@ -281,22 +290,35 @@ export default function DriverWalletPage() {
 
         {/* Deposit History */}
         {tab === 'deposits' && (
-          <div className="space-y-2">
+          <div className="space-y-2 animate-fade-in">
             {deposits.length === 0 && !loading && (
-              <div className="bg-card border rounded-xl p-6 text-center text-sm text-muted-foreground">
-                No deposits yet.
+              <div className="glass-card border border-primary/10 rounded-2xl p-8 text-center">
+                <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-3">
+                  <Plus className="h-5 w-5 text-primary" />
+                </div>
+                <p className="font-bold text-sm text-foreground">No deposits yet</p>
+                <p className="text-xs text-muted-foreground mt-1">Top up your wallet to keep driving.</p>
               </div>
             )}
             {deposits.map((d) => (
-              <div key={d.id} className="bg-card rounded-xl p-3 border flex items-center justify-between">
-                <div>
-                  <div className="font-bold text-sm">${Number(d.amount_usd).toFixed(2)}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {format(new Date(d.created_at), 'dd MMM yyyy, HH:mm')}
+              <div key={d.id} className="glass-card rounded-2xl p-3.5 border border-primary/10 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                    <Plus className="h-4 w-4 text-primary" />
                   </div>
-                  <div className="text-xs text-muted-foreground">{d.ecocash_reference}</div>
+                  <div className="min-w-0">
+                    <div className="font-black text-sm tabular-nums">${Number(d.amount_usd).toFixed(2)}</div>
+                    <div className="text-[11px] text-muted-foreground">
+                      {format(new Date(d.created_at), 'dd MMM yyyy, HH:mm')}
+                    </div>
+                    <div className="text-[10px] text-muted-foreground/80 truncate">{d.ecocash_reference}</div>
+                  </div>
                 </div>
-                <span className={`text-xs font-bold capitalize ${statusColor(d.status)}`}>{d.status}</span>
+                <span className={`text-[11px] font-black capitalize px-2.5 py-1 rounded-full ${
+                  d.status === 'approved' ? 'bg-emerald-500/10 text-emerald-600' :
+                  d.status === 'rejected' ? 'bg-destructive/10 text-destructive' :
+                  'bg-amber-500/10 text-amber-600'
+                }`}>{d.status}</span>
               </div>
             ))}
           </div>
@@ -304,35 +326,54 @@ export default function DriverWalletPage() {
 
         {/* Withdrawal History */}
         {tab === 'withdrawals' && (
-          <div className="space-y-2">
+          <div className="space-y-2 animate-fade-in">
             {withdrawals.length === 0 && !loading && (
-              <div className="bg-card border rounded-xl p-6 text-center text-sm text-muted-foreground">
-                No withdrawals yet. Tap “Withdraw” to request one.
+              <div className="glass-card border border-primary/10 rounded-2xl p-8 text-center">
+                <div className="w-12 h-12 rounded-2xl bg-destructive/10 flex items-center justify-center mx-auto mb-3">
+                  <ArrowUpRight className="h-5 w-5 text-destructive" />
+                </div>
+                <p className="font-bold text-sm text-foreground">No withdrawals yet</p>
+                <p className="text-xs text-muted-foreground mt-1">Tap "Withdraw" once your balance reaches $5.</p>
               </div>
             )}
             {withdrawals.map((w) => (
-              <div key={w.id} className="bg-card rounded-xl p-3 border">
+              <div key={w.id} className="glass-card rounded-2xl p-3.5 border border-primary/10">
                 <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="font-bold text-sm">−${Number(w.amount_usd).toFixed(2)}</div>
-                    <div className="text-xs text-muted-foreground capitalize">
-                      {w.method} • {w.destination}
+                  <div className="min-w-0 flex items-start gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-destructive/10 flex items-center justify-center shrink-0">
+                      <ArrowUpRight className="h-4 w-4 text-destructive" />
                     </div>
-                    <div className="text-[11px] text-muted-foreground mt-0.5">
-                      {format(new Date(w.created_at), 'dd MMM yyyy, HH:mm')}
+                    <div className="min-w-0">
+                      <div className="font-black text-sm tabular-nums">−${Number(w.amount_usd).toFixed(2)}</div>
+                      <div className="text-[11px] text-muted-foreground capitalize">
+                        {w.method} • {w.destination}
+                      </div>
+                      <div className="text-[10px] text-muted-foreground/80 mt-0.5">
+                        {format(new Date(w.created_at), 'dd MMM yyyy, HH:mm')}
+                      </div>
+                      {w.admin_note && (
+                        <div className="text-[10px] text-muted-foreground mt-1 italic">"{w.admin_note}"</div>
+                      )}
                     </div>
-                    {w.admin_note && (
-                      <div className="text-[11px] text-muted-foreground mt-1 italic">“{w.admin_note}”</div>
-                    )}
                   </div>
-                  <span className={`text-xs font-bold capitalize ${statusColor(w.status)}`}>{w.status}</span>
+                  <span className={`text-[11px] font-black capitalize px-2.5 py-1 rounded-full ${
+                    w.status === 'approved' ? 'bg-emerald-500/10 text-emerald-600' :
+                    w.status === 'rejected' ? 'bg-destructive/10 text-destructive' :
+                    'bg-amber-500/10 text-amber-600'
+                  }`}>{w.status}</span>
                 </div>
               </div>
             ))}
           </div>
         )}
 
-        {loading && <div className="text-center text-muted-foreground text-sm py-4">Loading…</div>}
+        {loading && (
+          <div className="flex items-center justify-center gap-2 py-4 text-muted-foreground">
+            <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+            <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse [animation-delay:120ms]" />
+            <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse [animation-delay:240ms]" />
+          </div>
+        )}
       </div>
     </div>
   );
