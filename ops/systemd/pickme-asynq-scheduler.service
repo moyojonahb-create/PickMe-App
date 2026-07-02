@@ -1,0 +1,29 @@
+[Unit]
+Description=PickMe Asynq Scheduler
+After=network-online.target redis.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pickme
+Group=pickme
+WorkingDirectory=/opt/pickme/backend
+EnvironmentFile=/etc/pickme/backend.env
+Environment=APP_ENV=production
+Environment=ASYNQ_ENABLED=true
+Environment=ASYNQ_CONCURRENCY=2
+ExecStart=/opt/pickme/bin/pickme-scheduler
+Restart=always
+RestartSec=5
+KillSignal=SIGTERM
+TimeoutStopSec=45
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/var/log/pickme /var/lib/pickme
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

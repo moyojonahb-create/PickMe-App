@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { AlertTriangle, MessageSquare, DollarSign, Clock, Navigation, Shield, Send, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/hooks/useAuth';
+import { submitDispute } from '@/lib/businessApi';
 import { toast } from 'sonner';
 import {
   Dialog,
@@ -38,15 +38,12 @@ export default function DisputeForm({ rideId, role = 'rider' }: DisputeFormProps
     setSubmitting(true);
 
     try {
-      const { error } = await supabase.from('disputes').insert({
+      await submitDispute({
         ride_id: rideId,
-        reporter_id: user.id,
         reporter_role: role,
         category,
         description: description.trim(),
       });
-
-      if (error) throw error;
       toast.success('Dispute submitted. Our team will review it shortly.');
       setOpen(false);
       setCategory(null);

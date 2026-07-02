@@ -10,6 +10,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 
 	"pickme-backend/internal/middleware"
+	"pickme-backend/internal/observability"
 )
 
 type FlowService interface {
@@ -148,11 +149,18 @@ type OperationsReportReader interface {
 
 func RegisterOperationRoutes(app fiber.Router, service FlowService, authorizations RideAuthorizationService, reconciliation WalletReconciliationService, pilot WalletPilotService, recovery FinancialRecoveryService, reports OperationsReportReader, requireAuth fiber.Handler) {
 	app.Post("/api/wallets/deposits", requireAuth, requirePilot(pilot, PilotRoleRider), createDepositHandler(service))
+	app.Get("/api/wallets/deposits", requireAuth, frontendWalletDepositsHandler(reports))
 	app.Get("/api/wallets/deposits/:id", requireAuth, depositDetailHandler(reports))
 	app.Get("/api/wallets/me", requireAuth, walletStateHandler(reports))
 	app.Get("/api/wallets/me/transactions", requireAuth, walletTransactionsHandler(reports))
 	app.Post("/api/wallets/withdrawals", requireAuth, requirePilot(pilot, PilotRoleDriver), createWithdrawalHandler(service))
 	app.Get("/api/wallets/withdrawals/:id", requireAuth, withdrawalDetailHandler(reports))
+	app.Post("/api/wallets/transfer", requireAuth, requirePilot(pilot, PilotRoleRider), frontendTransferHandler(service))
+	app.Post("/api/wallets/pay", requireAuth, requirePilot(pilot, PilotRoleRider), frontendPayRideHandler(service))
+	app.Post("/api/wallets/pin", requireAuth, frontendPINHandler(service))
+	app.Get("/api/wallets/lookup-user", requireAuth, frontendLookupUserGetHandler(service))
+	app.Get("/api/wallets/driver/summary", requireAuth, frontendDriverSummaryHandler(service))
+	app.Get("/api/wallets/driver/earnings", requireAuth, frontendDriverEarningsHandler(service))
 	app.Post("/api/wallets/authorize-ride", requireAuth, requirePilot(pilot, PilotRoleRider), authorizeRideHandler(authorizations))
 	app.Post("/api/wallets/capture-ride", requireAuth, middleware.AdminOnly(), captureRideHandler(authorizations))
 	app.Post("/api/wallets/release-ride", requireAuth, middleware.AdminOnly(), releaseRideHandler(authorizations))
@@ -174,12 +182,17 @@ func RegisterOperationRoutes(app fiber.Router, service FlowService, authorizatio
 	app.Get("/api/wallet/driver/earnings", requireAuth, frontendDriverEarningsHandler(service))
 	app.Get("/api/rides/:tripId/settlement", requireAuth, frontendRideSettlementHandler(reports))
 
+	app.Get("/admin/wallets/deposits", requireAuth, middleware.AdminOnly(), pendingDepositsHandler(reports))
 	app.Get("/admin/wallets/deposits/pending", requireAuth, middleware.AdminOnly(), pendingDepositsHandler(reports))
 	app.Post("/admin/wallets/deposits/:id/approve", requireAuth, middleware.AdminOnly(), approveDepositHandler(service))
 	app.Post("/admin/wallets/deposits/:id/reject", requireAuth, middleware.AdminOnly(), rejectDepositHandler(service))
+	app.Get("/admin/wallets/withdrawals", requireAuth, middleware.AdminOnly(), pendingWithdrawalsHandler(reports))
 	app.Get("/admin/wallets/withdrawals/pending", requireAuth, middleware.AdminOnly(), pendingWithdrawalsHandler(reports))
 	app.Post("/admin/wallets/withdrawals/:id/approve", requireAuth, middleware.AdminOnly(), approveWithdrawalHandler(service))
 	app.Post("/admin/wallets/withdrawals/:id/reject", requireAuth, middleware.AdminOnly(), rejectWithdrawalHandler(service))
+	app.Post("/admin/wallets/users/:userId/lock", requireAuth, middleware.AdminOnly(), adminLockWalletHandler(reports))
+	app.Post("/admin/wallets/users/:userId/unlock", requireAuth, middleware.AdminOnly(), adminUnlockWalletHandler(reports))
+	app.Post("/admin/wallets/transactions/:txId/reverse", requireAuth, middleware.AdminOnly(), adminReverseTransactionHandler())
 	app.Get("/admin/wallets/admin-actions", requireAuth, middleware.AdminOnly(), adminActionsHandler(reports))
 	app.Get("/admin/wallets/reconciliation/summary", requireAuth, middleware.AdminOnly(), reconciliationSummaryHandler(reports))
 	app.Get("/admin/wallets/reconciliation/drift", requireAuth, middleware.AdminOnly(), reconciliationDriftHandler(reports))
@@ -194,6 +207,15 @@ func RegisterOperationRoutes(app fiber.Router, service FlowService, authorizatio
 	app.Post("/admin/wallets/pilot/users/:userId/disable", requireAuth, middleware.AdminOnly(), pilotUserControlHandler(pilot, PilotStatusDisabled))
 	app.Post("/admin/wallets/pilot/users/:userId/suspend", requireAuth, middleware.AdminOnly(), pilotUserControlHandler(pilot, PilotStatusSuspended))
 	app.Post("/admin/wallets/pilot/users/:userId/remove", requireAuth, middleware.AdminOnly(), pilotUserControlHandler(pilot, PilotStatusRemoved))
+	app.Get("/admin/finance/wallet-dashboard", requireAuth, middleware.AdminOnly(), adminWalletDashboardHandler(reports))
+	app.Get("/admin/finance/earnings", requireAuth, middleware.AdminOnly(), adminFinanceEarningsHandler(reports))
+	app.Get("/admin/finance/ledger", requireAuth, middleware.AdminOnly(), adminFinanceLedgerHandler(reports))
+	app.Get("/admin/finance/settlements/summary", requireAuth, middleware.AdminOnly(), adminFinanceSettlementsSummaryHandler(reports))
+	app.Get("/admin/finance/health", requireAuth, middleware.AdminOnly(), adminFinanceHealthHandler(reports))
+	app.Post("/admin/finance/fx-rate", requireAuth, middleware.AdminOnly(), adminSetFXRateHandler(reports))
+	app.Post("/admin/finance/fraud-flags", requireAuth, middleware.AdminOnly(), adminCreateFraudFlagHandler(reports))
+	app.Post("/admin/finance/fraud-flags/:id/resolve", requireAuth, middleware.AdminOnly(), adminResolveFraudFlagHandler(reports))
+	app.Post("/admin/finance/low-balance-reminders", requireAuth, middleware.AdminOnly(), adminLowBalanceRemindersHandler())
 	app.Get("/admin/finance/hardening/summary", requireAuth, middleware.AdminOnly(), financialHardeningSummaryHandler(reports))
 	app.Get("/admin/finance/recovery/summary", requireAuth, middleware.AdminOnly(), financialRecoverySummaryHandler(reports))
 	app.Get("/admin/finance/refunds", requireAuth, middleware.AdminOnly(), refundIntentsHandler(reports))
@@ -367,6 +389,12 @@ func createDepositHandler(service FlowService) fiber.Handler {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid amount"})
 		}
 		result, err := service.CreateDeposit(middleware.RequestContext(c), DepositRequest{UserID: userID, WalletAccountType: body.WalletAccountType, AmountMinor: amountMinor, Currency: body.Currency, Method: body.Method, City: body.City, IdempotencyKey: body.IdempotencyKey})
+		if err == nil {
+			observability.RecordWalletDeposit()
+		} else {
+			observability.RecordWalletFailure("deposit")
+			observability.CaptureError(err)
+		}
 		return walletResult(c, fiber.StatusCreated, result, err)
 	}
 }
@@ -393,6 +421,12 @@ func createWithdrawalHandler(service FlowService) fiber.Handler {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid amount"})
 		}
 		result, err := service.CreateWithdrawal(middleware.RequestContext(c), WithdrawalCreateRequest{DriverID: driverID, AmountMinor: amountMinor, Currency: body.Currency, Method: body.Method, City: body.City, DestinationReference: body.DestinationReference, IdempotencyKey: body.IdempotencyKey})
+		if err == nil {
+			observability.RecordWalletWithdrawal()
+		} else {
+			observability.RecordWalletFailure("withdrawal")
+			observability.CaptureError(err)
+		}
 		return walletResult(c, fiber.StatusCreated, result, err)
 	}
 }
@@ -425,8 +459,11 @@ func frontendDepositHandler(service FlowService) fiber.Handler {
 		key := defaultString(body.IdempotencyKey, "frontend-deposit:"+userID+":"+body.EcoCashReference)
 		result, err := service.CreateDeposit(middleware.RequestContext(c), DepositRequest{UserID: userID, WalletAccountType: AccountTypeRiderWallet, AmountMinor: amountMinor, Currency: CurrencyUSD, Method: ManualMethodEcoCash, IdempotencyKey: key})
 		if err != nil {
+			observability.RecordWalletFailure("deposit")
+			observability.CaptureError(err)
 			return walletResult(c, fiber.StatusCreated, nil, err)
 		}
+		observability.RecordWalletDeposit()
 		return c.Status(fiber.StatusCreated).JSON(fiber.Map{"ok": true, "id": result.ID})
 	}
 }
@@ -455,8 +492,11 @@ func frontendRiderDepositHandler(service FlowService) fiber.Handler {
 		key := defaultString(body.IdempotencyKey, "frontend-rider-deposit:"+userID+":"+body.Reference)
 		result, err := service.CreateDeposit(middleware.RequestContext(c), DepositRequest{UserID: userID, WalletAccountType: AccountTypeRiderWallet, AmountMinor: amountMinor, Currency: CurrencyUSD, Method: frontendManualMethod(body.PaymentMethod), IdempotencyKey: key})
 		if err != nil {
+			observability.RecordWalletFailure("deposit")
+			observability.CaptureError(err)
 			return walletResult(c, fiber.StatusCreated, nil, err)
 		}
+		observability.RecordWalletDeposit()
 		return c.Status(fiber.StatusCreated).JSON(fiber.Map{"ok": true, "id": result.ID})
 	}
 }
@@ -484,8 +524,11 @@ func frontendWithdrawalHandler(service FlowService) fiber.Handler {
 		key := defaultString(body.IdempotencyKey, "frontend-withdrawal:"+driverID+":"+body.Destination+":"+MinorDecimalString(amountMinor, CurrencyUSD))
 		result, err := service.CreateWithdrawal(middleware.RequestContext(c), WithdrawalCreateRequest{DriverID: driverID, AmountMinor: amountMinor, Currency: CurrencyUSD, Method: frontendManualMethod(body.Method), DestinationReference: body.Destination, IdempotencyKey: key})
 		if err != nil {
+			observability.RecordWalletFailure("withdrawal")
+			observability.CaptureError(err)
 			return walletResult(c, fiber.StatusCreated, nil, err)
 		}
+		observability.RecordWalletWithdrawal()
 		return c.Status(fiber.StatusCreated).JSON(fiber.Map{"ok": true, "id": result.ID})
 	}
 }
@@ -512,14 +555,20 @@ func frontendTransferHandler(service FlowService) fiber.Handler {
 		key := defaultString(body.IdempotencyKey, "frontend-transfer:"+senderID+":"+body.ReceiverID+":"+MinorDecimalString(amountMinor, CurrencyUSD))
 		result, err := service.CreateTransfer(middleware.RequestContext(c), TransferRequest{SenderID: senderID, ReceiverID: body.ReceiverID, AmountMinor: amountMinor, Currency: CurrencyUSD, Note: body.Note, IdempotencyKey: key})
 		if err != nil {
+			observability.RecordWalletFailure("transfer")
+			observability.CaptureError(err)
 			return walletResult(c, fiber.StatusOK, nil, err)
 		}
+		observability.RecordWalletTransfer()
 		return c.JSON(fiber.Map{"ok": true, "amount": amountJSON(result.AmountMinor), "reference": result.Reference})
 	}
 }
 
 func frontendPayRideHandler(service FlowService) fiber.Handler {
 	return func(c *fiber.Ctx) error {
+		ctx, span := observability.StartSpan(middleware.RequestContext(c), "Wallet Settlement")
+		defer span.End()
+
 		riderID, ok := middleware.AuthenticatedUserID(c)
 		if !ok {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Authentication required"})
@@ -531,8 +580,10 @@ func frontendPayRideHandler(service FlowService) fiber.Handler {
 		if err := c.BodyParser(&body); err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
 		}
-		result, err := service.PayRide(middleware.RequestContext(c), WalletPayRequest{RiderID: riderID, RideID: body.RideID, IdempotencyKey: defaultString(body.IdempotencyKey, "frontend-pay-ride:"+body.RideID)})
+		result, err := service.PayRide(ctx, WalletPayRequest{RiderID: riderID, RideID: body.RideID, IdempotencyKey: defaultString(body.IdempotencyKey, "frontend-pay-ride:"+body.RideID)})
 		if err != nil {
+			observability.RecordWalletFailure("settlement")
+			observability.CaptureError(err)
 			return walletResult(c, fiber.StatusOK, nil, err)
 		}
 		return c.JSON(fiber.Map{"ok": true, "amount": amountJSON(result.AmountMinor), "already_paid": result.AlreadyPaid, "reference": result.Reference})
@@ -649,6 +700,310 @@ func frontendRideSettlementHandler(reports OperationsReportReader) fiber.Handler
 		}
 		return c.JSON(frontendMoneyMap(result))
 	}
+}
+
+func adminWalletDashboardHandler(reports OperationsReportReader) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		ctx := middleware.RequestContext(c)
+		limit := limitParam(c, 50)
+		deposits, err := reports.PendingDeposits(ctx, limit)
+		if err != nil {
+			return walletResult(c, fiber.StatusOK, nil, err)
+		}
+		withdrawals, err := reports.PendingWithdrawals(ctx, limit)
+		if err != nil {
+			return walletResult(c, fiber.StatusOK, nil, err)
+		}
+		flags := []map[string]any{}
+		transactions := []map[string]any{}
+		lockedWallets := []map[string]any{}
+		if db, ok := reportsDB(reports); ok {
+			flags, _ = rawRowsToMaps(queryJSONRows(ctx, db, `
+				SELECT json_build_object(
+					'id', id,
+					'user_id', user_id,
+					'flag_type', flag_type,
+					'severity', severity,
+					'resolved', resolved,
+					'created_at', created_at
+				)
+				FROM public.fraud_flags
+				ORDER BY created_at DESC
+				LIMIT $1
+			`, limit))
+			transactions, _ = rawRowsToMaps(queryJSONRows(ctx, db, `
+				SELECT json_build_object(
+					'id', id,
+					'transaction_type', transaction_type,
+					'status', status,
+					'total_amount', total_amount,
+					'created_at', created_at
+				)
+				FROM public.wallet_transactions
+				ORDER BY created_at DESC
+				LIMIT $1
+			`, limit))
+			lockedWallets, _ = rawRowsToMaps(queryJSONRows(ctx, db, `
+				SELECT json_build_object(
+					'id', id,
+					'user_id', user_id,
+					'balance', balance,
+					'is_locked', is_locked,
+					'locked_reason', locked_reason,
+					'locked_at', locked_at,
+					'created_at', created_at,
+					'updated_at', updated_at
+				)
+				FROM public.wallets
+				WHERE COALESCE(is_locked, false) = true
+				ORDER BY locked_at DESC NULLS LAST
+				LIMIT $1
+			`, limit))
+		}
+		return c.JSON(fiber.Map{
+			"transactions":   frontendMoneyRows(transactions),
+			"deposits":       frontendMoneyRows(deposits),
+			"withdrawals":    frontendMoneyRows(withdrawals),
+			"flags":          flags,
+			"failed_rides":   []map[string]any{},
+			"locked_wallets": frontendMoneyRows(lockedWallets),
+		})
+	}
+}
+
+func adminFinanceEarningsHandler(reports OperationsReportReader) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		db, ok := reportsDB(reports)
+		if !ok {
+			return c.JSON(fiber.Map{"earnings": []map[string]any{}})
+		}
+		rows, err := rawRowsToMaps(queryJSONRows(middleware.RequestContext(c), db, `
+			SELECT json_build_object(
+				'id', id,
+				'ride_id', ride_id,
+				'driver_id', driver_id,
+				'fare_amount', fare_amount,
+				'platform_fee', platform_fee,
+				'driver_earnings', driver_earnings,
+				'created_at', created_at
+			)
+			FROM public.admin_earnings
+			ORDER BY created_at DESC
+			LIMIT $1
+		`, limitParam(c, 100)))
+		if err != nil {
+			return walletResult(c, fiber.StatusOK, nil, err)
+		}
+		return c.JSON(fiber.Map{"earnings": frontendMoneyRows(rows)})
+	}
+}
+
+func adminFinanceLedgerHandler(reports OperationsReportReader) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		db, ok := reportsDB(reports)
+		if !ok {
+			return c.JSON(fiber.Map{"ledger": []map[string]any{}})
+		}
+		rows, err := rawRowsToMaps(queryJSONRows(middleware.RequestContext(c), db, `
+			SELECT json_build_object(
+				'id', id,
+				'trip_id', trip_id,
+				'driver_id', driver_id,
+				'passenger_id', passenger_id,
+				'amount', amount,
+				'currency', currency,
+				'status', status,
+				'to_account_id', to_account_id,
+				'created_at', created_at
+			)
+			FROM public.platform_ledger
+			ORDER BY created_at DESC
+			LIMIT $1
+		`, limitParam(c, 200)))
+		if err != nil {
+			return walletResult(c, fiber.StatusOK, nil, err)
+		}
+		return c.JSON(fiber.Map{"ledger": frontendMoneyRows(rows)})
+	}
+}
+
+func adminFinanceSettlementsSummaryHandler(reports OperationsReportReader) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		db, ok := reportsDB(reports)
+		if !ok {
+			return c.JSON(fiber.Map{"summary": fiber.Map{"totalSettlements": 0, "totalAmount": 0, "lastSettlementDate": nil}})
+		}
+		raw, err := queryJSON(middleware.RequestContext(c), db, `
+			SELECT json_build_object(
+				'totalSettlements', COUNT(*),
+				'totalAmount', COALESCE(SUM(fare), 0),
+				'lastSettlementDate', MAX(created_at)
+			)
+			FROM public.settlement_records
+		`)
+		if err != nil {
+			return walletResult(c, fiber.StatusOK, nil, err)
+		}
+		result, err := rawToMap(raw)
+		if err != nil {
+			return walletResult(c, fiber.StatusOK, nil, err)
+		}
+		return c.JSON(fiber.Map{"summary": result})
+	}
+}
+
+func adminFinanceHealthHandler(reports OperationsReportReader) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		ctx := middleware.RequestContext(c)
+		deposits, _ := reports.PendingDeposits(ctx, 100)
+		withdrawals, _ := reports.PendingWithdrawals(ctx, 100)
+		return c.JSON(fiber.Map{
+			"health": fiber.Map{
+				"low_balance_drivers":             0,
+				"pending_driver_deposits_over_2h": len(deposits),
+				"pending_rider_deposits_over_2h":  len(deposits),
+				"pending_withdrawals":             len(withdrawals),
+			},
+		})
+	}
+}
+
+func adminCreateFraudFlagHandler(reports OperationsReportReader) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		db, ok := reportsDB(reports)
+		if !ok {
+			return c.JSON(fiber.Map{"ok": true, "stored": false})
+		}
+		var body struct {
+			UserID   string `json:"user_id"`
+			Reason   string `json:"reason"`
+			Severity string `json:"severity"`
+		}
+		if err := c.BodyParser(&body); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
+		}
+		if body.UserID == "" || body.Reason == "" {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "user_id and reason are required"})
+		}
+		severity := defaultString(body.Severity, "medium")
+		_, err := db.Exec(middleware.RequestContext(c), `
+			INSERT INTO public.fraud_flags (user_id, flag_type, severity, details)
+			VALUES ($1, 'admin_flag', $2, jsonb_build_object('reason', $3))
+		`, body.UserID, severity, body.Reason)
+		if err != nil {
+			return walletResult(c, fiber.StatusOK, nil, err)
+		}
+		return c.JSON(fiber.Map{"ok": true})
+	}
+}
+
+func adminResolveFraudFlagHandler(reports OperationsReportReader) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		db, ok := reportsDB(reports)
+		if !ok {
+			return c.JSON(fiber.Map{"ok": true, "stored": false})
+		}
+		_, err := db.Exec(middleware.RequestContext(c), `
+			UPDATE public.fraud_flags
+			SET resolved = true, resolved_at = NOW()
+			WHERE id = $1
+		`, c.Params("id"))
+		if err != nil {
+			return walletResult(c, fiber.StatusOK, nil, err)
+		}
+		return c.JSON(fiber.Map{"ok": true})
+	}
+}
+
+func adminSetFXRateHandler(reports OperationsReportReader) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		db, ok := reportsDB(reports)
+		if !ok {
+			return c.JSON(fiber.Map{"ok": true, "stored": false})
+		}
+		adminID, _ := middleware.AuthenticatedUserID(c)
+		var body struct {
+			ZARPerUSD float64 `json:"zar_per_usd"`
+		}
+		if err := c.BodyParser(&body); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
+		}
+		if body.ZARPerUSD <= 0 {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "zar_per_usd must be positive"})
+		}
+		_, err := db.Exec(middleware.RequestContext(c), `
+			INSERT INTO public.fx_rates (zar_per_usd, effective_date, set_by)
+			VALUES ($1, NOW(), $2)
+		`, body.ZARPerUSD, adminID)
+		if err != nil {
+			return walletResult(c, fiber.StatusOK, nil, err)
+		}
+		return c.JSON(fiber.Map{"ok": true, "zar_per_usd": body.ZARPerUSD})
+	}
+}
+
+func adminLowBalanceRemindersHandler() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		return c.JSON(fiber.Map{"ok": true, "sent": 0})
+	}
+}
+
+func adminLockWalletHandler(reports OperationsReportReader) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		db, ok := reportsDB(reports)
+		if !ok {
+			return c.JSON(fiber.Map{"ok": true, "stored": false})
+		}
+		var body struct {
+			Reason string `json:"reason"`
+		}
+		_ = c.BodyParser(&body)
+		reason := defaultString(body.Reason, "admin lock")
+		_, err := db.Exec(middleware.RequestContext(c), `
+			UPDATE public.wallets
+			SET is_locked = true, locked_reason = $2, locked_at = NOW(), updated_at = NOW()
+			WHERE user_id = $1
+		`, c.Params("userId"), reason)
+		if err != nil {
+			return walletResult(c, fiber.StatusOK, nil, err)
+		}
+		return c.JSON(fiber.Map{"ok": true})
+	}
+}
+
+func adminUnlockWalletHandler(reports OperationsReportReader) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		db, ok := reportsDB(reports)
+		if !ok {
+			return c.JSON(fiber.Map{"ok": true, "stored": false})
+		}
+		_, err := db.Exec(middleware.RequestContext(c), `
+			UPDATE public.wallets
+			SET is_locked = false, locked_reason = NULL, locked_at = NULL, updated_at = NOW()
+			WHERE user_id = $1
+		`, c.Params("userId"))
+		if err != nil {
+			return walletResult(c, fiber.StatusOK, nil, err)
+		}
+		return c.JSON(fiber.Map{"ok": true})
+	}
+}
+
+func adminReverseTransactionHandler() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		return c.Status(fiber.StatusNotImplemented).JSON(fiber.Map{
+			"ok":    false,
+			"error": "transaction reversal must use the ledger-backed recovery workflow",
+		})
+	}
+}
+
+func reportsDB(reports OperationsReportReader) (DB, bool) {
+	postgres, ok := reports.(*PostgresReports)
+	if !ok || postgres == nil || postgres.db == nil {
+		return nil, false
+	}
+	return postgres.db, true
 }
 
 func approveDepositHandler(service FlowService) fiber.Handler {
@@ -1473,8 +1828,12 @@ func adminDecision(c *fiber.Ctx) AdminDecision {
 	adminID, _ := middleware.AuthenticatedUserID(c)
 	var body struct {
 		Reason string `json:"reason"`
+		Note   string `json:"note"`
 	}
 	_ = c.BodyParser(&body)
+	if body.Reason == "" {
+		body.Reason = body.Note
+	}
 	return AdminDecision{AdminUserID: adminID, TargetID: c.Params("id"), Reason: body.Reason}
 }
 

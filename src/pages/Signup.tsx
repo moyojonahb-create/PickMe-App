@@ -12,6 +12,7 @@ import { Loader2, ArrowLeft, RefreshCw, CheckCircle2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 import { lovable } from '@/integrations/lovable/index';
+import { updateMyProfile } from '@/lib/businessApi';
 
 const signupSchema = z.object({
   fullName: z.string().min(2, 'Full Name is required').max(100, 'Name too long'),
@@ -185,7 +186,7 @@ const Signup = () => {
       }
       const { data: authData } = await supabase.auth.getUser();
       if (authData?.user) {
-        await supabase.from('profiles').update({ phone: data.phone }).eq('user_id', authData.user.id);
+        await updateMyProfile({ phone: data.phone });
       }
       toast({ title: 'Account created!', description: 'Welcome to PickMe.' });
       navigate(next);

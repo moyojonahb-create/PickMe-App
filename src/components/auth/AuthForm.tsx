@@ -8,6 +8,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabaseClient';
 import { toast } from 'sonner';
 import { z } from 'zod';
+import { updateMyProfile } from '@/lib/businessApi';
 
 interface AuthFormProps {
   mode: 'login' | 'signup';
@@ -99,14 +100,11 @@ const AuthForm = ({ mode, onSwitchMode, onSuccess }: AuthFormProps) => {
   };
 
   // Update profile with phone and gender after signup
-  const updateProfileAfterSignup = async (userId: string, phoneNumber: string, userGender: string) => {
+  const updateProfileAfterSignup = async (_userId: string, phoneNumber: string, userGender: string) => {
     try {
       const updateData: Record<string, string> = { phone: phoneNumber };
       if (userGender) updateData.gender = userGender;
-      await supabase
-        .from('profiles')
-        .update(updateData as never)
-        .eq('user_id', userId);
+      await updateMyProfile(updateData);
     } catch (e) {
       console.warn('Could not update profile:', e);
     }

@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -78,6 +79,41 @@ func TestGlobalRateLimitRejectsAfterLimit(t *testing.T) {
 	}
 }
 
+func TestGlobalRateLimitUsesRedisStoreWhenEnabled(t *testing.T) {
+	app := fiber.New()
+	store := &fakeRateLimitStore{counts: map[string]int64{}}
+	app.Use(RequestID())
+	app.Use(GlobalRateLimit(RateLimitConfig{Max: 1, Window: time.Minute, Store: store, KeyPrefix: "test"}))
+	app.Get("/", func(c *fiber.Ctx) error {
+		return c.SendStatus(fiber.StatusNoContent)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.RemoteAddr = "198.51.100.8:1234"
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != fiber.StatusNoContent {
+		t.Fatalf("expected first request allowed, got %d", resp.StatusCode)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/", nil)
+	req.RemoteAddr = "198.51.100.8:1234"
+	resp, err = app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != fiber.StatusTooManyRequests {
+		t.Fatalf("expected redis-backed rate limit rejection, got %d", resp.StatusCode)
+	}
+	if len(store.counts) != 1 {
+		t.Fatalf("expected one redis rate limit key, got %d", len(store.counts))
+	}
+}
+
 func TestRequestTimeoutSetsUserContextDeadline(t *testing.T) {
 	app := fiber.New()
 	app.Use(RequestTimeout(time.Second))
@@ -96,4 +132,17 @@ func TestRequestTimeoutSetsUserContextDeadline(t *testing.T) {
 	if resp.StatusCode != fiber.StatusNoContent {
 		t.Fatalf("expected 204, got %d", resp.StatusCode)
 	}
+}
+
+type fakeRateLimitStore struct {
+	counts map[string]int64
+}
+
+func (s *fakeRateLimitStore) Enabled() bool {
+	return true
+}
+
+func (s *fakeRateLimitStore) IncrWithTTL(ctx context.Context, key string, ttl time.Duration) (int64, error) {
+	s.counts[key]++
+	return s.counts[key], nil
 }

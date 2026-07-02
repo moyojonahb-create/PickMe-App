@@ -13,6 +13,7 @@ import { supabase } from '@/lib/supabaseClient';
 import type { CodeFinding } from '@/lib/ramzCodeScan';
 import type { PatchResult } from '@/lib/ramzPatch';
 import { downloadPatchedFile } from '@/lib/ramzPatch';
+import { adminCreateRamzAudit } from '@/lib/businessApi';
 
 export type AuditAction = 'generated' | 'applied' | 'skipped' | 'reverted' | 'verified';
 
@@ -67,17 +68,13 @@ export async function logAudit(
     patched_content: extra.storeContent ? patch.patchedContent : null,
   };
 
-  const { data, error } = await supabase
-    .from('ramz_patch_audit')
-    .insert([row])
-    .select('id')
-    .maybeSingle();
-
-  if (error) {
+  try {
+    const data = await adminCreateRamzAudit(row);
+    return data?.id ?? null;
+  } catch (error) {
     console.error('ramz audit insert failed', error);
     return null;
   }
-  return data?.id ?? null;
 }
 
 export async function listRecentAudit(limit = 30): Promise<AuditEntry[]> {
@@ -168,7 +165,7 @@ export async function performRollback(entry: AuditEntry): Promise<void> {
 
   const { data: { user } } = await supabase.auth.getUser();
   if (user) {
-    await supabase.from('ramz_patch_audit').insert({
+    await adminCreateRamzAudit({
       admin_id: user.id,
       file_path: entry.file_path,
       finding_title: entry.finding_title,

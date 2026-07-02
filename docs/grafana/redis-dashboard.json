@@ -1,0 +1,21 @@
+{
+  "title": "PickMe Redis",
+  "schemaVersion": 39,
+  "version": 1,
+  "tags": ["pickme", "redis"],
+  "timezone": "browser",
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Redis operations",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "targets": [{"expr": "sum by (operation) (rate(redis_operations_total[5m]))"}]
+    },
+    {
+      "type": "timeseries",
+      "title": "Redis failures",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "targets": [{"expr": "sum by (operation) (rate(redis_failures_total[5m]))"}]
+    }
+  ]
+}

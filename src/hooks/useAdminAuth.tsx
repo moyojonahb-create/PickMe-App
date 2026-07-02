@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/hooks/useAuth';
+import { adminVerify } from '@/lib/businessApi';
 
 interface AdminAuthState {
   isAdmin: boolean;
@@ -49,23 +49,11 @@ export const useAdminAuth = () => {
       }
 
       try {
-        const response = await fetch(
-          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-api?action=verify_admin`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${session.access_token}`,
-            },
-            body: JSON.stringify({}),
-          }
-        );
-
         if (cancelled) return;
 
-        const data = await response.json();
+        const data = await adminVerify();
 
-        if (!response.ok || data?.error || data?.isAdmin !== true) {
+        if (data?.error || data?.isAdmin !== true) {
           cachedAdmin = { userId: user.id, isAdmin: false, ts: Date.now() };
           setState({ isAdmin: false, isLoading: false, error: 'Access denied' });
           navigateRef.current('/');

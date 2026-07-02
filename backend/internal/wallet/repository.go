@@ -2760,7 +2760,6 @@ func (r *PostgresRepository) GetProviderDepositByScopedIdempotency(ctx context.C
 		SELECT
 			id::text,
 			user_id::text,
-			amount,
 			amount_minor,
 			currency,
 			provider,
@@ -2813,7 +2812,6 @@ func (r *PostgresRepository) GetProviderDepositByProviderReference(ctx context.C
 		SELECT
 			id::text,
 			user_id::text,
-			amount,
 			amount_minor,
 			currency,
 			provider,
@@ -2864,7 +2862,6 @@ func (r *PostgresRepository) GetDepositRequestByIdempotencyKey(ctx context.Conte
 		SELECT
 			id::text,
 			user_id::text,
-			amount,
 			amount_minor,
 			currency,
 			provider,
@@ -3169,7 +3166,7 @@ func (r *PostgresRepository) GetDepositRequest(ctx context.Context, id string) (
 		SELECT
 			id::text,
 			user_id::text,
-			amount,
+			amount_minor,
 			currency,
 			provider,
 			payment_method,
@@ -3291,6 +3288,37 @@ func (r *PostgresRepository) GetWithdrawalRequest(ctx context.Context, id string
 		FROM public.withdrawal_requests
 		WHERE id = $1
 	`, id).Scan(
+		&withdrawal.ID,
+		&withdrawal.DriverID,
+		&withdrawal.WalletAccountID,
+		&withdrawal.AmountMinor,
+		&withdrawal.Currency,
+		&withdrawal.Provider,
+		&withdrawal.DestinationReference,
+		&withdrawal.Status,
+		&withdrawal.IdempotencyKey,
+		&withdrawal.RequestedAt,
+	)
+	return withdrawal, err
+}
+
+func (r *PostgresRepository) GetWithdrawalRequestByIdempotencyKey(ctx context.Context, key string) (WithdrawalRequest, error) {
+	var withdrawal WithdrawalRequest
+	err := r.db.QueryRow(ctx, `
+		SELECT
+			id::text,
+			driver_id::text,
+			wallet_account_id::text,
+			amount_minor,
+			currency,
+			provider,
+			destination_reference,
+			status,
+			idempotency_key,
+			requested_at
+		FROM public.withdrawal_requests
+		WHERE idempotency_key = $1
+	`, key).Scan(
 		&withdrawal.ID,
 		&withdrawal.DriverID,
 		&withdrawal.WalletAccountID,
@@ -4905,7 +4933,7 @@ func lockAuthorizationByRide(ctx context.Context, tx pgx.Tx, rideID string) (Wal
 			ride_id::text,
 			rider_id::text,
 			wallet_account_id::text,
-			amount,
+			amount_minor,
 			currency,
 			status,
 			idempotency_key,

@@ -32,6 +32,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { supabase } from '@/lib/supabaseClient';
+import { adminUpdateRow } from '@/lib/businessApi';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
@@ -140,12 +141,7 @@ const AdminDriverDetail = () => {
     setActionLoading(true);
 
     try {
-      const { error } = await supabase
-        .from('drivers')
-        .update({ status: newStatus })
-        .eq('id', driver.id);
-
-      if (error) throw error;
+      await adminUpdateRow('drivers', driver.id, { status: newStatus });
 
       setDriver({ ...driver, status: newStatus });
       toast.success(`Driver ${newStatus}`);
@@ -170,12 +166,7 @@ const AdminDriverDetail = () => {
         updateData.rejection_reason = rejectionReason;
       }
 
-      const { error } = await supabase
-        .from('driver_documents')
-        .update(updateData)
-        .eq('id', docId);
-
-      if (error) throw error;
+      await adminUpdateRow('driver_documents', docId, updateData);
 
       setDocuments(documents.map(doc => 
         doc.id === docId ? { ...doc, status: action } : doc
@@ -198,12 +189,10 @@ const AdminDriverDetail = () => {
 
     try {
       const pendingIds = pendingDocs.map(d => d.id);
-      const { error } = await supabase
-        .from('driver_documents')
-        .update({ status: 'approved', reviewed_at: new Date().toISOString() })
-        .in('id', pendingIds);
-
-      if (error) throw error;
+      await Promise.all(pendingIds.map((id) => adminUpdateRow('driver_documents', id, {
+        status: 'approved',
+        reviewed_at: new Date().toISOString(),
+      })));
 
       setDocuments(documents.map(doc =>
         pendingIds.includes(doc.id) ? { ...doc, status: 'approved' } : doc

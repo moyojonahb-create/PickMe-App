@@ -3,14 +3,17 @@ package dispatch
 import "time"
 
 const (
-	ModeOff    = "off"
-	ModeShadow = "shadow"
+	ModeOff           = "off"
+	ModeShadow        = "shadow"
+	ModeAuthoritative = "authoritative"
 
 	StatusCompleted        = "completed"
 	StatusDisabled         = "disabled"
 	StatusNoCoordinates    = "no_coordinates"
 	StatusRedisUnavailable = "redis_unavailable"
 	StatusNoCandidates     = "no_candidates"
+	StatusQueued           = "queued"
+	StatusOffered          = "offered"
 	StatusFailed           = "failed"
 )
 
@@ -20,18 +23,23 @@ type Config struct {
 	CandidateLimit int
 	SelectedLimit  int
 	RankingVersion string
+	OfferTTL       time.Duration
+	RideLockTTL    time.Duration
+	DriverLockTTL  time.Duration
+	QueueName      string
 }
 
 type RideContext struct {
-	RideID          string
-	RiderID         string
-	PickupLocation  string
-	DropoffLocation string
-	PickupLatitude  float64
-	PickupLongitude float64
-	City            string
-	VehicleType     string
-	CreatedAt       time.Time
+	RideID             string
+	RiderID            string
+	PickupLocation     string
+	DropoffLocation    string
+	PickupLatitude     float64
+	PickupLongitude    float64
+	City               string
+	VehicleType        string
+	EstimatedFareMinor int64
+	CreatedAt          time.Time
 }
 
 type Candidate struct {
@@ -97,4 +105,27 @@ type OfferOutcome struct {
 	OfferID  string
 	DriverID string
 	At       time.Time
+}
+
+type DispatchJob struct {
+	ID       string
+	Ride     RideContext
+	QueuedAt time.Time
+	Attempt  int
+}
+
+type OfferWave struct {
+	Ride      RideContext
+	Offers    []DriverOffer
+	ExpiresAt time.Time
+	CreatedAt time.Time
+}
+
+type DriverOffer struct {
+	OfferID     string
+	DriverID    string
+	Rank        int
+	AmountMinor int64
+	ETAMinutes  int
+	DistanceKM  float64
 }

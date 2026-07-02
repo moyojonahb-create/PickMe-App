@@ -4,6 +4,7 @@ import { decimalToMinor } from '@/lib/money';
 import { queueOfflineRide } from '@/lib/offlineQueue';
 import { detectSuspiciousPatterns, reportFraudFlag } from '@/lib/fraudDetection';
 import { isRateLimited } from '@/lib/rateLimit';
+import { normalizeRideRow } from '@/lib/rideContract';
 
 type RequestRideInput = {
   pickup_address: string;
@@ -109,7 +110,7 @@ export async function requestRide(input: RequestRideInput) {
     if (created.ok === false) {
       return { ok: false as const, error: created.reason || "Ride request failed" };
     }
-    const ride = (created.ride ?? created) as RideRow;
+    const ride = normalizeRideRow((created.ride ?? created) as Record<string, unknown>) as unknown as RideRow;
     const rideId = ride.id ?? created.ride_id ?? created.id;
     if (!rideId) return { ok: false as const, error: "Ride request failed: backend did not return a ride id" };
     return { ok: true as const, ride: { ...ride, id: rideId } as RideRow };

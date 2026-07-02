@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
+import { adminUpdateRow } from '@/lib/businessApi';
 import { toast } from 'sonner';
 
 export interface PricingSettings {
@@ -62,19 +63,13 @@ export const useUpdatePricingSettings = () => {
   return useMutation({
     mutationFn: async (settings: Partial<PricingSettings>) => {
       const { data: user } = await supabase.auth.getUser();
-      
-      const { data, error } = await supabase
-        .from('pricing_settings')
-        .update({
-          ...settings,
-          updated_by: user.user?.id,
-        })
-        .select()
-        .maybeSingle();
-
-      if (error) throw error;
-      if (!data) throw new Error('Pricing settings not found');
-      return data;
+      if (!settings.id) throw new Error('Pricing settings id is required');
+      const { id, ...changes } = settings;
+      await adminUpdateRow('pricing_settings', id, {
+        ...changes,
+        updated_by: user.user?.id,
+      });
+      return settings as PricingSettings;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pricing-settings'] });

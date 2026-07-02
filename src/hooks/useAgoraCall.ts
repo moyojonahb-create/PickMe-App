@@ -8,6 +8,7 @@ import AgoraRTC, {
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
 import { startRingtone, stopRingtone } from "@/lib/notificationSounds";
+import { createCallSession, updateCallSession } from "@/lib/businessApi";
 
 export type CallStatus =
   | "idle"
@@ -361,22 +362,13 @@ export function useAgoraCall({
         otherUserId
       );
 
-      const { data, error } = await supabase
-        .from("call_sessions")
-        .insert({
+      const data = await createCallSession({
           ride_id: rideId,
-          caller_id: currentUserId,
           callee_id: otherUserId,
           status: "ringing",
-        })
-        .select("id")
-        .maybeSingle();
+        });
 
-      if (error) {
-        console.error("[AgoraCall] Insert error:", error);
-        throw error;
-      }
-      if (!data) throw new Error("Failed to create call session");
+      if (!data?.id) throw new Error("Failed to create call session");
 
       if (import.meta.env.DEV) console.log("[AgoraCall] Call session created:", data.id);
       // Set ref IMMEDIATELY so realtime handler can match it
@@ -406,10 +398,7 @@ export function useAgoraCall({
     try {
       stopRingtone();
       if (import.meta.env.DEV) console.log("[AgoraCall] Answering call:", incomingCall.sessionId);
-      await supabase
-        .from("call_sessions")
-        .update({ status: "answered" })
-        .eq("id", incomingCall.sessionId);
+      await updateCallSession(incomingCall.sessionId, { status: "answered" });
 
       setSessionIdSync(incomingCall.sessionId);
       setIncomingCall(null);
@@ -426,10 +415,7 @@ export function useAgoraCall({
     stopRingtone();
 
     try {
-      await supabase
-        .from("call_sessions")
-        .update({ status: "declined", ended_at: new Date().toISOString() })
-        .eq("id", incomingCall.sessionId);
+      await updateCallSession(incomingCall.sessionId, { status: "declined", ended_at: new Date().toISOString() });
 
       setIncomingCall(null);
     } catch (err) {
@@ -441,10 +427,7 @@ export function useAgoraCall({
     const sid = sessionIdRef.current;
     if (sid) {
       try {
-        await supabase
-          .from("call_sessions")
-          .update({ status: "ended", ended_at: new Date().toISOString() })
-          .eq("id", sid);
+        await updateCallSession(sid, { status: "ended", ended_at: new Date().toISOString() });
       } catch (err) {
         console.warn("Failed to end call session:", err);
       }

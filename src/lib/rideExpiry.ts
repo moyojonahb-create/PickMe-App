@@ -1,5 +1,6 @@
 // Ride expiry utilities
-import { supabase } from '@/lib/supabaseClient';
+import { adminExpireOldRides } from '@/lib/businessApi';
+import { isRequestedRideStatus } from '@/lib/rideContract';
 
 export const RIDE_EXPIRY_SECONDS = 300; // 5 minutes
 
@@ -24,22 +25,22 @@ export function getSecondsRemaining(expiresAt: string | null): number {
  * Call the server-side RPC to expire old pending rides
  */
 export async function expireOldRides(): Promise<number> {
-  const { data, error } = await supabase.rpc('expire_old_rides');
-  if (error) {
+  try {
+    return await adminExpireOldRides();
+  } catch (error) {
     console.error('[Expiry] Failed to expire old rides:', error);
     return 0;
   }
-  return data ?? 0;
 }
 
 /**
  * Filter out expired rides from a list
  */
-export function filterActiveRides<T extends { expires_at?: string | null; status?: string }>(
+export function filterActiveRides<T extends { expires_at?: string | null; status?: string; ride_status?: string }>(
   rides: T[]
 ): T[] {
   return rides.filter((r) => {
-    if (r.status !== 'pending') return true;
+    if (!isRequestedRideStatus(r.status, r.ride_status)) return true;
     return !isRideExpired(r.expires_at ?? null);
   });
 }

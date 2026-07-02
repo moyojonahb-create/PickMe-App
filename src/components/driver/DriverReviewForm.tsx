@@ -3,9 +3,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Loader2, Edit3, CheckCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useState } from 'react';
-import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
+import { upsertDriverApplication } from '@/lib/businessApi';
 
 interface ReviewData {
   personal: {
@@ -37,53 +37,22 @@ export default function DriverReviewForm({ data, onBack }: { data: ReviewData; o
     try {
       if (!user) throw new Error('Not logged in');
 
-      // Keep profile details in profiles table (schema-safe fields only)
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .upsert(
-          {
-            user_id: user.id,
-            full_name: data.personal.fullName,
-            phone: data.personal.phone,
-          },
-          { onConflict: 'user_id' }
-        );
-      if (profileError) throw profileError;
-
-      // Upsert driver record with current drivers schema fields
-      const { data: existingDriver, error: existingDriverError } = await supabase
-        .from('drivers')
-        .select('id')
-        .eq('user_id', user.id)
-        .maybeSingle();
-      if (existingDriverError) throw existingDriverError;
-
-      if (existingDriver?.id) {
-        const { error: updateError } = await supabase
-          .from('drivers')
-          .update({
-            vehicle_make: data.vehicle.carMake,
-            vehicle_model: data.vehicle.carModel,
-            vehicle_year: data.vehicle.carYear,
-            plate_number: data.vehicle.plateNumber,
-            status: 'pending',
-            is_online: false,
-          })
-          .eq('id', existingDriver.id);
-        if (updateError) throw updateError;
-      } else {
-        const { error: insertError } = await supabase.from('drivers').insert({
-          user_id: user.id,
+      await upsertDriverApplication({
+        profile: {
+          full_name: data.personal.fullName,
+          phone: data.personal.phone,
+        },
+        driver: {
           vehicle_make: data.vehicle.carMake,
           vehicle_model: data.vehicle.carModel,
           vehicle_year: data.vehicle.carYear,
+          vehicle_color: data.vehicle.vehicleColor,
           plate_number: data.vehicle.plateNumber,
           vehicle_type: 'economy',
           status: 'pending',
           is_online: false,
-        });
-        if (insertError) throw insertError;
-      }
+        },
+      });
 
       // TODO: Upload files to storage
       // ...

@@ -10,6 +10,7 @@ import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { lovable } from '@/integrations/lovable/index';
 import PickMeLogo from '@/components/PickMeLogo';
+import { updateMyProfile } from '@/lib/businessApi';
 
 const Auth = () => {
   const [searchParams] = useSearchParams();
@@ -129,7 +130,7 @@ const Auth = () => {
 
       const { data: authData } = await supabase.auth.getUser();
       if (authData?.user) {
-        await supabase.from('profiles').update({ phone: formattedPhone }).eq('user_id', authData.user.id);
+        await updateMyProfile({ phone: formattedPhone });
       }
 
       toast({ title: 'Account created!', description: 'Welcome to PickMe.' });

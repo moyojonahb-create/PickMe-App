@@ -8,6 +8,7 @@ import { Send, Phone, MessageCircle, Image as ImageIcon, Smile } from "lucide-re
 import { playMessageSound } from "@/lib/notificationSounds";
 import { format } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
+import { createMessage } from "@/lib/businessApi";
 
 type Message = {
   id: string;
@@ -85,17 +86,14 @@ export function RideCommunication({
 
     setSending(true);
     try {
-      const { error } = await supabase.from("messages").insert({
+      await createMessage({
         ride_id: rideId,
-        sender_id: currentUserId,
         text: msgText,
       });
 
-      if (!error) {
-        setText("");
-        setShowQuickReplies(false);
-        loadMessages();
-      }
+      setText("");
+      setShowQuickReplies(false);
+      loadMessages();
     } finally {
       setSending(false);
     }

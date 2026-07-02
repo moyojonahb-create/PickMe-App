@@ -11,6 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { supabase } from '@/integrations/supabase/client';
+import { adminUpdateTownPricing } from '@/lib/businessApi';
 import { toast } from 'sonner';
 import type { TownPricingConfig } from '@/hooks/useTownPricing';
 
@@ -57,13 +58,8 @@ const AdminTownPricing = () => {
       return;
     }
     setSaving(town.id);
-    const { error } = await supabase
-      .from('town_pricing')
-      .update(changes as Partial<TownPricingConfig>)
-      .eq('id', town.id);
-    if (error) {
-      toast.error(`Failed to save ${town.town_name}`);
-    } else {
+    try {
+      await adminUpdateTownPricing(town.id, changes as Record<string, unknown>);
       toast.success(`${town.town_name} pricing updated`);
       setEditState((prev) => {
         const next = { ...prev };
@@ -71,6 +67,8 @@ const AdminTownPricing = () => {
         return next;
       });
       await fetchTowns();
+    } catch {
+      toast.error(`Failed to save ${town.town_name}`);
     }
     setSaving(null);
   };

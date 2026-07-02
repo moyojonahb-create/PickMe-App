@@ -6,9 +6,25 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+function legacyAllowed(flagName: string): boolean {
+  if (Deno.env.get(flagName) !== "true") return false;
+  const appEnv = (Deno.env.get("APP_ENV") ?? "").toLowerCase();
+  if (appEnv === "production" && Deno.env.get("LEGACY_EMERGENCY_OVERRIDE_ENABLED") !== "true") {
+    return false;
+  }
+  return true;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
+  }
+
+  if (!legacyAllowed("LEGACY_SETTLE_TRIP_ENABLED")) {
+    return new Response(JSON.stringify({ error: "settle-trip is retired; use Go /api/rides/:rideId/settle" }), {
+      status: 410,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 
   try {

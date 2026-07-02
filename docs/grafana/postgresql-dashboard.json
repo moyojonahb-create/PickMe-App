@@ -1,0 +1,21 @@
+{
+  "title": "PickMe PostgreSQL",
+  "schemaVersion": 39,
+  "version": 1,
+  "tags": ["pickme", "postgresql"],
+  "timezone": "browser",
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "PostgreSQL queries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "targets": [{"expr": "sum by (operation) (rate(postgres_queries_total[5m]))"}]
+    },
+    {
+      "type": "timeseries",
+      "title": "PostgreSQL failures",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "targets": [{"expr": "sum by (operation) (rate(postgres_failures_total[5m]))"}]
+    }
+  ]
+}

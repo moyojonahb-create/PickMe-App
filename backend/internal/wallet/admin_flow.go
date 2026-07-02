@@ -80,6 +80,18 @@ func (s *AdminFlowService) CreateDeposit(ctx context.Context, req DepositRequest
 	if err := s.repo.CreateDepositRequest(ctx, intent); err != nil {
 		return PaymentIntent{}, err
 	}
+	if lookup, ok := s.repo.(interface {
+		GetDepositRequestByIdempotencyKey(context.Context, string) (PaymentIntent, error)
+	}); ok {
+		stored, err := lookup.GetDepositRequestByIdempotencyKey(ctx, req.IdempotencyKey)
+		if err != nil {
+			return PaymentIntent{}, err
+		}
+		if stored.UserID != req.UserID || stored.AmountMinor != req.AmountMinor || stored.Currency != req.Currency || stored.Provider != req.Method {
+			return PaymentIntent{}, ErrInvalidIdempotencyKey
+		}
+		return stored, nil
+	}
 	return intent, nil
 }
 
@@ -258,6 +270,18 @@ func (s *AdminFlowService) CreateWithdrawal(ctx context.Context, req WithdrawalC
 	}
 	if err := s.repo.CreateWithdrawalRequest(ctx, withdrawal); err != nil {
 		return WithdrawalRequest{}, err
+	}
+	if lookup, ok := s.repo.(interface {
+		GetWithdrawalRequestByIdempotencyKey(context.Context, string) (WithdrawalRequest, error)
+	}); ok {
+		stored, err := lookup.GetWithdrawalRequestByIdempotencyKey(ctx, req.IdempotencyKey)
+		if err != nil {
+			return WithdrawalRequest{}, err
+		}
+		if stored.DriverID != req.DriverID || stored.AmountMinor != req.AmountMinor || stored.Currency != req.Currency || stored.Provider != req.Method || stored.DestinationReference != req.DestinationReference {
+			return WithdrawalRequest{}, ErrInvalidIdempotencyKey
+		}
+		return stored, nil
 	}
 	return withdrawal, nil
 }

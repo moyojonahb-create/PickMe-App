@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { useNavigate } from 'react-router-dom';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line } from 'recharts';
+import { adminUpdateRow } from '@/lib/businessApi';
 
 interface DriverRow {
   id: string;
@@ -176,23 +177,7 @@ const AdminDashboard = () => {
   const setDriverStatus = async (driverId: string, status: 'approved' | 'suspended') => {
     setError('');
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) { setError('Not authenticated'); return; }
-      const action = status === 'approved' ? 'approve_driver' : 'suspend_driver';
-      const res = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-api?action=${action}`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${session.access_token}`,
-            'Content-Type': 'application/json',
-            'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-          },
-          body: JSON.stringify({ driverId }),
-        }
-      );
-      const data = await res.json();
-      if (!res.ok || data?.error) { setError(data?.error || 'Operation failed'); return; }
+      await adminUpdateRow('drivers', driverId, { status });
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Operation failed');
       return;
@@ -200,23 +185,9 @@ const AdminDashboard = () => {
     await refreshAll();
   };
 
-  const forceDriverOffline = async (userId: string, driverId: string) => {
+  const forceDriverOffline = async (driverId: string) => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) return;
-      const res = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-api?action=force_driver_offline`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${session.access_token}`,
-            'Content-Type': 'application/json',
-            'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-          },
-          body: JSON.stringify({ userId, driverId }),
-        }
-      );
-      if (!res.ok) { const d = await res.json(); setError(d?.error || 'Failed'); return; }
+      await adminUpdateRow('drivers', driverId, { is_online: false });
     } catch { /* ignore */ }
     await refreshAll();
   };
@@ -482,7 +453,7 @@ const AdminDashboard = () => {
                           <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => navigate(`/admin/drivers/${d.id}`)}>
                             <Eye className="w-3 h-3 mr-1" /> View
                           </Button>
-                          <Button size="sm" variant="secondary" className="h-8 text-xs font-bold" onClick={() => forceDriverOffline(d.user_id, d.id)}>
+                          <Button size="sm" variant="secondary" className="h-8 text-xs font-bold" onClick={() => forceDriverOffline(d.id)}>
                             Force Offline
                           </Button>
                         </div>

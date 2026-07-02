@@ -58,6 +58,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { supabase } from '@/lib/supabaseClient';
+import { adminDeleteRow, adminInsertRow, adminUpdateRow } from '@/lib/businessApi';
 import { toast } from 'sonner';
 
 interface Landmark {
@@ -177,19 +178,10 @@ const AdminLandmarks = () => {
       const landmarkData = validation.data;
 
       if (editingId) {
-        const { error } = await supabase
-          .from('koloi_landmarks')
-          .update(landmarkData)
-          .eq('id', editingId);
-
-        if (error) throw error;
+        await adminUpdateRow('koloi_landmarks', editingId, landmarkData as unknown as Record<string, unknown>);
         toast.success('Landmark updated');
       } else {
-        const { error } = await supabase
-          .from('koloi_landmarks')
-          .insert([landmarkData]);
-
-        if (error) throw error;
+        await adminInsertRow('koloi_landmarks', landmarkData as unknown as Record<string, unknown>);
         toast.success('Landmark created');
       }
 
@@ -206,12 +198,7 @@ const AdminLandmarks = () => {
 
   const handleDelete = async (id: string) => {
     try {
-      const { error } = await supabase
-        .from('koloi_landmarks')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
+      await adminDeleteRow('koloi_landmarks', id);
       toast.success('Landmark deleted');
       fetchLandmarks();
     } catch (error) {

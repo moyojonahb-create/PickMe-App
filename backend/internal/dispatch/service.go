@@ -5,10 +5,13 @@ import (
 	"errors"
 	"log"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
+
+	"pickme-backend/internal/observability"
 )
 
 type CandidateProvider interface {
@@ -23,10 +26,40 @@ type Repository interface {
 	RecordAcceptedOfferOutcome(ctx context.Context, outcome OfferOutcome) error
 }
 
+type Queue interface {
+	EnqueueDispatchJob(ctx context.Context, queue string, job DispatchJob) (string, error)
+}
+
+type Locker interface {
+	AcquireLock(ctx context.Context, key string, value string, ttl time.Duration) (bool, error)
+	ReleaseLock(ctx context.Context, key string, value string) error
+}
+
+type OfferRepository interface {
+	CreateOfferWave(ctx context.Context, wave OfferWave) error
+	ExpireRideOffers(ctx context.Context, rideID string, now time.Time) (int64, error)
+	SetDriverAvailability(ctx context.Context, driverID string, availability string, rideID string) error
+}
+
+type OfferNotifier interface {
+	NotifyDriverOffer(ctx context.Context, offer DriverOffer, ride RideContext, expiresAt time.Time)
+}
+
+type OfferNotifierFunc func(ctx context.Context, offer DriverOffer, ride RideContext, expiresAt time.Time)
+
+func (f OfferNotifierFunc) NotifyDriverOffer(ctx context.Context, offer DriverOffer, ride RideContext, expiresAt time.Time) {
+	if f != nil {
+		f(ctx, offer, ride, expiresAt)
+	}
+}
+
 type Service struct {
 	cfg        Config
 	candidates CandidateProvider
 	repo       Repository
+	queue      Queue
+	locker     Locker
+	notifier   OfferNotifier
 	now        func() time.Time
 }
 
@@ -47,6 +80,18 @@ func NewService(cfg Config, candidates CandidateProvider, repo Repository) *Serv
 	if cfg.RankingVersion == "" {
 		cfg.RankingVersion = "v2.0-b-simple"
 	}
+	if cfg.OfferTTL <= 0 {
+		cfg.OfferTTL = 30 * time.Second
+	}
+	if cfg.RideLockTTL <= 0 {
+		cfg.RideLockTTL = 45 * time.Second
+	}
+	if cfg.DriverLockTTL <= 0 {
+		cfg.DriverLockTTL = 45 * time.Second
+	}
+	if cfg.QueueName == "" {
+		cfg.QueueName = "dispatch:rides"
+	}
 	return &Service{
 		cfg:        cfg,
 		candidates: candidates,
@@ -55,11 +100,43 @@ func NewService(cfg Config, candidates CandidateProvider, repo Repository) *Serv
 	}
 }
 
+func (s *Service) WithQueue(queue Queue) *Service {
+	if s != nil {
+		s.queue = queue
+	}
+	return s
+}
+
+func (s *Service) WithLocker(locker Locker) *Service {
+	if s != nil {
+		s.locker = locker
+	}
+	return s
+}
+
+func (s *Service) WithOfferNotifier(notifier OfferNotifier) *Service {
+	if s != nil {
+		s.notifier = notifier
+	}
+	return s
+}
+
 func (s *Service) Enabled() bool {
-	return s != nil && s.cfg.Mode == ModeShadow
+	return s != nil && (s.cfg.Mode == ModeShadow || s.cfg.Mode == ModeAuthoritative)
+}
+
+func (s *Service) Authoritative() bool {
+	return s != nil && s.cfg.Mode == ModeAuthoritative
 }
 
 func (s *Service) ObserveRide(ctx context.Context, ride RideContext) {
+	if s == nil {
+		return
+	}
+	if s.Authoritative() {
+		s.enqueueAndDispatch(ctx, ride)
+		return
+	}
 	if !s.Enabled() {
 		return
 	}
@@ -72,6 +149,7 @@ func (s *Service) RecordFirstOffer(ctx context.Context, outcome OfferOutcome) {
 	}
 	go func() {
 		if err := s.repo.RecordFirstOfferOutcome(context.Background(), normalizeOutcome(outcome, s.now())); err != nil {
+			observability.CaptureError(err)
 			log.Println("Smart dispatch shadow first-offer comparison warning:", err)
 		}
 	}()
@@ -83,13 +161,166 @@ func (s *Service) RecordAcceptedOffer(ctx context.Context, outcome OfferOutcome)
 	}
 	go func() {
 		if err := s.repo.RecordAcceptedOfferOutcome(context.Background(), normalizeOutcome(outcome, s.now())); err != nil {
+			observability.CaptureError(err)
 			log.Println("Smart dispatch shadow accepted-offer comparison warning:", err)
 		}
 	}()
 }
 
+func (s *Service) SetDriverAvailability(ctx context.Context, driverID string, availability string, rideID string) {
+	if s == nil || s.repo == nil || driverID == "" {
+		return
+	}
+	repo, ok := s.repo.(OfferRepository)
+	if !ok {
+		return
+	}
+	if err := repo.SetDriverAvailability(ctx, driverID, availability, rideID); err != nil {
+		observability.CaptureError(err)
+		log.Println("Dispatch driver availability warning:", err)
+	}
+}
+
 func (s *Service) RunShadowSync(ctx context.Context, ride RideContext) (ShadowRun, []RankedCandidate) {
 	return s.runShadow(ctx, ride)
+}
+
+func (s *Service) DispatchRideSync(ctx context.Context, ride RideContext) (OfferWave, []RankedCandidate, error) {
+	return s.dispatchRide(ctx, ride)
+}
+
+func (s *Service) enqueueAndDispatch(ctx context.Context, ride RideContext) {
+	job := DispatchJob{
+		ID:       uuid.NewString(),
+		Ride:     ride,
+		QueuedAt: s.now().UTC(),
+		Attempt:  1,
+	}
+	if s.queue != nil {
+		if _, err := s.queue.EnqueueDispatchJob(ctx, s.queueName(ride), job); err != nil {
+			log.Println("Authoritative dispatch queue warning:", err)
+		}
+	}
+	go func() {
+		if _, _, err := s.dispatchRide(context.Background(), ride); err != nil {
+			log.Println("Authoritative dispatch warning:", err)
+		}
+	}()
+}
+
+func (s *Service) dispatchRide(ctx context.Context, ride RideContext) (OfferWave, []RankedCandidate, error) {
+	ctx, span := observability.StartSpan(ctx, "Dispatch")
+	defer span.End()
+
+	if !s.Authoritative() {
+		return OfferWave{}, nil, nil
+	}
+	if ride.RideID == "" {
+		return OfferWave{}, nil, errors.New("ride id is required")
+	}
+	if ride.PickupLatitude == 0 || ride.PickupLongitude == 0 {
+		return OfferWave{}, nil, errors.New("pickup coordinates are required for authoritative dispatch")
+	}
+	if s.candidates == nil {
+		return OfferWave{}, nil, ErrCandidatesUnavailable
+	}
+
+	lockValue := uuid.NewString()
+	rideLock := "dispatch:lock:ride:" + ride.RideID
+	if s.locker != nil {
+		acquired, err := s.locker.AcquireLock(ctx, rideLock, lockValue, s.cfg.RideLockTTL)
+		if err != nil {
+			observability.CaptureError(err)
+			return OfferWave{}, nil, err
+		}
+		if !acquired {
+			return OfferWave{}, nil, errors.New("ride dispatch lock is already held")
+		}
+		defer func() {
+			if err := s.locker.ReleaseLock(context.Background(), rideLock, lockValue); err != nil {
+				observability.CaptureError(err)
+				log.Println("Authoritative dispatch ride lock release warning:", err)
+			}
+		}()
+	}
+
+	if repo, ok := s.repo.(OfferRepository); ok {
+		expired, err := repo.ExpireRideOffers(ctx, ride.RideID, s.now().UTC())
+		if err != nil {
+			observability.CaptureError(err)
+			return OfferWave{}, nil, err
+		}
+		observability.RecordDispatchOfferExpired(expired)
+	}
+
+	candidates, _, err := s.candidates.NearbyCandidates(ctx, ride, s.cfg.RadiusKM, s.cfg.CandidateLimit)
+	if err != nil {
+		observability.CaptureError(err)
+		return OfferWave{}, nil, err
+	}
+	ranked := RankCandidates(candidates, s.cfg.RadiusKM, s.now())
+	if len(ranked) == 0 {
+		return OfferWave{}, ranked, nil
+	}
+
+	selectedLimit := s.cfg.SelectedLimit
+	if selectedLimit > len(ranked) {
+		selectedLimit = len(ranked)
+	}
+	expiresAt := s.now().UTC().Add(s.cfg.OfferTTL)
+	wave := OfferWave{
+		Ride:      ride,
+		Offers:    make([]DriverOffer, 0, selectedLimit),
+		ExpiresAt: expiresAt,
+		CreatedAt: s.now().UTC(),
+	}
+	for i := 0; i < selectedLimit; i++ {
+		candidate := ranked[i]
+		driverLockValue := ride.RideID + ":" + strconv.Itoa(candidate.Rank)
+		driverLock := "dispatch:lock:driver:" + candidate.DriverID
+		if s.locker != nil {
+			acquired, err := s.locker.AcquireLock(ctx, driverLock, driverLockValue, s.cfg.DriverLockTTL)
+			if err != nil {
+				observability.CaptureError(err)
+				return OfferWave{}, ranked, err
+			}
+			if !acquired {
+				continue
+			}
+		}
+		ranked[i].Selected = true
+		wave.Offers = append(wave.Offers, DriverOffer{
+			OfferID:     uuid.NewString(),
+			DriverID:    candidate.DriverID,
+			Rank:        candidate.Rank,
+			AmountMinor: ride.EstimatedFareMinor,
+			ETAMinutes:  etaFromDistance(candidate.DistanceKM),
+			DistanceKM:  candidate.DistanceKM,
+		})
+	}
+	if len(wave.Offers) == 0 {
+		return wave, ranked, nil
+	}
+
+	if repo, ok := s.repo.(OfferRepository); ok {
+		if err := repo.CreateOfferWave(ctx, wave); err != nil {
+			observability.CaptureError(err)
+			return OfferWave{}, ranked, err
+		}
+		observability.RecordDispatchOfferWave()
+		for _, offer := range wave.Offers {
+			if err := repo.SetDriverAvailability(ctx, offer.DriverID, "offered", ride.RideID); err != nil {
+				observability.CaptureError(err)
+				log.Println("Authoritative dispatch driver availability warning:", err)
+			}
+		}
+	}
+	if s.notifier != nil {
+		for _, offer := range wave.Offers {
+			s.notifier.NotifyDriverOffer(ctx, offer, ride, expiresAt)
+		}
+	}
+	return wave, ranked, nil
 }
 
 func (s *Service) runShadow(ctx context.Context, ride RideContext) (ShadowRun, []RankedCandidate) {
@@ -290,4 +521,28 @@ func defaultString(value string, fallback string) string {
 		return fallback
 	}
 	return value
+}
+
+func (s *Service) queueName(ride RideContext) string {
+	queue := s.cfg.QueueName
+	if queue == "" {
+		queue = "dispatch:rides"
+	}
+	city := defaultString(strings.TrimSpace(strings.ToLower(ride.City)), "default")
+	vehicle := defaultString(strings.TrimSpace(strings.ToLower(ride.VehicleType)), "economy")
+	return queue + ":" + city + ":" + vehicle
+}
+
+func etaFromDistance(distanceKM float64) int {
+	if distanceKM <= 0 {
+		return 2
+	}
+	eta := int(distanceKM*3) + 2
+	if eta < 2 {
+		return 2
+	}
+	if eta > 45 {
+		return 45
+	}
+	return eta
 }

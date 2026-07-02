@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabaseClient';
+import { createFraudFlag } from '@/lib/businessApi';
 import { withRateLimit } from '@/lib/rateLimit';
 
 export interface FraudCheck {
@@ -105,12 +106,12 @@ export async function detectSuspiciousPatterns(userId: string): Promise<FraudChe
  * Report a fraud flag to the database.
  */
 export async function reportFraudFlag(userId: string, check: FraudCheck) {
-  await supabase.from('fraud_flags').insert([{
+  await createFraudFlag({
     user_id: userId,
     flag_type: check.type,
     severity: check.severity,
     details: JSON.parse(JSON.stringify(check.details)),
-  }]);
+  });
 }
 
 /**

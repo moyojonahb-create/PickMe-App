@@ -1,6 +1,7 @@
 // Cache Nominatim results to places_cache table
 import { supabase } from '@/lib/supabaseClient';
 import type { NominatimResult } from '@/lib/geo';
+import { cachePlace } from '@/lib/businessApi';
 
 /**
  * Cache a Nominatim result into the places_cache table.
@@ -32,13 +33,9 @@ export async function cachePlaceFromNominatim(p: NominatimResult): Promise<void>
       if (existing) return; // Already cached
     }
 
-    const { error } = await supabase.from('places_cache').insert(payload);
+    await cachePlace(payload);
 
-    // Cache is best-effort only; never fail ride flow due to cache writes.
-    if (error) {
       // Silence all cache errors — they're non-fatal
-      return;
-    }
   } catch {
     // Ignore cache failures (duplicates, auth issues, etc.)
   }

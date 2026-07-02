@@ -6,10 +6,26 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+function legacyAllowed(flagName: string): boolean {
+  if (Deno.env.get(flagName) !== "true") return false;
+  const appEnv = (Deno.env.get("APP_ENV") ?? "").toLowerCase();
+  if (appEnv === "production" && Deno.env.get("LEGACY_EMERGENCY_OVERRIDE_ENABLED") !== "true") {
+    return false;
+  }
+  return true;
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
+  }
+
+  if (!legacyAllowed("LEGACY_ADMIN_API_ENABLED")) {
+    return new Response(
+      JSON.stringify({ error: "admin-api is retired; use Go /admin endpoints" }),
+      { status: 410, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
   }
 
   try {

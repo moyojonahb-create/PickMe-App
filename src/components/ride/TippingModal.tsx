@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { X, Heart, DollarSign } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { createTip } from '@/lib/businessApi';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -38,13 +38,11 @@ export default function TippingModal({ rideId, riderId, driverId, fare, driverNa
     if (tipAmount <= 0) { onClose(); return; }
     setSubmitting(true);
     try {
-      const { error } = await supabase.from('tips').insert({
+      await createTip({
         ride_id: rideId,
-        rider_id: riderId,
         driver_id: driverId,
         amount: tipAmount,
       });
-      if (error) throw error;
       setShowCelebration(true);
       setTimeout(() => { toast.success(`$${tipAmount.toFixed(2)} tip sent!`); onClose(); }, 1500);
     } catch {

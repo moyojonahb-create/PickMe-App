@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Star, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { supabase } from "@/integrations/supabase/client";
+import { submitDriverRating } from "@/lib/businessApi";
 import { toast } from "sonner";
 import TippingModal from "./TippingModal";
 
@@ -39,15 +39,12 @@ export default function DriverRatingModal({
 
     setSubmitting(true);
     try {
-      const { error } = await supabase.from("driver_ratings").insert({
+      await submitDriverRating({
         ride_id: rideId,
-        rider_id: riderId,
         driver_id: driverId,
         rating,
         comment: comment.trim() || null,
       });
-
-      if (error) throw error;
 
       toast.success("Thanks for rating your driver!");
       // Show tipping modal after successful rating

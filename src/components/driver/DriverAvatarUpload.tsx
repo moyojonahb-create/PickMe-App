@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { resolveAvatarUrl } from "@/lib/avatarUrl";
 import { useAuth } from "@/hooks/useAuth";
+import { updateMyDriver } from "@/lib/businessApi";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Camera, Loader2 } from "lucide-react";
@@ -59,12 +60,7 @@ export default function DriverAvatarUpload({ currentAvatarUrl, gender, onUploade
       const avatarUrl = signedData.signedUrl;
 
       // Update driver record with file path (not signed URL, as signed URLs expire)
-      const { error: updateErr } = await supabase
-        .from("drivers")
-        .update({ avatar_url: filePath })
-        .eq("user_id", user.id);
-
-      if (updateErr) throw updateErr;
+      await updateMyDriver({ avatar_url: filePath });
 
       setPreviewUrl(avatarUrl);
       onUploaded(avatarUrl);

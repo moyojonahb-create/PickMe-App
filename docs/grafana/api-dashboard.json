@@ -1,0 +1,33 @@
+{
+  "title": "PickMe API",
+  "schemaVersion": 39,
+  "version": 1,
+  "tags": ["pickme", "api"],
+  "timezone": "browser",
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Requests per second",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "targets": [{"expr": "sum by (method, route, status) (rate(requests_total[5m]))"}]
+    },
+    {
+      "type": "timeseries",
+      "title": "Request duration p95",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "targets": [{"expr": "histogram_quantile(0.95, sum by (le, route) (rate(request_duration_seconds_bucket[5m])))"}]
+    },
+    {
+      "type": "stat",
+      "title": "Requests in flight",
+      "gridPos": {"h": 6, "w": 8, "x": 0, "y": 8},
+      "targets": [{"expr": "requests_in_flight"}]
+    },
+    {
+      "type": "timeseries",
+      "title": "5xx responses",
+      "gridPos": {"h": 6, "w": 16, "x": 8, "y": 8},
+      "targets": [{"expr": "sum by (route) (rate(requests_total{status=~\"5..\"}[5m]))"}]
+    }
+  ]
+}

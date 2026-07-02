@@ -9,9 +9,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, Car, Upload, CheckCircle } from 'lucide-react';
-import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
+import { createDriverApplication } from '@/lib/businessApi';
 
 const vehicleTypes = ['economy', 'comfort', 'premium', 'suv'] as const;
 
@@ -54,8 +54,7 @@ const DriverApplicationForm = ({ onSuccess }: DriverApplicationFormProps) => {
 
     setIsSubmitting(true);
     try {
-      const { error } = await supabase.from('drivers').insert({
-        user_id: user.id,
+      await createDriverApplication({
         vehicle_type: data.vehicleType,
         vehicle_make: data.vehicleMake,
         vehicle_model: data.vehicleModel,
@@ -64,8 +63,6 @@ const DriverApplicationForm = ({ onSuccess }: DriverApplicationFormProps) => {
         gender: data.gender,
         status: 'pending',
       });
-
-      if (error) throw error;
 
       toast({
         title: 'Application submitted!',

@@ -963,6 +963,56 @@ func TestAdminFinancialRecoveryReportsAndControls(t *testing.T) {
 	}
 }
 
+func TestFrontendAdminCompatibilityAliases(t *testing.T) {
+	app := fiber.New()
+	RegisterOperationRoutes(app, &fakeFlowService{}, &fakeRideAuthorizationService{}, &fakeWalletReconciliationService{}, &fakePilotService{}, &fakeRecoveryService{}, fakeOpsReports{}, authAs("admin-1", "admin"))
+
+	getPaths := []string{
+		"/api/wallets/deposits",
+		"/api/wallets/driver/summary",
+		"/api/wallets/driver/earnings",
+		"/admin/wallets/deposits",
+		"/admin/wallets/withdrawals",
+		"/admin/finance/wallet-dashboard",
+		"/admin/finance/earnings",
+		"/admin/finance/ledger",
+		"/admin/finance/settlements/summary",
+		"/admin/finance/health",
+	}
+	for _, path := range getPaths {
+		resp := walletHTTPTestRequest(t, app, http.MethodGet, path, nil)
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("expected %s to return 200, got %d body=%s", path, resp.StatusCode, string(readHTTPBody(t, resp)))
+		}
+	}
+
+	postCases := []struct {
+		path string
+		body any
+	}{
+		{"/api/wallets/transfer", map[string]any{"receiver_id": "receiver-1", "amount": 2.50}},
+		{"/api/wallets/pay", map[string]any{"ride_id": "ride-1"}},
+		{"/api/wallets/pin", map[string]any{"pin": "1234"}},
+		{"/admin/finance/fraud-flags", map[string]any{"user_id": "user-1", "reason": "manual review", "severity": "medium"}},
+		{"/admin/finance/fraud-flags/flag-1/resolve", nil},
+		{"/admin/finance/fx-rate", map[string]any{"zar_per_usd": 18.5}},
+		{"/admin/finance/low-balance-reminders", nil},
+		{"/admin/wallets/users/user-1/lock", map[string]any{"reason": "risk review"}},
+		{"/admin/wallets/users/user-1/unlock", nil},
+	}
+	for _, tt := range postCases {
+		resp := walletHTTPTestRequest(t, app, http.MethodPost, tt.path, tt.body)
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("expected %s to return 200, got %d body=%s", tt.path, resp.StatusCode, string(readHTTPBody(t, resp)))
+		}
+	}
+
+	reverse := walletHTTPTestRequest(t, app, http.MethodPost, "/admin/wallets/transactions/tx-1/reverse", map[string]any{"reason": "audit"})
+	if reverse.StatusCode != http.StatusNotImplemented {
+		t.Fatalf("expected reversal compatibility route to be explicit 501, got %d", reverse.StatusCode)
+	}
+}
+
 func authAs(userID string, role string) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		c.Locals(middleware.LocalsAuthSubject, userID)

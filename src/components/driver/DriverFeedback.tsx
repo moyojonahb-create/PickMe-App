@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
+import { createDriverFeedback } from '@/lib/businessApi';
 
 interface FeedbackItem {
   id: string;
@@ -42,17 +43,16 @@ export default function DriverFeedback() {
   const handleSubmit = async () => {
     if (!user || !message.trim()) return;
     setSubmitting(true);
-    const { error } = await supabase.from('driver_feedback').insert({
-      driver_id: user.id,
-      type: tab,
-      message: message.trim(),
-    });
-    if (error) {
-      toast.error('Failed to submit', { description: error.message });
-    } else {
+    try {
+      await createDriverFeedback({
+        type: tab,
+        message: message.trim(),
+      });
       toast.success(`${tab === 'suggestion' ? 'Suggestion' : 'Complaint'} submitted`);
       setMessage('');
       fetchFeedback();
+    } catch (error) {
+      toast.error('Failed to submit', { description: error instanceof Error ? error.message : 'Unknown error' });
     }
     setSubmitting(false);
   };

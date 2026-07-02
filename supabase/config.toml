@@ -1,34 +1,66 @@
 project_id = "jidfganntquilvsytslp"
 
+# Retired business-logic functions. They default to 410 in function code unless
+# a LEGACY_*_ENABLED secret is deliberately set for rollback. In APP_ENV=production,
+# LEGACY_EMERGENCY_OVERRIDE_ENABLED=true is also required for emergency rollback.
 [functions.admin-api]
+verify_jwt = true
+
+[functions.settle-trip]
+verify_jwt = true
+
+[functions.add-driver]
+verify_jwt = true
+
+[functions.dispatch-scheduled]
+verify_jwt = true
+
+# Authenticated or admin-only utilities that still require Supabase Storage/Auth,
+# privileged database access, or third-party token generation.
+[functions.wallet-pin]
+verify_jwt = true
+
+[functions.send-notification]
+verify_jwt = true
+
+[functions.verify-student]
+verify_jwt = true
+
+[functions.delete-account]
+verify_jwt = true
+
+[functions.import-osm-places]
+verify_jwt = true
+
+[functions.ramz-code-scan]
+verify_jwt = true
+
+[functions.ramz-generate-patch]
+verify_jwt = true
+
+[functions.google-maps-key]
+verify_jwt = true
+
+[functions.agora-token]
+verify_jwt = true
+
+# Public external-service proxies retained for current frontend flows.
+# They must enforce function-level abuse controls because Supabase JWT
+# verification is intentionally off.
+[functions.twilio-otp]
+verify_jwt = false
+
+[functions.sms-invite]
 verify_jwt = false
 
 [functions.google-routes]
 verify_jwt = false
 
-[functions.twilio-otp]
-verify_jwt = false
-
-[functions.import-osm-places]
-verify_jwt = false
-
-[functions.settle-trip]
-verify_jwt = false
-
-[functions.agora-token]
-verify_jwt = false
-
-[functions.google-maps-key]
+[functions.google-places-search]
 verify_jwt = false
 
 [functions.nominatim-search]
 verify_jwt = false
 
-[functions.google-places-search]
-verify_jwt = false
-
-[functions.ramz-code-scan]
-verify_jwt = false
-
-[functions.ramz-generate-patch]
+[functions.push-config]
 verify_jwt = false

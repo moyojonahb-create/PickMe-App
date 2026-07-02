@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Flame, TrendingUp, Clock, MapPin } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
+import { adminUpdateDemandZones } from '@/lib/businessApi';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface DemandZone {
@@ -51,7 +52,7 @@ export default function DemandHeatmap({ townId, className }: DemandHeatmapProps)
     const fetchZones = async () => {
       setLoading(true);
       // Trigger zone recalculation (ignore errors if RPC doesn't exist)
-      try { await supabase.rpc('update_demand_zones'); } catch {}
+      try { await adminUpdateDemandZones(); } catch {}
       
       const { data } = await supabase
         .from('ride_demand_zones')

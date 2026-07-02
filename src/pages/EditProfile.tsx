@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import PickMeLogo from '@/components/PickMeLogo';
+import { updateMyProfile } from '@/lib/businessApi';
 
 
 export default function EditProfile() {
@@ -52,15 +53,11 @@ export default function EditProfile() {
     if (!user || !fullName.trim()) return;
     setSaving(true);
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          full_name: fullName.trim(),
-          phone: phone.trim(),
-          avatar_url: avatarUrl,
-        })
-        .eq('user_id', user.id);
-      if (error) throw error;
+      await updateMyProfile({
+        full_name: fullName.trim(),
+        phone: phone.trim(),
+        avatar_url: avatarUrl,
+      });
 
       // Also update auth metadata
       await supabase.auth.updateUser({

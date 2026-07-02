@@ -1,11 +1,13 @@
 package middleware
 
 import (
+	"context"
 	"log"
 	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/jackc/pgx/v5"
 
 	"pickme-backend/internal/auth"
 )
@@ -47,20 +49,53 @@ func SupabaseJWT(verifier *auth.SupabaseJWT) fiber.Handler {
 	}
 }
 
+type AdminRoleLookup interface {
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
+
 // AdminOnly is the centralized admin authorization middleware used across admin routes.
 // On denial it emits a structured SECURITY_ADMIN_AUTHZ_FAILURE log and returns 403 with
 // a generic {"error":"admin_not_authorized"} payload.
 func AdminOnly() fiber.Handler {
+	return AdminOnlyWithDB(nil)
+}
+
+func AdminOnlyWithDB(lookup AdminRoleLookup) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		role, _ := c.Locals(LocalsAuthRole).(string)
-		userID, _ := AuthenticatedUserID(c)
-		if role != "admin" && role != "service_role" {
-			// Structured log for admin authorization failures. Never expose internal reason to client.
+		if err := RequireAdmin(c, lookup); err != nil {
+			userID, _ := AuthenticatedUserID(c)
 			LogAdminSecurityFailure(userID, c.Path(), "not_admin")
 			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "admin_not_authorized"})
 		}
 		return c.Next()
 	}
+}
+
+func RequireAdmin(c *fiber.Ctx, lookup AdminRoleLookup) error {
+	userID, ok := AuthenticatedUserID(c)
+	if !ok {
+		return fiber.NewError(fiber.StatusUnauthorized, "authentication required")
+	}
+	role, _ := c.Locals(LocalsAuthRole).(string)
+	if role == "admin" || role == "service_role" {
+		return nil
+	}
+	if lookup == nil {
+		return fiber.NewError(fiber.StatusForbidden, "admin role required")
+	}
+
+	var exists bool
+	if err := lookup.QueryRow(c.Context(), `
+		SELECT EXISTS (
+			SELECT 1 FROM public.user_roles
+			WHERE user_id = $1 AND role = 'admin'
+		)`, userID).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		return fiber.NewError(fiber.StatusForbidden, "admin role required")
+	}
+	return nil
 }
 
 // LogAdminSecurityFailure emits a standardized SECURITY_ADMIN_AUTHZ_FAILURE event to logs.

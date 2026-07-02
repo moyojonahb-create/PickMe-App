@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { createDriverDocument } from '@/lib/businessApi';
 
 interface Document {
   id: string;
@@ -63,15 +64,13 @@ const DocumentUpload = ({ driverId }: DocumentUploadProps) => {
 
       if (uploadError) throw uploadError;
 
-      // Store only the file path (not public URL) - we'll generate signed URLs on-demand
-      const { error: dbError } = await supabase.from('driver_documents').insert({
+      // Store only the file path (not public URL) through Go.
+      await createDriverDocument({
         driver_id: driverId,
         document_type: documentType,
         file_url: filePath, // Store path, not public URL
         status: 'pending',
       });
-
-      if (dbError) throw dbError;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['driver-documents', driverId] });

@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { AlertTriangle, CheckCircle, Clock, MessageSquare, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { adminUpdateDispute } from '@/lib/businessApi';
 
 interface Dispute {
   id: string;
@@ -71,16 +72,11 @@ export default function AdminDisputes() {
   const handleResolve = async (disputeId: string, status: 'resolved' | 'dismissed') => {
     setResponding(disputeId);
     try {
-      const { error } = await supabase
-        .from('disputes')
-        .update({
-          status,
-          admin_response: response || null,
-          resolved_at: new Date().toISOString(),
-        })
-        .eq('id', disputeId);
-
-      if (error) throw error;
+      await adminUpdateDispute(disputeId, {
+        status,
+        admin_response: response || null,
+        resolved_at: new Date().toISOString(),
+      });
       toast.success(`Dispute ${status}`);
       setResponse('');
       setResponding(null);
@@ -183,7 +179,7 @@ export default function AdminDisputes() {
                             size="sm"
                             variant="secondary"
                             onClick={async () => {
-                              await supabase.from('disputes').update({ status: 'investigating' }).eq('id', d.id);
+                              await adminUpdateDispute(d.id, { status: 'investigating' });
                               fetchDisputes();
                             }}
                             className="gap-1.5"

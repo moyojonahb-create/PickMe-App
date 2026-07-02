@@ -1,0 +1,298 @@
+name: pickme-production
+
+services:
+  frontend:
+    env_file:
+      - path: ./.env
+        required: false
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL}
+        VITE_SUPABASE_PUBLISHABLE_KEY: ${VITE_SUPABASE_PUBLISHABLE_KEY}
+        VITE_GO_BACKEND_URL: ${VITE_GO_BACKEND_URL:-https://api.pickme.local}
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
+        VITE_BACKEND_URL: ${VITE_BACKEND_URL:-}
+        VITE_GOOGLE_MAPS_API_KEY: ${VITE_GOOGLE_MAPS_API_KEY:-}
+        VITE_DD_RUM_ENABLED: ${VITE_DD_RUM_ENABLED:-false}
+        VITE_DD_RUM_APPLICATION_ID: ${VITE_DD_RUM_APPLICATION_ID:-}
+        VITE_DD_RUM_CLIENT_TOKEN: ${VITE_DD_RUM_CLIENT_TOKEN:-}
+        VITE_DD_RUM_SITE: ${VITE_DD_RUM_SITE:-us5.datadoghq.com}
+        VITE_DD_RUM_SERVICE: ${VITE_DD_RUM_SERVICE:-koloi-ride-with-confidence}
+        VITE_DD_RUM_ENV: ${VITE_DD_RUM_ENV:-production}
+        VITE_DD_RUM_VERSION: ${VITE_DD_RUM_VERSION:-}
+    image: pickme/frontend:${IMAGE_TAG:-local}
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${FRONTEND_PORT:-8080}:8080"
+    networks:
+      - edge
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/ >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  backend:
+    env_file:
+      - path: ./.env
+        required: false
+      - path: ./backend/.env
+        required: false
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: pickme/backend:${IMAGE_TAG:-local}
+    command: ["/app/pickme-server"]
+    environment:
+      APP_ENV: ${APP_ENV:-production}
+      READINESS_PROFILE: ${READINESS_PROFILE:-pilot}
+      PORT: 3000
+      DATABASE_URL: ${DATABASE_URL}
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_JWT_SECRET: ${SUPABASE_JWT_SECRET}
+      SUPABASE_JWT_AUDIENCE: ${SUPABASE_JWT_AUDIENCE:-authenticated}
+      SUPABASE_JWT_ISSUER: ${SUPABASE_JWT_ISSUER:-}
+      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS}
+      HTTP_REQUEST_TIMEOUT_SECONDS: ${HTTP_REQUEST_TIMEOUT_SECONDS:-15}
+      HTTP_RATE_LIMIT_MAX: ${HTTP_RATE_LIMIT_MAX:-120}
+      HTTP_RATE_LIMIT_WINDOW_SECONDS: ${HTTP_RATE_LIMIT_WINDOW_SECONDS:-60}
+      REDIS_ENABLED: ${REDIS_ENABLED:-true}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      REDIS_POOL_SIZE: ${REDIS_POOL_SIZE:-16}
+      ASYNQ_ENABLED: ${ASYNQ_ENABLED:-true}
+      ASYNQ_REDIS_URL: ${ASYNQ_REDIS_URL:-redis://redis:6379/1}
+      ASYNQ_CONCURRENCY: ${ASYNQ_CONCURRENCY:-10}
+      DISPATCH_MODE: ${DISPATCH_MODE:-authoritative}
+      DISPATCH_QUEUE_NAME: ${DISPATCH_QUEUE_NAME:-dispatch:rides}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-production}
+      SENTRY_RELEASE: ${SENTRY_RELEASE:-}
+      OTEL_ENABLED: ${OTEL_ENABLED:-false}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      NOTIFICATION_RATE_LIMIT_PER_MINUTE: ${NOTIFICATION_RATE_LIMIT_PER_MINUTE:-60}
+      NOTIFICATION_FCM_ENDPOINT: ${NOTIFICATION_FCM_ENDPOINT:-}
+      NOTIFICATION_FCM_TOKEN: ${NOTIFICATION_FCM_TOKEN:-}
+      NOTIFICATION_SMS_ENDPOINT: ${NOTIFICATION_SMS_ENDPOINT:-}
+      NOTIFICATION_SMS_TOKEN: ${NOTIFICATION_SMS_TOKEN:-}
+      NOTIFICATION_EMAIL_ENDPOINT: ${NOTIFICATION_EMAIL_ENDPOINT:-}
+      NOTIFICATION_EMAIL_TOKEN: ${NOTIFICATION_EMAIL_TOKEN:-}
+      PUBLIC_WALLET_PILOT_ENABLED: ${PUBLIC_WALLET_PILOT_ENABLED:-true}
+      PUBLIC_WALLET_PILOT_CITY: ${PUBLIC_WALLET_PILOT_CITY:-Gwanda}
+      PAYMENTS_PROVIDER_ENABLED: ${PAYMENTS_PROVIDER_ENABLED:-false}
+    depends_on:
+      redis:
+        condition: service_healthy
+    ports:
+      - "${BACKEND_PORT:-3000}:3000"
+    networks:
+      - edge
+      - data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/health/live >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  asynq-worker:
+    image: pickme/backend:${IMAGE_TAG:-local}
+    command: ["/app/pickme-worker"]
+    profiles: ["worker"]
+    env_file:
+      - path: ./.env
+        required: false
+      - path: ./backend/.env
+        required: false
+    environment:
+      APP_ENV: ${APP_ENV:-production}
+      READINESS_PROFILE: ${READINESS_PROFILE:-pilot}
+      DATABASE_URL: ${DATABASE_URL}
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_JWT_SECRET: ${SUPABASE_JWT_SECRET}
+      REDIS_ENABLED: "true"
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      ASYNQ_ENABLED: "true"
+      ASYNQ_REDIS_URL: ${ASYNQ_REDIS_URL:-redis://redis:6379/1}
+      ASYNQ_CONCURRENCY: ${ASYNQ_WORKER_CONCURRENCY:-10}
+      DISPATCH_MODE: ${DISPATCH_MODE:-authoritative}
+      NOTIFICATION_FCM_ENDPOINT: ${NOTIFICATION_FCM_ENDPOINT:-}
+      NOTIFICATION_FCM_TOKEN: ${NOTIFICATION_FCM_TOKEN:-}
+      NOTIFICATION_SMS_ENDPOINT: ${NOTIFICATION_SMS_ENDPOINT:-}
+      NOTIFICATION_SMS_TOKEN: ${NOTIFICATION_SMS_TOKEN:-}
+      NOTIFICATION_EMAIL_ENDPOINT: ${NOTIFICATION_EMAIL_ENDPOINT:-}
+      NOTIFICATION_EMAIL_TOKEN: ${NOTIFICATION_EMAIL_TOKEN:-}
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "tr '\\0' ' ' < /proc/1/cmdline | grep -q '/app/pickme-worker'"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  asynq-scheduler:
+    image: pickme/backend:${IMAGE_TAG:-local}
+    command: ["/app/pickme-scheduler"]
+    profiles: ["scheduler"]
+    env_file:
+      - path: ./.env
+        required: false
+      - path: ./backend/.env
+        required: false
+    environment:
+      APP_ENV: ${APP_ENV:-production}
+      READINESS_PROFILE: ${READINESS_PROFILE:-pilot}
+      DATABASE_URL: ${DATABASE_URL}
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_JWT_SECRET: ${SUPABASE_JWT_SECRET}
+      REDIS_ENABLED: "true"
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      ASYNQ_ENABLED: "true"
+      ASYNQ_REDIS_URL: ${ASYNQ_REDIS_URL:-redis://redis:6379/1}
+      ASYNQ_CONCURRENCY: "2"
+      DISPATCH_MODE: ${DISPATCH_MODE:-authoritative}
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "tr '\\0' ' ' < /proc/1/cmdline | grep -q '/app/pickme-scheduler'"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+    volumes:
+      - redis-data:/data
+      - ./ops/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    networks:
+      - data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    command:
+      - --path.procfs=/host/proc
+      - --path.sysfs=/host/sys
+      - --path.rootfs=/rootfs
+      - --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro,rslave
+    networks:
+      - data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "(command -v wget >/dev/null 2>&1 && wget -qO- http://127.0.0.1:9100/metrics >/dev/null) || (command -v curl >/dev/null 2>&1 && curl -fsS http://127.0.0.1:9100/metrics >/dev/null) || (tr '\\0' ' ' < /proc/1/cmdline | grep -q node_exporter)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  prometheus:
+    image: prom/prometheus:v3.0.1
+    volumes:
+      - ./ops/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./ops/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - ./ops/prometheus/secrets:/etc/prometheus/secrets:ro
+      - prometheus-data:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-15d}
+    ports:
+      - "127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"
+    networks:
+      - data
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+      node-exporter:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "(command -v wget >/dev/null 2>&1 && wget -qO- http://127.0.0.1:9090/-/ready >/dev/null) || (command -v curl >/dev/null 2>&1 && curl -fsS http://127.0.0.1:9090/-/ready >/dev/null) || (tr '\\0' ' ' < /proc/1/cmdline | grep -q prometheus)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    env_file:
+      - path: ./.env
+        required: false
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD is required}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./ops/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./docs/grafana:/var/lib/grafana/dashboards/pickme:ro
+    ports:
+      - "127.0.0.1:${GRAFANA_PORT:-3001}:3000"
+    networks:
+      - data
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+    healthcheck:
+      test: ["CMD-SHELL", "(command -v wget >/dev/null 2>&1 && wget -qO- http://127.0.0.1:3000/api/health >/dev/null) || (command -v curl >/dev/null 2>&1 && curl -fsS http://127.0.0.1:3000/api/health >/dev/null) || (tr '\\0' ' ' < /proc/1/cmdline | grep -q grafana)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  loki:
+    image: grafana/loki:3.3.2
+    profiles: ["loki"]
+    command: ["-config.file=/etc/loki/local-config.yaml"]
+    ports:
+      - "127.0.0.1:${LOKI_PORT:-3100}:3100"
+    networks:
+      - data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "(command -v wget >/dev/null 2>&1 && wget -qO- http://127.0.0.1:3100/ready >/dev/null) || (command -v curl >/dev/null 2>&1 && curl -fsS http://127.0.0.1:3100/ready >/dev/null) || (tr '\\0' ' ' < /proc/1/cmdline | grep -q loki)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  redis-data:
+  prometheus-data:
+  grafana-data:
+
+networks:
+  edge:
+  data:
+    internal: true

@@ -5,7 +5,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line, AreaChart, Area } from 'recharts';
-import { DollarSign, TrendingUp, Car, Calendar, Star, Percent } from 'lucide-react';
+import { DollarSign, TrendingUp, Car, Calendar, Star, Percent, CheckCircle2 } from 'lucide-react';
 import { format, subDays, eachDayOfInterval, eachHourOfInterval, startOfDay, endOfDay } from 'date-fns';
 import { motion } from 'framer-motion';
 import { getDriverEarnings } from '@/lib/walletApi';
@@ -158,6 +158,18 @@ export default function DriverEarningsDashboard() {
               <TabsTrigger value="30d" className="text-xs px-3 h-6">30 Days</TabsTrigger>
             </TabsList>
           </Tabs>
+        </div>
+
+        <div className="rounded-2xl border border-primary/20 bg-primary/5 p-3">
+          <div className="flex items-start gap-2">
+            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+            <div>
+              <p className="text-xs font-extrabold text-foreground">Pilot performance targets</p>
+              <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
+                Keep acceptance high, pickup communication clear, and cash handoff confirmed before marking trips complete.
+              </p>
+            </div>
+          </div>
         </div>
 
         {/* Summary Cards */}

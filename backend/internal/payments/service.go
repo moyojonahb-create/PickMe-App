@@ -101,6 +101,11 @@ func (s *Service) CreateCardDeposit(ctx context.Context, req DepositIntentReques
 	if req.Currency == "" {
 		req.Currency = wallet.CurrencyUSD
 	}
+	if existing, ok, err := s.existingProviderDeposit(ctx, req.UserID, ProviderCard, "provider_deposit", req.IdempotencyKey, req.AmountMinor, req.Currency); err != nil {
+		return DepositIntent{}, err
+	} else if ok {
+		return depositIntentFromWallet(existing), nil
+	}
 	if err := s.guardWalletPilot(ctx, wallet.WalletPilotMutationRequest{
 		Endpoint:        "/api/payments/cards/deposits",
 		UserID:          req.UserID,
@@ -223,6 +228,11 @@ func (s *Service) createProviderDepositIntent(ctx context.Context, providerName 
 	if req.Currency == "" {
 		req.Currency = wallet.CurrencyUSD
 	}
+	if existing, ok, err := s.existingProviderDeposit(ctx, req.UserID, providerName, "provider_deposit", req.IdempotencyKey, req.AmountMinor, req.Currency); err != nil {
+		return DepositIntent{}, err
+	} else if ok {
+		return depositIntentFromWallet(existing), nil
+	}
 	if err := s.guardWalletPilot(ctx, wallet.WalletPilotMutationRequest{
 		Endpoint:        "/api/payments/" + providerName + "/deposits",
 		UserID:          req.UserID,
@@ -272,6 +282,30 @@ func (s *Service) HandleInnbucksCallback(ctx context.Context, callback ProviderC
 
 func (s *Service) HandlePayPalCallback(ctx context.Context, callback ProviderCallback) (wallet.PaymentIntent, error) {
 	return s.handleProviderCallback(ctx, ProviderPayPal, callback)
+}
+
+func (s *Service) existingProviderDeposit(ctx context.Context, userID string, provider string, operation string, key string, amountMinor int64, currency string) (wallet.PaymentIntent, bool, error) {
+	type scopedLookup interface {
+		GetProviderDepositByScopedIdempotency(ctx context.Context, userID string, provider string, operation string, key string) (wallet.PaymentIntent, error)
+	}
+	if s == nil || s.repo == nil || key == "" {
+		return wallet.PaymentIntent{}, false, nil
+	}
+	if err := wallet.ValidateIdempotencyKey(key); err != nil {
+		return wallet.PaymentIntent{}, false, nil
+	}
+	lookup, ok := s.repo.(scopedLookup)
+	if !ok {
+		return wallet.PaymentIntent{}, false, nil
+	}
+	intent, err := lookup.GetProviderDepositByScopedIdempotency(ctx, userID, provider, operation, key)
+	if err != nil {
+		return wallet.PaymentIntent{}, false, nil
+	}
+	if intent.AmountMinor != amountMinor || intent.Currency != currency {
+		return wallet.PaymentIntent{}, false, wallet.ErrInvalidIdempotencyKey
+	}
+	return intent, true, nil
 }
 
 func (s *Service) handleProviderCallback(ctx context.Context, providerName string, callback ProviderCallback) (wallet.PaymentIntent, error) {

@@ -31,6 +31,7 @@ import LoadPulsePanel from '@/components/admin/LoadPulsePanel';
 import UserIncidentsPanel from '@/components/admin/UserIncidentsPanel';
 import { generateLovablePrompt } from '@/lib/ramzPrompt';
 import { getAdminFinanceHealth } from '@/lib/walletApi';
+import { adminIngestSystemHealthLogs, adminResolveSystemHealthLog } from '@/lib/businessApi';
 
 interface HealthCheck {
   id: string;
@@ -130,14 +131,7 @@ export default function AdminSystemHealth() {
     const todayStart = new Date(now);
     todayStart.setHours(0, 0, 0, 0);
 
-    // Move old "today" entries to "week" if they're from previous days
-    await supabase
-      .from('system_error_logs')
-      .update({ period: 'week', updated_at: new Date().toISOString() } as any)
-      .eq('period', 'today')
-      .lt('created_at', todayStart.toISOString());
-
-    // Insert new findings
+    // Insert new findings and archive older "today" rows on the backend.
     const rows = findings
       .filter(f => f.severity !== 'info')
       .map(f => ({
@@ -153,7 +147,7 @@ export default function AdminSystemHealth() {
       }));
 
     if (rows.length > 0) {
-      await supabase.from('system_error_logs').insert(rows);
+      await adminIngestSystemHealthLogs(todayStart.toISOString(), rows);
     }
   }, []);
 
@@ -770,9 +764,7 @@ export default function AdminSystemHealth() {
   const categories = ['all', 'error', 'map', 'ui', 'driver', 'performance', 'security', 'database', 'suggestion'];
 
   const resolveLog = async (logId: string) => {
-    await supabase.from('system_error_logs').update({
-      resolved: true, resolved_at: new Date().toISOString(),
-    } as any).eq('id', logId);
+    await adminResolveSystemHealthLog(logId);
     toast.success('Issue marked as resolved');
     loadErrorLogs(logTab);
   };

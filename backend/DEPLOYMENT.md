@@ -11,8 +11,8 @@
 Required:
 
 ```text
-DATABASE_URL=postgres://...
-SUPABASE_JWT_SECRET={supabase jwt secret}
+DATABASE_URL=
+SUPABASE_JWT_SECRET=
 ```
 
 Optional:

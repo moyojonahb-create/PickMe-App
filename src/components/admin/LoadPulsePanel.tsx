@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { subHours, subMinutes } from 'date-fns';
 import { toast } from 'sonner';
+import { adminPurgeStaleLiveLocations } from '@/lib/businessApi';
 
 interface Pulse {
   activeRides: number;
@@ -95,8 +96,7 @@ export default function LoadPulsePanel() {
     setPurging(true);
     try {
       const cutoff = subHours(new Date(), 1).toISOString();
-      const { error } = await supabase.from('live_locations').delete().lt('updated_at', cutoff);
-      if (error) throw error;
+      await adminPurgeStaleLiveLocations(cutoff);
       toast.success('Stale live_locations purged.');
       await load();
     } catch (e) {

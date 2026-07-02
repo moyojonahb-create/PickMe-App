@@ -786,6 +786,7 @@ func TestListOffersReturnsPendingNonExpiredOffers(t *testing.T) {
 }
 
 func TestAcceptOfferSuccessful(t *testing.T) {
+	rideUpdateMirroredStatus := false
 	tx := &fakeTx{
 		queryRowFn: func(ctx context.Context, sql string, args ...any) pgx.Row {
 			if strings.Contains(sql, "FROM public.ride_offers") {
@@ -794,6 +795,9 @@ func TestAcceptOfferSuccessful(t *testing.T) {
 			return &fakeRow{values: []any{"rider-1", "requested", "cash"}, err: nil}
 		},
 		execFn: func(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error) {
+			if strings.Contains(sql, "UPDATE public.rides") {
+				rideUpdateMirroredStatus = strings.Contains(sql, "status = 'accepted'")
+			}
 			return pgconn.NewCommandTag("UPDATE 1"), nil
 		},
 		commitFn: func(ctx context.Context) error {
@@ -825,8 +829,14 @@ func TestAcceptOfferSuccessful(t *testing.T) {
 	if result["ride_status"] != "accepted" {
 		t.Fatalf("expected ride_status accepted, got %v", result["ride_status"])
 	}
+	if result["status"] != "accepted" {
+		t.Fatalf("expected compatibility status accepted, got %v", result["status"])
+	}
 	if result["offer_id"] != "offer-1" {
 		t.Fatalf("expected offer_id offer-1, got %v", result["offer_id"])
+	}
+	if !rideUpdateMirroredStatus {
+		t.Fatal("accept offer must mirror accepted into legacy status column")
 	}
 }
 
@@ -986,12 +996,14 @@ func TestRiderCannotAcceptOfferForAnotherRidersRide(t *testing.T) {
 
 func TestStartRideEmitsRideStartedExactlyOnce(t *testing.T) {
 	notifier := &fakeLifecycleNotifier{}
+	var updateSQL string
 	db := &fakeDB{
 		queryRowFn: func(ctx context.Context, sql string, args ...any) pgx.Row {
 			switch {
 			case strings.Contains(sql, "COALESCE(driver_id"):
 				return &fakeRow{values: []any{"driver-1"}}
 			case strings.Contains(sql, "UPDATE public.rides"):
+				updateSQL = sql
 				if !strings.Contains(sql, "RETURNING rider_id::text, driver_id::text") {
 					t.Fatalf("expected start update to return lifecycle identities: %s", sql)
 				}
@@ -1013,6 +1025,16 @@ func TestStartRideEmitsRideStartedExactlyOnce(t *testing.T) {
 	if len(notifier.events) != 1 {
 		t.Fatalf("expected exactly one lifecycle event, got %d", len(notifier.events))
 	}
+	if !strings.Contains(updateSQL, "status = 'in_progress'") || !strings.Contains(updateSQL, "ride_status IN ('accepted', 'enroute', 'arrived')") {
+		t.Fatalf("start must mirror in_progress compatibility and allow accepted/enroute/arrived, got %s", updateSQL)
+	}
+	var body map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	if body["ride_status"] != "ongoing" || body["status"] != "in_progress" {
+		t.Fatalf("expected ongoing/in_progress compatibility response, got %#v", body)
+	}
 
 	event := notifier.events[0]
 	if event.payload.Event != "ride_started" ||
@@ -1023,6 +1045,52 @@ func TestStartRideEmitsRideStartedExactlyOnce(t *testing.T) {
 		event.riderID != "rider-1" ||
 		event.driverID != "driver-1" {
 		t.Fatalf("unexpected ride_started event: %#v", event)
+	}
+}
+
+func TestIntermediateRideStatusDoesNotStartPayableTrip(t *testing.T) {
+	notifier := &fakeLifecycleNotifier{}
+	var updateSQL string
+	db := &fakeDB{
+		queryRowFn: func(ctx context.Context, sql string, args ...any) pgx.Row {
+			switch {
+			case strings.Contains(sql, "COALESCE(driver_id"):
+				return &fakeRow{values: []any{"driver-1"}}
+			case strings.Contains(sql, "UPDATE public.rides"):
+				updateSQL = sql
+				if args[0] != "enroute" || args[1] != "ride-1" || args[2] != "driver-1" {
+					t.Fatalf("unexpected enroute update args: %#v", args)
+				}
+				return &fakeRow{values: []any{"rider-1", "driver-1"}}
+			default:
+				return &fakeRow{err: pgx.ErrNoRows}
+			}
+		},
+	}
+
+	h := makeHandlerWithDB(db)
+	h.lifecycleNotifier = notifier
+	app := makeAuthRideApp(http.MethodPost, "/test/:rideId/status", h.UpdateStatus, "driver-1")
+
+	resp := doRequest(t, app, "/test/ride-1/status", fiber.Map{"status": "enroute", "expected_status": "accepted"})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", resp.StatusCode)
+	}
+	if strings.Contains(updateSQL, "started_at") {
+		t.Fatalf("enroute transition must not start payable trip: %s", updateSQL)
+	}
+	if !strings.Contains(updateSQL, "ride_status = $1") || !strings.Contains(updateSQL, "status = $1") {
+		t.Fatalf("enroute transition must mirror canonical and compatibility status, got %s", updateSQL)
+	}
+	if len(notifier.events) != 1 || notifier.events[0].payload.Event != "ride_status_updated" || notifier.events[0].payload.RideStatus != "enroute" {
+		t.Fatalf("expected one enroute lifecycle event, got %#v", notifier.events)
+	}
+	var body map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	if body["ride_status"] != "enroute" || body["status"] != "enroute" {
+		t.Fatalf("expected enroute compatibility response, got %#v", body)
 	}
 }
 
@@ -1285,5 +1353,56 @@ func TestRideOfferDoesNotUseGlobalBroadcastPath(t *testing.T) {
 	}
 	if !strings.Contains(string(source), "NotifyRideOffer(offer)") {
 		t.Fatal("ride request should notify ride_offer through the driver-targeted notifier")
+	}
+}
+
+func TestFrontendRideCompatibilityAliases(t *testing.T) {
+	db := &fakeDB{
+		execFn: func(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error) {
+			switch {
+			case strings.Contains(sql, "SET estimated_fare"):
+				if len(args) != 3 || args[0] != "ride-1" || args[1] != "rider-1" {
+					t.Fatalf("unexpected patch ride args: %#v", args)
+				}
+				return pgconn.NewCommandTag("UPDATE 1"), nil
+			case strings.Contains(sql, "SET status = 'declined'"):
+				if len(args) != 3 || args[0] != "offer-1" || args[1] != "ride-1" || args[2] != "driver-1" {
+					t.Fatalf("unexpected reject args: %#v", args)
+				}
+				return pgconn.NewCommandTag("UPDATE 1"), nil
+			default:
+				t.Fatalf("unexpected exec sql: %s", sql)
+				return pgconn.CommandTag{}, nil
+			}
+		},
+		queryRowFn: func(ctx context.Context, sql string, args ...any) pgx.Row {
+			if !strings.Contains(sql, "FROM public.ride_offers") {
+				t.Fatalf("unexpected query sql: %s", sql)
+			}
+			if len(args) != 2 || args[0] != "offer-1" || args[1] != "driver-1" {
+				t.Fatalf("unexpected query args: %#v", args)
+			}
+			return &fakeRow{values: []any{"ride-1"}}
+		},
+	}
+	h := makeHandlerWithDB(db)
+	app := fiber.New()
+	RegisterCompatibilityRoutes(app, h, func(c *fiber.Ctx) error {
+		userID := "driver-1"
+		if c.Method() == http.MethodPatch {
+			userID = "rider-1"
+		}
+		c.Locals(middleware.LocalsAuthSubject, userID)
+		return c.Next()
+	})
+
+	patch := doRawRequest(t, app, http.MethodPatch, "/api/rides/ride-1", map[string]any{"fare_minor": 1250})
+	if patch.StatusCode != http.StatusOK {
+		t.Fatalf("expected PATCH compatibility route 200, got %d body=%s", patch.StatusCode, string(readResponseBody(t, patch)))
+	}
+
+	reject := doRawRequest(t, app, http.MethodPost, "/api/rides/offers/offer-1/reject", nil)
+	if reject.StatusCode != http.StatusOK {
+		t.Fatalf("expected unscoped reject compatibility route 200, got %d body=%s", reject.StatusCode, string(readResponseBody(t, reject)))
 	}
 }

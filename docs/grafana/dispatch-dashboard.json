@@ -1,0 +1,33 @@
+{
+  "title": "PickMe Dispatch",
+  "schemaVersion": 39,
+  "version": 1,
+  "tags": ["pickme", "dispatch"],
+  "timezone": "browser",
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Offer waves",
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 0},
+      "targets": [{"expr": "sum(rate(dispatch_offer_waves_total[5m]))"}]
+    },
+    {
+      "type": "timeseries",
+      "title": "Offer acceptances",
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 0},
+      "targets": [{"expr": "sum(rate(dispatch_offer_acceptances_total[5m]))"}]
+    },
+    {
+      "type": "timeseries",
+      "title": "Expired offers",
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 0},
+      "targets": [{"expr": "sum(rate(dispatch_offer_expired_total[5m]))"}]
+    },
+    {
+      "type": "timeseries",
+      "title": "Ride lifecycle",
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 8},
+      "targets": [{"expr": "sum(rate(rides_created_total[5m]))"}, {"expr": "sum(rate(rides_started_total[5m]))"}, {"expr": "sum(rate(rides_completed_total[5m]))"}, {"expr": "sum(rate(rides_cancelled_total[5m]))"}]
+    }
+  ]
+}

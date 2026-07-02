@@ -1,0 +1,18 @@
+[Unit]
+Description=PickMe Frontend Container
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/pickme
+ExecStart=/usr/bin/docker compose up frontend
+ExecStop=/usr/bin/docker compose stop frontend
+Restart=always
+RestartSec=10
+TimeoutStopSec=45
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

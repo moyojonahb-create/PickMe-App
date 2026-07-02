@@ -16,6 +16,7 @@ import {
   DollarSign, TrendingUp, GraduationCap,
 } from 'lucide-react';
 import { useStudentProfile } from '@/hooks/useStudentProfile';
+import { updateMyProfileAvatar } from '@/lib/businessApi';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import BottomNavBar from '@/components/BottomNavBar';
@@ -80,7 +81,7 @@ export default function RiderProfile() {
       const { data: signedData, error: signedErr } = await supabase.storage.from('driver-avatars').createSignedUrl(path, 60 * 60 * 24 * 365);
       if (signedErr || !signedData?.signedUrl) throw signedErr || new Error('Failed to get URL');
       setAvatarUrl(signedData.signedUrl);
-      await supabase.from('profiles').update({ avatar_url: path }).eq('user_id', user.id);
+      await updateMyProfileAvatar(path);
       toast.success('Photo updated!');
     } catch (err: unknown) {
       toast.error('Upload failed', { description: (err as Error).message });

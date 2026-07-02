@@ -4,6 +4,7 @@ import { resolveAvatarUrl } from '@/lib/avatarUrl';
 import { getCached, setCache } from '@/lib/queryCache';
 import { goBackend, type GoOfferCreateRequest } from '@/lib/goBackendClient';
 import { decimalToMinor } from '@/lib/money';
+import { normalizeRideRow } from '@/lib/rideContract';
 
 export type Offer = {
   id: string;
@@ -15,6 +16,37 @@ export type Offer = {
   status: 'pending' | 'accepted' | 'rejected';
   created_at: string;
 };
+
+type GoOfferResponse = {
+  id?: string;
+  offer_id?: string;
+  ride_id?: string;
+  request_id?: string;
+  driver_id: string;
+  amount?: number;
+  price?: number;
+  fare?: number;
+  offered_fare?: number;
+  eta_minutes?: number | null;
+  message?: string | null;
+  status?: 'pending' | 'accepted' | 'rejected';
+  created_at?: string;
+};
+
+function normalizeOffer(row: GoOfferResponse, rideId: string): Offer {
+  const id = String(row.id ?? row.offer_id ?? "");
+  if (!id) throw new Error("Offer response missing id");
+  return {
+    id,
+    ride_id: String(row.ride_id ?? row.request_id ?? rideId),
+    driver_id: row.driver_id,
+    price: Number(row.price ?? row.amount ?? row.fare ?? row.offered_fare ?? 0),
+    eta_minutes: row.eta_minutes ?? null,
+    message: row.message ?? null,
+    status: row.status ?? "pending",
+    created_at: row.created_at ?? new Date().toISOString(),
+  };
+}
 
 export type DriverProfile = {
   id: string;
@@ -61,16 +93,8 @@ async function getUserOrThrow() {
 
 // Fetch pending offers for a ride (with LIMIT to prevent overload)
 export async function fetchPendingOffers(rideId: string): Promise<Offer[]> {
-  const { data, error } = await supabase
-    .from("offers")
-    .select("id, ride_id, driver_id, price, eta_minutes, message, status, created_at")
-    .eq("ride_id", rideId)
-    .eq("status", "pending")
-    .order("created_at", { ascending: false })
-    .limit(50); // Cap offers per ride
-
-  if (error) throw new Error(error.message);
-  return (data ?? []) as Offer[];
+  const data = await goBackend.get<GoOfferResponse[]>(`/api/rides/${rideId}/offers`);
+  return (data ?? []).slice(0, 50).map((offer) => normalizeOffer(offer, rideId));
 }
 
 // Fetch drivers by their user IDs, enriched with profile name
@@ -114,17 +138,8 @@ export async function fetchDriversByIds(driverIds: string[]): Promise<Record<str
 // Fetch open rides for drivers to bid on (only last 5 minutes)
 // OPTIMIZED: added LIMIT 30 to cap returned rides at scale
 export async function fetchOpenRides(driverGender?: string | null) {
-  const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
-  const { data, error } = await supabase
-    .from("rides")
-    .select("id, user_id, status, pickup_address, dropoff_address, pickup_lat, pickup_lon, dropoff_lat, dropoff_lon, fare, distance_km, duration_minutes, vehicle_type, gender_preference, payment_method, passenger_count, town_id, created_at")
-    .eq("status", "pending")
-    .gte("created_at", fiveMinAgo)
-    .order("created_at", { ascending: false })
-    .limit(30); // Cap to prevent fetching thousands of rides
-
-  if (error) throw new Error(error.message);
-  const rides = data ?? [];
+  const data = await goBackend.get<Record<string, unknown>[]>("/api/rides/open");
+  const rides = (data ?? []).map((ride) => normalizeRideRow(ride));
 
   // Server-side filtering: hide female-only rides from male drivers
   if (driverGender && driverGender !== 'female') {
@@ -174,10 +189,9 @@ export async function submitOffer(input: {
     status: 'pending',
   };
 
-  const data = await goBackend.post<Offer | { offer: Offer }>(`/api/rides/${input.ride_id}/offers`, payload);
+  const data = await goBackend.post<GoOfferResponse | { offer: GoOfferResponse }>(`/api/rides/${input.ride_id}/offers`, payload);
   const offer = "offer" in data ? data.offer : data;
-  if (!offer?.id) throw new Error("Failed to create offer");
-  return offer as Offer;
+  return normalizeOffer(offer, input.ride_id);
 }
 
 // Decline an offer

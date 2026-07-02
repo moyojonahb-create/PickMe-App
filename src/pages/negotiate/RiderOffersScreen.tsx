@@ -6,6 +6,8 @@ import { toast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, CheckCircle, Clock, UserCircle } from 'lucide-react';
 import { goBackend } from '@/lib/goBackendClient';
+import { fetchPendingOffers } from '@/lib/offerHelpers';
+import { isRequestedRideStatus, normalizeRideRow } from '@/lib/rideContract';
 
 type RideRequest = {
   id: string;
@@ -38,23 +40,36 @@ export default function RiderOffersScreen() {
   // Load request details
   useEffect(() => {
     if (!requestId) return;
-    supabase
-      .from('ride_requests')
-      .select('*')
-      .eq('id', requestId)
-      .single()
-      .then(({ data }) => { if (data) setRequest(data as RideRequest); });
+    goBackend
+      .get<Record<string, unknown>>(`/api/rides/${requestId}`)
+      .then((data) => {
+        const ride = normalizeRideRow(data);
+        setRequest({
+          id: String(ride.id),
+          pickup: String(ride.pickup_address ?? ride.pickup_location ?? ''),
+          dropoff: String(ride.dropoff_address ?? ride.dropoff_location ?? ''),
+          offered_fare: Number(ride.fare ?? ride.estimated_fare ?? 0),
+          currency: 'USD',
+          status: ride.status,
+        });
+      })
+      .catch((error) => {
+        toast({ title: 'Error loading ride', description: (error as Error).message, variant: 'destructive' });
+      });
   }, [requestId]);
 
   // Load offers — stable ref to avoid stale closures in realtime
   const loadOffers = useCallback(async () => {
     if (!requestId) return;
-    const { data } = await supabase
-      .from('ride_offers')
-      .select('*')
-      .eq('request_id', requestId)
-      .order('created_at', { ascending: false });
-    if (data) setOffers(data as RideOffer[]);
+    const data = await fetchPendingOffers(requestId);
+    setOffers(data.map((offer) => ({
+      id: offer.id,
+      request_id: offer.ride_id,
+      driver_id: offer.driver_id,
+      offer_fare: offer.price,
+      status: offer.status,
+      created_at: offer.created_at,
+    })));
   }, [requestId]);
 
   const loadOffersRef = useRef(loadOffers);
@@ -72,7 +87,7 @@ export default function RiderOffersScreen() {
       .channel(`rider-offers-realtime-${requestId}-${Date.now()}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'ride_offers', filter: `request_id=eq.${requestId}` },
+        { event: '*', schema: 'public', table: 'ride_offers', filter: `ride_id=eq.${requestId}` },
         () => { loadOffersRef.current(); }
       )
       .subscribe();
@@ -138,7 +153,7 @@ export default function RiderOffersScreen() {
           <p className="text-sm text-muted-foreground">
             Offered: <span className="font-bold text-foreground">${Number(request.offered_fare).toFixed(2)}</span>
           </p>
-          {request.status === 'negotiating' && (
+          {isRequestedRideStatus(request.status) && (
             <p className="text-xs text-primary flex items-center gap-1 mt-1">
               <Clock className="w-3 h-3" /> Waiting for driver offers…
             </p>
@@ -175,7 +190,7 @@ export default function RiderOffersScreen() {
                     <p className="text-xl font-bold text-foreground">${offer.offer_fare}</p>
                   </div>
                 </div>
-                {offer.status === 'pending' && request?.status === 'negotiating' && (
+                {offer.status === 'pending' && isRequestedRideStatus(request?.status) && (
                   <Button
                     size="sm"
                     onClick={() => handleAccept(offer)}

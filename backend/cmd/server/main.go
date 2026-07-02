@@ -2,25 +2,35 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log"
+	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 
 	"pickme-backend/internal/auth"
 	"pickme-backend/internal/authz"
+	"pickme-backend/internal/business"
 	"pickme-backend/internal/config"
 	"pickme-backend/internal/database"
 	"pickme-backend/internal/dispatch"
 	"pickme-backend/internal/drivers"
 	"pickme-backend/internal/geo"
+	"pickme-backend/internal/jobs"
 	"pickme-backend/internal/middleware"
+	"pickme-backend/internal/notification"
+	"pickme-backend/internal/observability"
 	"pickme-backend/internal/payments"
+	"pickme-backend/internal/readiness"
 	redisclient "pickme-backend/internal/redis"
 	"pickme-backend/internal/reputation"
 	"pickme-backend/internal/rides"
+	"pickme-backend/internal/risk"
 	"pickme-backend/internal/wallet"
 	"pickme-backend/internal/websocket"
 )
@@ -30,6 +40,24 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	obsShutdown, err := observability.Init(context.Background(), observability.Config{
+		ServiceName:  "pickme-backend",
+		Environment:  cfg.Observability.SentryEnvironment,
+		Release:      cfg.Observability.SentryRelease,
+		SentryDSN:    cfg.Observability.SentryDSN,
+		OTELEnabled:  cfg.Observability.OTELEnabled,
+		OTLPEndpoint: cfg.Observability.OTLPExporterEndpoint,
+	})
+	if err != nil {
+		log.Fatal("Observability initialization failed:", err)
+	}
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := obsShutdown(ctx); err != nil {
+			log.Println("Observability shutdown error:", err)
+		}
+	}()
 
 	dbpool, err := database.NewPool(cfg.DatabaseURL)
 	if err != nil {
@@ -55,6 +83,23 @@ func main() {
 			}
 		}()
 	}
+	jobRuntime, err := jobs.NewRuntime(jobs.Config{
+		Enabled:                cfg.Jobs.Enabled,
+		RedisURL:               cfg.Jobs.RedisURL,
+		Concurrency:            cfg.Jobs.Concurrency,
+		RetryMax:               cfg.Jobs.RetryMax,
+		ShutdownTimeoutSeconds: cfg.Jobs.ShutdownTimeoutSeconds,
+	})
+	if err != nil {
+		log.Fatal("Asynq initialization failed:", err)
+	}
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(cfg.Jobs.ShutdownTimeoutSeconds)*time.Second)
+		defer cancel()
+		if err := jobRuntime.Shutdown(ctx); err != nil {
+			log.Println("Asynq shutdown error:", err)
+		}
+	}()
 	geoService := geo.NewService(redisClient, geo.Config{
 		LocationTTL: time.Duration(cfg.Redis.DriverLocationTTLSeconds) * time.Second,
 		PresenceTTL: time.Duration(cfg.Redis.DriverPresenceTTLSeconds) * time.Second,
@@ -65,10 +110,47 @@ func main() {
 		CandidateLimit: cfg.Dispatch.CandidateLimit,
 		SelectedLimit:  cfg.Dispatch.SelectedLimit,
 		RankingVersion: cfg.Dispatch.RankingVersion,
-	}, dispatch.NewGeoCandidateProvider(geoService), dispatch.NewPostgresRepository(dbpool))
+		OfferTTL:       time.Duration(cfg.Dispatch.OfferTTLSeconds) * time.Second,
+		RideLockTTL:    time.Duration(cfg.Dispatch.RideLockTTLSeconds) * time.Second,
+		DriverLockTTL:  time.Duration(cfg.Dispatch.DriverLockTTLSeconds) * time.Second,
+		QueueName:      cfg.Dispatch.QueueName,
+	}, dispatch.NewGeoCandidateProvider(geoService), dispatch.NewPostgresRepository(dbpool)).
+		WithQueue(redisClient).
+		WithLocker(redisClient)
 	reputationRepo := reputation.NewPostgresRepository(dbpool)
 	reputationService := reputation.NewService(reputationRepo)
 	walletRepo := wallet.NewPostgresRepository(dbpool)
+	riskRepo := risk.NewPostgresRepository(dbpool)
+	riskService := risk.NewService(riskRepo, redisClient, jobRuntime.Client())
+	notificationRepo := notification.NewPostgresRepository(dbpool)
+	notificationService := notification.NewService(notificationRepo, jobRuntime.Client(), notification.Providers{
+		Push: notification.NewHTTPProvider(notification.HTTPProviderConfig{
+			Name:     "firebase_fcm",
+			Endpoint: cfg.Notification.FCMEndpoint,
+			Token:    cfg.Notification.FCMToken,
+		}),
+		SMS: notification.NewHTTPProvider(notification.HTTPProviderConfig{
+			Name:     "sms_provider",
+			Endpoint: cfg.Notification.SMSEndpoint,
+			Token:    cfg.Notification.SMSToken,
+		}),
+		Email: notification.NewHTTPProvider(notification.HTTPProviderConfig{
+			Name:     "email_provider",
+			Endpoint: cfg.Notification.EmailEndpoint,
+			Token:    cfg.Notification.EmailToken,
+		}),
+	}, notification.ServiceConfig{RateLimitPerMinute: cfg.Notification.RateLimitPerMinute})
+	readinessChecker := readiness.NewChecker(readiness.Config{
+		Postgres:             dbpool,
+		Redis:                redisClient,
+		Jobs:                 jobRuntime,
+		Profile:              cfg.ReadinessProfile,
+		DispatchMode:         cfg.Dispatch.Mode,
+		NotificationFCM:      cfg.Notification.FCMEndpoint,
+		NotificationSMS:      cfg.Notification.SMSEndpoint,
+		NotificationEmail:    cfg.Notification.EmailEndpoint,
+		QueueSaturationLimit: 10000,
+	})
 	publicWalletPilotService := wallet.NewPublicWalletPilotService(walletRepo)
 	publicWalletPilotEnforcer := wallet.NewPublicWalletPilotRuntimeEnforcer(publicWalletPilotService, wallet.PublicWalletPilotEnforcementConfig{
 		Enabled:         cfg.Wallet.PublicWalletPilotEnabled,
@@ -143,9 +225,36 @@ func main() {
 		)
 	}
 
-	wsManager := websocket.NewManager()
+	wsManager := websocket.NewManager().WithPubSub(redisClient)
+	wsManager.StartPubSub(context.Background())
 	driverRegistry := websocket.NewConnectionRegistry()
 	riderRegistry := websocket.NewConnectionRegistry()
+	dispatchService.WithOfferNotifier(dispatch.OfferNotifierFunc(func(ctx context.Context, offer dispatch.DriverOffer, ride dispatch.RideContext, expiresAt time.Time) {
+		driverSocket, exists := driverRegistry.Get(offer.DriverID)
+		if !exists {
+			return
+		}
+		payload, err := json.Marshal(fiber.Map{
+			"event":                "ride_offer",
+			"offer_id":             offer.OfferID,
+			"ride_id":              ride.RideID,
+			"rider_id":             ride.RiderID,
+			"pickup_location":      ride.PickupLocation,
+			"dropoff_location":     ride.DropoffLocation,
+			"estimated_fare":       wallet.MinorDecimalString(offer.AmountMinor, wallet.CurrencyUSD),
+			"estimated_fare_minor": offer.AmountMinor,
+			"payment_method":       "cash",
+			"eta_minutes":          offer.ETAMinutes,
+			"expires_at":           expiresAt,
+		})
+		if err != nil {
+			log.Println("Authoritative dispatch offer marshal warning:", err)
+			return
+		}
+		if !wsManager.Send(driverSocket, payload) {
+			driverRegistry.Delete(offer.DriverID)
+		}
+	}))
 
 	driverService := drivers.NewService(dbpool)
 	driverService.StartCleanupWorker()
@@ -167,7 +276,9 @@ func main() {
 	app.Use(middleware.GlobalRateLimit(middleware.RateLimitConfig{
 		Max:    cfg.HTTP.RateLimitMax,
 		Window: time.Duration(cfg.HTTP.RateLimitWindowSecs) * time.Second,
+		Store:  redisClient,
 	}))
+	app.Use(observability.HTTPMiddleware())
 	app.Use(middleware.Observability())
 	app.Use(middleware.CORS(cfg.CORS))
 	app.Use("/ws", websocket.NewHandler(wsManager, riderRegistry, driverRegistry, jwtVerifier, websocket.NewPostgresRoomAuthorizer(dbpool), authzSvc))
@@ -177,8 +288,18 @@ func main() {
 	})
 
 	app.Get("/health", database.HealthHandler())
+	app.Get("/health/live", readiness.LiveHandler())
+	app.Get("/health/ready", readiness.ReadyHandler(readinessChecker))
+	app.Get("/health/dependencies", readiness.DependenciesHandler(readinessChecker))
 	app.Get("/health/redis", redisclient.HealthHandler(redisClient))
-	app.Get("/test-db", database.TestHandler(dbpool))
+	adminOnly := middleware.AdminOnlyWithDB(dbpool)
+	if explicitDevelopmentMode(cfg.AppEnv) {
+		app.Get("/test-db", database.TestHandler(dbpool, true))
+		app.Get("/metrics", observability.MetricsHandler)
+	} else {
+		app.Get("/test-db", requireAuth, adminOnly, database.TestHandler(dbpool, false))
+		app.Get("/metrics", requireAuth, adminOnly, observability.MetricsHandler)
+	}
 
 	rideHandler := rides.NewHandler(rides.NewDB(dbpool), wsManager, riderRegistry, driverRegistry, dispatchService, reputationService, shadowSettlementService, activeCashSettlementService, walletAuthorizationService, walletPilotService, publicWalletPilotEnforcer, authzSvc)
 	driverHandler := drivers.NewHandler(dbpool, wsManager, geoService, reputationService, authzSvc)
@@ -193,9 +314,30 @@ func main() {
 	wallet.RegisterAdminRoutes(app, wallet.NewPostgresReports(dbpool), requireAuth)
 	wallet.RegisterOperationRoutes(app, walletAdminFlowService, walletAuthorizationService, walletReconciliationService, walletPilotService, walletRecoveryService, wallet.NewPostgresReports(dbpool), requireAuth)
 	payments.RegisterRoutes(app, paymentService, payments.NewReports(dbpool), requireAuth)
+	jobs.RegisterAdminRoutes(app, jobRuntime, requireAuth)
+	notification.RegisterRoutes(app, notificationService, requireAuth)
+	risk.RegisterRoutes(app, riskService, requireAuth)
+	business.RegisterRoutes(app, dbpool, requireAuth)
+
+	go func() {
+		quit := make(chan os.Signal, 1)
+		signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
+		<-quit
+		log.Println("Shutdown signal received")
+		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(cfg.Jobs.ShutdownTimeoutSeconds)*time.Second)
+		defer cancel()
+		if err := jobRuntime.Shutdown(ctx); err != nil {
+			log.Println("Asynq shutdown error:", err)
+		}
+		if err := app.Shutdown(); err != nil {
+			log.Println("Fiber shutdown error:", err)
+		}
+	}()
 
 	log.Println("PickMe Go Backend running on port", cfg.Port)
-	log.Fatal(app.Listen(":" + cfg.Port))
+	if err := app.Listen(":" + cfg.Port); err != nil {
+		log.Fatal(err)
+	}
 }
 
 func cardProcessorForConfig(cfg config.Config) (payments.CardProcessor, error) {

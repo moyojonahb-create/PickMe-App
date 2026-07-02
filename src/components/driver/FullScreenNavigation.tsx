@@ -31,6 +31,7 @@ import { completeTrip } from "@/lib/completeTrip";
 import { useVoiceNavigation } from "@/hooks/useVoiceNavigation";
 import { RideCommunication } from "@/components/ride/RideCommunication";
 import { goBackend } from "@/lib/goBackendClient";
+import { createNotification } from "@/lib/businessApi";
 import type { Coordinates } from "@/lib/osrm";
 
 // ── Types ──
@@ -403,12 +404,12 @@ export default function FullScreenNavigation({
     lastFetchPhase.current = "";
 
     if (newStatus === "arrived") {
-      supabase.from("notifications").insert({
+      createNotification({
         user_id: activeTrip.user_id,
         title: "🚗 Your driver has arrived!",
         body: "Your driver is at the pickup point. Please meet them now.",
         notification_type: "driver_arrived",
-      }).then(() => {});
+      }).catch(() => {});
     }
   };
 

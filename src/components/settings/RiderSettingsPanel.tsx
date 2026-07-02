@@ -5,6 +5,7 @@ import { Switch } from '@/components/ui/switch';
 import { Card, CardContent } from '@/components/ui/card';
 import { Bell, BellOff, Megaphone, Navigation2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { upsertUserSettings } from '@/lib/businessApi';
 
 type UserSettings = {
   notifications_enabled: boolean;
@@ -44,11 +45,9 @@ export default function RiderSettingsPanel() {
     const next = { ...settings, [field]: value };
     setSettings(next);
 
-    const { error } = await supabase
-      .from('user_settings')
-      .upsert({ user_id: user.id, ...next }, { onConflict: 'user_id' });
-
-    if (error) {
+    try {
+      await upsertUserSettings(next);
+    } catch {
       toast.error('Failed to save setting');
       setSettings(settings); // revert
     }

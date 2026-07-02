@@ -5,6 +5,7 @@ import { Switch } from '@/components/ui/switch';
 import { Volume2, Thermometer, Accessibility, Ear, ShieldCheck, Bell, Play } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { updateRiderPreferences } from '@/lib/businessApi';
 import {
   ARRIVED_SOUND_OPTIONS,
   getArrivedSound,
@@ -70,17 +71,15 @@ export default function RiderPreferencesSettings() {
     if (!user) return;
     const next = { ...local, [field]: value };
     setLocal(next);
-    const { error } = await supabase
-      .from('profiles')
-      .update({
+    try {
+      await updateRiderPreferences({
         quiet_ride: next.quiet_ride,
         cool_temperature: next.cool_temperature,
         wav_required: next.wav_required,
         hearing_impaired: next.hearing_impaired,
         gender_preference: next.gender_preference,
-      } as never)
-      .eq('user_id', user.id);
-    if (error) {
+      });
+    } catch {
       toast.error('Failed to save preference');
       setLocal(local);
     }

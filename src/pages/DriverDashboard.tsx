@@ -48,9 +48,11 @@ import { playAcceptedSound, playNewRequestSound } from "@/lib/notificationSounds
 import { updateDriverLocation } from "@/lib/driverLocation";
 import { useVoiceNavigation } from "@/hooks/useVoiceNavigation";
 import { filterActiveRides, getSecondsRemaining, expireOldRides } from "@/lib/rideExpiry";
+import { normalizeRideRow } from "@/lib/rideContract";
 import { preloadAllTownPricing, type TownPricingConfig } from "@/hooks/useTownPricing";
 
 import { completeTrip } from "@/lib/completeTrip";
+import { canCurrentDriverOperate, createNotification, isCurrentDriverTopDriver } from "@/lib/businessApi";
 import WalletBalance from "@/components/wallet/WalletBalance";
 import DepositModal from "@/components/wallet/DepositModal";
 import TransactionsSheet from "@/components/wallet/TransactionsSheet";
@@ -83,6 +85,7 @@ import RideRequestCard from "@/components/driver/RideRequestCard";
 import DriverOfferModal from "@/components/driver/DriverOfferModal";
 import PassengerInfoCard from "@/components/driver/PassengerInfoCard";
 import TopFlashBanner from "@/components/ui/top-flash-banner";
+import PilotReadinessCard from "@/components/pilot/PilotReadinessCard";
 import { subscribeRiderComing } from "@/lib/rideSignals";
 import { goBackend, type GoDriverPresenceRequest, type GoRideStatusRequest } from "@/lib/goBackendClient";
 import { getDriverWalletSummary } from "@/lib/walletApi";
@@ -290,8 +293,7 @@ export default function DriverDashboard() {
     setTogglingOnline(true);
     try {
       if (online) {
-        const { data: canOperate, error: rpcErr } = await supabase.rpc("can_driver_operate", { p_driver_id: user!.id });
-        if (rpcErr) throw new Error(rpcErr.message);
+        const canOperate = await canCurrentDriverOperate();
         if (!canOperate) {
           toast.error("Cannot go online", {
             description: "Your trial has ended or your wallet balance is too low. Please deposit to continue.",
@@ -352,31 +354,33 @@ export default function DriverDashboard() {
       // Fetch active trip (accepted/in_progress) assigned to this driver
       const { data: activeTripData } = await supabase
         .from("rides")
-        .select("id, pickup_address, dropoff_address, fare, status, user_id, pickup_lat, pickup_lon, dropoff_lat, dropoff_lon, payment_method, passenger_name, passenger_phone")
-        .eq("driver_id", p.id)
-        .in("status", ["accepted", "enroute", "enroute_pickup", "in_progress", "arrived"])
+        .select("*")
+        .or(`driver_id.eq.${p.id},driver_id.eq.${user?.id}`)
+        .or("status.in.(accepted,enroute,enroute_pickup,in_progress,arrived),ride_status.in.(accepted,enroute,arrived,ongoing)")
         .order("updated_at", { ascending: false })
         .limit(1)
         .maybeSingle();
       
       if (activeTripData) {
+        const activeTripRow = activeTripData as unknown as Record<string, unknown>;
+        const normalizedTrip = normalizeRideRow(activeTripRow);
         const prevStatus = activeTrip?.status;
-        const newStatus = activeTripData.status;
+        const newStatus = normalizedTrip.status;
 
         setActiveTrip({
-          id: activeTripData.id,
-          pickup_address: activeTripData.pickup_address,
-          dropoff_address: activeTripData.dropoff_address,
-          fare: Number(activeTripData.fare),
-          user_id: activeTripData.user_id,
+          id: String(activeTripRow.id),
+          pickup_address: String(activeTripRow.pickup_address ?? activeTripRow.pickup_location ?? ''),
+          dropoff_address: String(activeTripRow.dropoff_address ?? activeTripRow.dropoff_location ?? ''),
+          fare: Number(activeTripRow.fare ?? activeTripRow.estimated_fare ?? 0),
+          user_id: String(activeTripRow.user_id ?? activeTripRow.rider_id ?? ''),
           status: newStatus,
-          pickup_lat: activeTripData.pickup_lat,
-          pickup_lon: activeTripData.pickup_lon,
-          dropoff_lat: activeTripData.dropoff_lat,
-          dropoff_lon: activeTripData.dropoff_lon,
-          payment_method: activeTripData.payment_method || 'cash',
-          passenger_name: activeTripData.passenger_name || null,
-          passenger_phone: activeTripData.passenger_phone || null,
+          pickup_lat: Number(activeTripRow.pickup_lat ?? 0),
+          pickup_lon: Number(activeTripRow.pickup_lon ?? 0),
+          dropoff_lat: Number(activeTripRow.dropoff_lat ?? 0),
+          dropoff_lon: Number(activeTripRow.dropoff_lon ?? 0),
+          payment_method: String(activeTripRow.payment_method || 'cash'),
+          passenger_name: (activeTripRow.passenger_name as string | null) || null,
+          passenger_phone: (activeTripRow.passenger_phone as string | null) || null,
         });
 
         // Notify driver when rider accepts their offer
@@ -385,11 +389,11 @@ export default function DriverDashboard() {
           vibrateAlert();
           showBrowserNotification(
             "✅ Ride Accepted!",
-            `Rider accepted your offer — ${fmtUSD(Number(activeTripData.fare))}. Head to pickup!`,
+            `Rider accepted your offer — ${fmtUSD(Number(activeTripRow.fare ?? activeTripRow.estimated_fare ?? 0))}. Head to pickup!`,
             "/driver"
           );
           toast.success("✅ Ride Accepted!", {
-            description: `Rider accepted your offer — ${fmtUSD(Number(activeTripData.fare))}. Head to pickup now!`,
+            description: `Rider accepted your offer — ${fmtUSD(Number(activeTripRow.fare ?? activeTripRow.estimated_fare ?? 0))}. Head to pickup now!`,
             duration: 10000,
           });
         }
@@ -404,7 +408,7 @@ export default function DriverDashboard() {
         const { data: riderProfile } = await supabase
           .from("profiles")
           .select("phone")
-          .eq("user_id", activeTripData.user_id)
+          .eq("user_id", String(activeTripRow.user_id ?? activeTripRow.rider_id ?? ''))
           .maybeSingle();
         setRiderPhone(riderProfile?.phone ?? null);
 
@@ -415,21 +419,21 @@ export default function DriverDashboard() {
       }
 
       // Check if top driver for priority access
-      const { data: topStatus } = await supabase.rpc("is_top_driver", { _user_id: user!.id });
-      setIsTopDriver(!!topStatus);
+      const topStatus = await isCurrentDriverTopDriver();
+      setIsTopDriver(topStatus);
 
       // Only fetch rides if driver is online
       if (p.is_online) {
         // Expire old rides server-side first
         await expireOldRides();
-        const list = await fetchOpenRides(profile?.gender);
+        const list = await fetchOpenRides(p.gender);
         const activeList = filterActiveRides(list);
 
-        setRides(activeList as Ride[]);
+        setRides(activeList as unknown as Ride[]);
 
         // Fetch preferences for all visible rides
-        const allRideIds = activeList.map(r => r.id);
-        if (activeTripData) allRideIds.push(activeTripData.id);
+        const allRideIds = activeList.map(r => String(r.id));
+        if (activeTripData) allRideIds.push(String((activeTripData as unknown as Record<string, unknown>).id));
         if (allRideIds.length > 0) {
           const { data: allPrefs } = await supabase
             .from("ride_preferences")
@@ -452,7 +456,7 @@ export default function DriverDashboard() {
         }
 
         // Notify on new rides with LOUD sound and voice
-        const currentIds = new Set(list.map((r) => r.id));
+        const currentIds = new Set<string>(list.map((r) => String(r.id)));
         let hasNewRide = false;
         for (const id of currentIds) {
           if (!lastRideIds.current.has(id)) {
@@ -595,12 +599,12 @@ export default function DriverDashboard() {
       if (options?.openNavigation) setFullNavMode(true);
 
       if (options?.notifyArrived) {
-        supabase.from("notifications").insert({
+        createNotification({
           user_id: activeTrip.user_id,
           title: "🚗 Your driver has arrived!",
           body: "Your driver is at the pickup point. Please meet them now.",
           notification_type: "driver_arrived",
-        }).then(() => {});
+        }).catch(() => {});
       }
     } catch (e: unknown) {
       toast.error("Failed to update trip", { description: (e as Error).message });
@@ -868,6 +872,39 @@ export default function DriverDashboard() {
             </motion.div>
           ))}
         </div>
+
+        <PilotReadinessCard
+          tone="driver"
+          title="Pilot shift readiness"
+          subtitle="Before taking Gwanda pilot rides, confirm the basics."
+          items={[
+            {
+              label: isOnline ? "Online and visible" : "Go online",
+              detail: isOnline ? "You can receive nearby ride requests." : "Open settings and switch online when ready.",
+              done: isOnline,
+            },
+            {
+              label: driverCoords ? "Location is active" : "Enable location",
+              detail: driverCoords ? "GPS is updating for pickup guidance." : "Allow precise location so riders and ops can track trips.",
+              done: !!driverCoords,
+            },
+            {
+              label: voiceEnabled ? "Alerts enabled" : "Enable alerts",
+              detail: voiceEnabled ? "Voice and sound cues are on for new requests." : "Turn on alerts before joining the pilot shift.",
+              done: voiceEnabled,
+            },
+            {
+              label: driverBalance >= 0 ? "Cash fallback ready" : "Cash fallback",
+              detail: "For pilot day, confirm cash collection with the rider before trip completion.",
+              done: true,
+            },
+          ]}
+          footer={
+            <div className="rounded-xl border border-destructive/20 bg-destructive/5 px-3 py-2 text-[11px] font-medium text-destructive">
+              If the app stalls during a live trip, call pilot support and keep the rider informed before retrying actions.
+            </div>
+          }
+        />
 
         {/* Earnings Dashboard (toggled via icon) */}
         {earningsOpen && (

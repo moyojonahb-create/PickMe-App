@@ -11,6 +11,7 @@ import { useLandmarks } from '@/hooks/useLandmarks';
 import { supabase } from '@/lib/supabaseClient';
 import { requestRide } from '@/lib/requestRide';
 import { goBackend } from '@/lib/goBackendClient';
+import { createNotification, createRidePreferences, createRideStops, createStudentDiscountUsage } from '@/lib/businessApi';
 import { searchZW, reverseZW } from '@/lib/geo_osm';
 import { cachePlaceFromNominatim } from '@/lib/placeCache';
 import { searchCachedPlacesPrefix } from '@/lib/placeCache';
@@ -64,6 +65,7 @@ import { type IntercityRoute } from '@/lib/intercityRoutes';
 import { useNearbyDrivers } from '@/hooks/useNearbyDrivers';
 import GenderPreferenceToggle, { type GenderPreference } from './GenderPreferenceToggle';
 import ContactPickerSheet from './ContactPickerSheet';
+import PilotReadinessCard from '@/components/pilot/PilotReadinessCard';
 
 interface SelectedLocation {name: string;lat: number;lng: number;}
 interface GPSState {status: 'idle' | 'loading' | 'success' | 'denied' | 'unavailable';coords: {lat: number;lng: number;} | null;error: string | null;}
@@ -397,12 +399,11 @@ export default function RideView() {
 
       // Record student discount usage (best-effort)
       if (studentDiscountAvailable && result.ride?.id && user?.id) {
-        supabase.from('student_discount_usage').insert([{
-          user_id: user.id,
+        createStudentDiscountUsage({
           ride_id: result.ride.id,
           discount_amount: STUDENT_DISCOUNT,
-        }] as never).then(({ error }) => {
-          if (error) console.error('Failed to record student discount:', error.message);
+        }).catch((error) => {
+          console.error('Failed to record student discount:', error);
         });
       }
 
@@ -418,7 +419,7 @@ export default function RideView() {
           longitude: s.lng
         }));
         if (stopsToInsert.length > 0) {
-          await supabase.from('ride_stops').insert(stopsToInsert);
+          await createRideStops(stopsToInsert);
         }
       }
 
@@ -432,8 +433,8 @@ export default function RideView() {
           hearing_impaired: hearingImpaired,
           gender_preference: genderPreference,
         };
-        supabase.from('ride_preferences').insert([prefsPayload] as never).then(({ error }) => {
-          if (error) console.error('Failed to save ride preferences:', error.message);
+        createRidePreferences(prefsPayload as Record<string, unknown>).catch((error) => {
+          console.error('Failed to save ride preferences:', error);
         });
       }
 
@@ -450,7 +451,7 @@ export default function RideView() {
 
         if (passengerProfile?.user_id) {
           // User exists — send in-app notification
-          await supabase.from('notifications').insert({
+          await createNotification({
             user_id: passengerProfile.user_id,
             title: '🚗 Ride booked for you!',
             body: `${bookerName} has requested a ride for you from ${pickupLocation!.name} to ${dropoffLocation!.name}.`,
@@ -858,6 +859,28 @@ export default function RideView() {
 
 
           {/* Pickup & Dropoff — premium cards with swap */}
+          <PilotReadinessCard
+            title="Pilot booking checklist"
+            subtitle="A quick check before requesting your ride."
+            items={[
+              {
+                label: pickupLocation ? "Pickup set" : "Set pickup",
+                detail: pickupLocation ? "Use a precise landmark or GPS pickup." : "Choose your exact pickup point before requesting.",
+                done: !!pickupLocation,
+              },
+              {
+                label: dropoffLocation ? "Drop-off set" : "Set drop-off",
+                detail: dropoffLocation ? "Fare preview can now be calculated." : "Pick a destination to see the fare preview.",
+                done: !!dropoffLocation,
+              },
+              {
+                label: paymentMethod === "cash" ? "Cash fallback selected" : "Wallet selected",
+                detail: paymentMethod === "cash" ? "Recommended for the controlled pilot." : "Keep cash ready if provider payments are unavailable.",
+                done: true,
+              },
+            ]}
+          />
+
           <div className="space-y-2 relative">
             <button
               onClick={() => {setActiveField('pickup');setSearchQuery('');}}

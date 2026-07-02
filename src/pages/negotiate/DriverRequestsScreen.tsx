@@ -8,6 +8,8 @@ import { Input } from '@/components/ui/input';
 import { ArrowLeft, MapPin, Navigation, RefreshCw } from 'lucide-react';
 import { goBackend } from '@/lib/goBackendClient';
 import { decimalToMinor } from '@/lib/money';
+import { isCurrentDriverTopDriver } from '@/lib/businessApi';
+import { fetchOpenRides } from '@/lib/offerHelpers';
 
 type RideRequest = {
   id: string;
@@ -33,27 +35,29 @@ export default function DriverRequestsScreen() {
 
     // Check if top driver
     if (user) {
-      const { data: topStatus } = await supabase.rpc("is_top_driver", { _user_id: user.id });
-      setIsTopDriver(!!topStatus);
+      const topStatus = await isCurrentDriverTopDriver();
+      setIsTopDriver(topStatus);
     }
 
-    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
-    const { data, error } = await supabase
-      .from('ride_requests')
-      .select('*')
-      .eq('status', 'negotiating')
-      .gte('created_at', fiveMinutesAgo)
-      .order('created_at', { ascending: false });
-
-    if (error) toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    else {
-      let results = (data ?? []) as RideRequest[];
+    try {
+      const data = await fetchOpenRides();
+      let results = (data ?? []).map((ride: Record<string, unknown>) => ({
+        id: String(ride.id),
+        pickup: String(ride.pickup_address ?? ride.pickup_location ?? ''),
+        dropoff: String(ride.dropoff_address ?? ride.dropoff_location ?? ''),
+        offered_fare: Number(ride.fare ?? ride.estimated_fare ?? 0),
+        currency: 'USD',
+        status: String(ride.status ?? 'requested'),
+        created_at: String(ride.created_at ?? new Date().toISOString()),
+      })) as RideRequest[];
       // Non-top drivers only see requests older than 30 seconds
       if (!isTopDriver) {
         const thirtySecsAgo = Date.now() - 30_000;
         results = results.filter(r => new Date(r.created_at).getTime() <= thirtySecsAgo);
       }
       setRequests(results);
+    } catch (error) {
+      toast({ title: 'Error', description: (error as Error).message, variant: 'destructive' });
     }
     setLoading(false);
   }, [user, isTopDriver]);
@@ -63,13 +67,13 @@ export default function DriverRequestsScreen() {
 
   useEffect(() => { loadRequests(); }, [loadRequests]);
 
-  // Realtime: auto-refresh when ride_requests change
+  // Realtime: auto-refresh when canonical rides change
   useEffect(() => {
     const channel = supabase
       .channel(`driver-requests-realtime-${Date.now()}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'ride_requests' },
+        { event: '*', schema: 'public', table: 'rides' },
         () => { loadRequestsRef.current(); }
       )
       .subscribe();

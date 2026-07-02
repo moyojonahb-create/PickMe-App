@@ -5,9 +5,25 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+function legacyAllowed(flagName: string): boolean {
+  if (Deno.env.get(flagName) !== "true") return false;
+  const appEnv = (Deno.env.get("APP_ENV") ?? "").toLowerCase();
+  if (appEnv === "production" && Deno.env.get("LEGACY_EMERGENCY_OVERRIDE_ENABLED") !== "true") {
+    return false;
+  }
+  return true;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
+  }
+
+  if (!legacyAllowed("LEGACY_DISPATCH_SCHEDULED_ENABLED")) {
+    return new Response(
+      JSON.stringify({ error: "dispatch-scheduled is retired; scheduled dispatch must run in Go" }),
+      { status: 410, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
   }
 
   try {

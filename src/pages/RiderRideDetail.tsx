@@ -12,6 +12,7 @@ import { useAgoraCall } from "@/hooks/useAgoraCall";
 import { getSecondsRemaining } from "@/lib/rideExpiry";
 import { goBackend } from "@/lib/goBackendClient";
 import { decimalToMinor } from "@/lib/money";
+import { isRequestedRideStatus, normalizeRideRow } from "@/lib/rideContract";
 import {
   fetchPendingOffers,
   fetchDriversByIds,
@@ -46,12 +47,15 @@ import PayRideButton from "@/components/ride/PayRideButton";
 import PaymentStatusBadge from "@/components/ride/PaymentStatusBadge";
 // Rider wallet removed — riders pay drivers directly
 import RideBottomSheet, { type SheetState } from "@/components/ride/RideBottomSheet";
+import { createFavoriteLocation } from "@/lib/businessApi";
+import PilotReadinessCard from "@/components/pilot/PilotReadinessCard";
 
 type Ride = {
   id: string;
   user_id: string;
   driver_id: string | null;
   status: string;
+  ride_status?: string;
   pickup_address: string;
   dropoff_address: string;
   pickup_lat: number;
@@ -111,13 +115,18 @@ export default function RiderRideDetail() {
 
   const refreshRide = useCallback(async () => {
     if (!rideId) return;
-    const { data, error } = await supabase.from("rides").select("*").eq("id", rideId).single();
-    if (error) { setError(error.message); return; }
+    let data: Ride;
+    try {
+      data = normalizeRideRow(await goBackend.get<Record<string, unknown>>(`/api/rides/${rideId}`)) as unknown as Ride;
+    } catch (error) {
+      setError((error as Error).message);
+      return;
+    }
 
     const wasAccepted = ride?.status !== "accepted" && data.status === "accepted";
     const wasArrived = ride?.status !== "driver_arrived" && ride?.status !== "arrived" && (data.status === "driver_arrived" || data.status === "arrived");
     const wasCompleted = ride?.status !== "completed" && data.status === "completed";
-    setRide(data as Ride);
+    setRide(data);
 
     if (wasAccepted) {
       playAcceptedSound();
@@ -148,9 +157,9 @@ export default function RiderRideDetail() {
       if (!hasRated) setShowRating(true);
     }
 
-    if (data.driver_id && (data.status === "accepted" || data.status === "in_progress" || data.status === "arrived")) {
+    if (data.driver_id && (data.status === "accepted" || data.status === "in_progress" || data.status === "arrived" || data.status === "enroute")) {
       try {
-        const { data: driverData } = await supabase.from("drivers").select("*").eq("id", data.driver_id).maybeSingle();
+        const { data: driverData } = await supabase.from("drivers").select("*").or(`id.eq.${data.driver_id},user_id.eq.${data.driver_id}`).maybeSingle();
         if (driverData) {
           const resolvedAvatar = await resolveAvatarUrl(driverData.avatar_url);
           setDriverProfile({ ...driverData, avatar_url: resolvedAvatar });
@@ -203,15 +212,15 @@ export default function RiderRideDetail() {
     ride?.status ?? null
   );
 
-  const isPendingStatus = ride?.status === "pending";
+  const isPendingStatus = isRequestedRideStatus(ride?.status, ride?.ride_status);
   const nearbyDrivers = useNearbyDrivers(isPendingStatus);
 
   useEffect(() => {
-    if (!ride || ride.status !== "pending" || !ride.expires_at) return;
+    if (!ride || !isRequestedRideStatus(ride.status, ride.ride_status) || !ride.expires_at) return;
     const updateCountdown = () => {
       const secs = getSecondsRemaining(ride.expires_at ?? null);
       setSecondsLeft(secs);
-      if (secs <= 0 && ride.status === "pending") {
+      if (secs <= 0 && isRequestedRideStatus(ride.status, ride.ride_status)) {
         toast.info("Ride request expired", { description: "Your request timed out." });
         nav("/ride");
       }
@@ -241,7 +250,7 @@ export default function RiderRideDetail() {
   }, [ride?.status]);
 
   const updateFare = async (newFare: number) => {
-    if (!rideId || !ride || ride.status !== "pending") return;
+    if (!rideId || !ride || !isRequestedRideStatus(ride.status, ride.ride_status)) return;
     const clampedFare = Math.max(0.50, Math.round(newFare * 2) / 2);
     if (clampedFare === ride.fare) return;
     setUpdatingFare(true);
@@ -321,8 +330,8 @@ export default function RiderRideDetail() {
     };
   });
 
-  const isAccepted = ride ? ["accepted", "in_progress", "arrived"].includes(ride.status) : false;
-  const isPending = ride?.status === "pending";
+  const isAccepted = ride ? ["accepted", "enroute", "in_progress", "arrived"].includes(ride.status) : false;
+  const isPending = isRequestedRideStatus(ride?.status, ride?.ride_status);
   const isInProgress = ride?.status === "in_progress";
   const isArrived = ride?.status === "arrived" || ride?.status === "driver_arrived";
 
@@ -778,6 +787,30 @@ export default function RiderRideDetail() {
           )}
 
           {/* ─── COMPLETED SUMMARY ─── */}
+          {ride && ride.status !== "completed" && (
+            <PilotReadinessCard
+              title="Live ride checklist"
+              subtitle="Keep this ready during the pilot trip."
+              items={[
+                {
+                  label: isPending ? "Offers pending" : "Trip connected",
+                  detail: isPending ? "Stay in the app while drivers send offers." : "Driver and rider screens are linked to this ride.",
+                  done: !isPending || offers.length > 0,
+                },
+                {
+                  label: "Safety tools visible",
+                  detail: "Use SOS if the trip feels unsafe or if support must intervene.",
+                  done: true,
+                },
+                {
+                  label: ride.payment_method === "cash" ? "Cash handoff ready" : "Payment method ready",
+                  detail: ride.payment_method === "cash" ? "Confirm cash amount with the driver before completion." : "Keep cash as backup for the controlled pilot.",
+                  done: true,
+                },
+              ]}
+            />
+          )}
+
           {ride?.status === "completed" && (
             <>
               <RideCompleteSummary
@@ -791,8 +824,8 @@ export default function RiderRideDetail() {
                 onBookAgain={() => nav('/ride', { state: { rebook: { pickup: { name: ride.pickup_address, lat: ride.pickup_lat, lng: ride.pickup_lon }, dropoff: { name: ride.dropoff_address, lat: ride.dropoff_lat, lng: ride.dropoff_lon } } } })}
                 onSaveLocation={() => {
                   if (user) {
-                    supabase.from('favorite_locations').insert({
-                      user_id: user.id, name: ride.dropoff_address, address: ride.dropoff_address,
+                    createFavoriteLocation({
+                      name: ride.dropoff_address, address: ride.dropoff_address,
                       latitude: ride.dropoff_lat, longitude: ride.dropoff_lon
                     }).then(() => toast.success('Location saved!'));
                   }

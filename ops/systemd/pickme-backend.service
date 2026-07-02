@@ -1,0 +1,28 @@
+[Unit]
+Description=PickMe Go Backend
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pickme
+Group=pickme
+WorkingDirectory=/opt/pickme/backend
+EnvironmentFile=/etc/pickme/backend.env
+Environment=APP_ENV=production
+Environment=PORT=3000
+ExecStart=/opt/pickme/bin/pickme-server
+Restart=always
+RestartSec=5
+KillSignal=SIGTERM
+TimeoutStopSec=45
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/var/log/pickme /var/lib/pickme
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

@@ -12,6 +12,15 @@
 import { supabase } from '@/lib/supabaseClient';
 import { subDays, subHours } from 'date-fns';
 import { adminSendLowBalanceReminders } from '@/lib/walletApi';
+import {
+  adminAutoResolveNoiseFraudFlags,
+  adminCancelStuckRides,
+  adminCleanupOldMessages,
+  adminExpireOldRides,
+  adminForceFatigueBreak,
+  adminForceOfflineGhostDrivers,
+  adminPurgeStaleLiveLocations,
+} from '@/lib/businessApi';
 
 export interface RamzAction {
   /** Button label shown to admin */
@@ -29,8 +38,7 @@ export const RAMZ_ACTIONS: Record<string, RamzAction> = {
     label: 'Expire stale rides',
     confirm: 'Expire every pending ride older than 30 minutes?',
     run: async () => {
-      const { error } = await supabase.rpc('expire_old_rides' as never);
-      if (error) throw error;
+      await adminExpireOldRides();
       return 'Stale rides expired.';
     },
   },
@@ -38,8 +46,7 @@ export const RAMZ_ACTIONS: Record<string, RamzAction> = {
   'fraud-flags': {
     label: 'Auto-resolve noise flags',
     run: async () => {
-      const { error } = await supabase.rpc('auto_resolve_noise_fraud_flags' as never);
-      if (error) throw error;
+      await adminAutoResolveNoiseFraudFlags();
       return 'Sensor-jitter fraud flags resolved.';
     },
   },
@@ -48,8 +55,7 @@ export const RAMZ_ACTIONS: Record<string, RamzAction> = {
     label: 'Clean old messages',
     confirm: 'Delete chat messages older than 7 days?',
     run: async () => {
-      const { error } = await supabase.rpc('cleanup_old_messages' as never);
-      if (error) throw error;
+      await adminCleanupOldMessages();
       return 'Old messages cleaned up.';
     },
   },
@@ -59,30 +65,11 @@ export const RAMZ_ACTIONS: Record<string, RamzAction> = {
     confirm: 'Mark every "online" driver with no GPS in 5+ min as offline?',
     run: async () => {
       const cutoff = subHours(new Date(), 5 / 60).toISOString();
-      const { data: online } = await supabase
-        .from('drivers')
-        .select('id, user_id')
-        .eq('status', 'approved')
-        .eq('is_online', true);
-      if (!online?.length) return 'No online drivers to check.';
-
-      const { data: locs } = await supabase
-        .from('live_locations')
-        .select('user_id, updated_at')
-        .in('user_id', online.map(d => d.user_id));
-
-      const stale = online.filter(d => {
-        const loc = locs?.find(l => l.user_id === d.user_id);
-        return !loc || new Date(loc.updated_at) < new Date(cutoff);
-      });
-      if (!stale.length) return 'No ghost drivers found.';
-
-      const { error } = await supabase
-        .from('drivers')
-        .update({ is_online: false } as never)
-        .in('id', stale.map(d => d.id));
-      if (error) throw error;
-      return `${stale.length} ghost driver${stale.length > 1 ? 's' : ''} forced offline.`;
+      const result = await adminForceOfflineGhostDrivers(cutoff);
+      const updated = Number(result.updated ?? 0);
+      return updated > 0
+        ? `${updated} ghost driver${updated > 1 ? 's' : ''} forced offline.`
+        : 'No ghost drivers found.';
     },
   },
 
@@ -91,30 +78,11 @@ export const RAMZ_ACTIONS: Record<string, RamzAction> = {
     confirm: 'Cancel every ride stuck in "accepted" for 1+ hour? Drivers and riders will be notified.',
     run: async () => {
       const cutoff = subHours(new Date(), 1).toISOString();
-      const { data: stuck } = await supabase
-        .from('rides')
-        .select('id, user_id')
-        .eq('status', 'accepted')
-        .lt('updated_at', cutoff);
-      if (!stuck?.length) return 'No stuck rides to cancel.';
-
-      const ids = stuck.map(r => r.id);
-      const { error } = await supabase
-        .from('rides')
-        .update({ status: 'cancelled' } as never)
-        .in('id', ids);
-      if (error) throw error;
-
-      // Notify riders
-      const notifs = stuck.map(r => ({
-        user_id: r.user_id,
-        title: 'Ride cancelled',
-        body: 'Your driver did not start the trip. We have cancelled the ride and you will not be charged.',
-        notification_type: 'ride_update',
-      }));
-      await supabase.from('notifications').insert(notifs);
-
-      return `${ids.length} stuck ride${ids.length > 1 ? 's' : ''} cancelled.`;
+      const result = await adminCancelStuckRides(cutoff);
+      const updated = Number(result.updated ?? 0);
+      return updated > 0
+        ? `${updated} stuck ride${updated > 1 ? 's' : ''} cancelled.`
+        : 'No stuck rides to cancel.';
     },
   },
 
@@ -135,30 +103,11 @@ export const RAMZ_ACTIONS: Record<string, RamzAction> = {
     confirm: 'Force every driver online >12h to take a mandatory break?',
     run: async () => {
       const cutoff = subHours(new Date(), 12).toISOString();
-      const { data: long } = await supabase
-        .from('driver_sessions')
-        .select('driver_id')
-        .is('went_offline_at', null)
-        .lt('went_online_at', cutoff)
-        .limit(500);
-      if (!long?.length) return 'No drivers exceeding 12h.';
-
-      const ids = Array.from(new Set(long.map(s => s.driver_id)));
-      const { error } = await supabase
-        .from('drivers')
-        .update({ is_online: false } as never)
-        .in('id', ids);
-      if (error) throw error;
-
-      await supabase.from('driver_sessions')
-        .update({
-          went_offline_at: new Date().toISOString(),
-          forced_break_until: new Date(Date.now() + 6 * 3600_000).toISOString(),
-        } as never)
-        .is('went_offline_at', null)
-        .lt('went_online_at', cutoff);
-
-      return `${ids.length} fatigued driver${ids.length > 1 ? 's' : ''} sent on a 6h break.`;
+      const result = await adminForceFatigueBreak(cutoff);
+      const updated = Number(result.updated ?? 0);
+      return updated > 0
+        ? `${updated} fatigued driver${updated > 1 ? 's' : ''} sent on a 6h break.`
+        : 'No drivers exceeding 12h.';
     },
   },
 
@@ -167,12 +116,9 @@ export const RAMZ_ACTIONS: Record<string, RamzAction> = {
     confirm: 'Delete live_locations rows older than 1 hour? Drivers repopulate on next ping.',
     run: async () => {
       const cutoff = subHours(new Date(), 1).toISOString();
-      const { error, count } = await supabase
-        .from('live_locations')
-        .delete({ count: 'exact' })
-        .lt('updated_at', cutoff);
-      if (error) throw error;
-      return `${count ?? 0} stale GPS row${count === 1 ? '' : 's'} purged.`;
+      const result = await adminPurgeStaleLiveLocations(cutoff);
+      const deleted = Number(result.deleted ?? 0);
+      return `${deleted} stale GPS row${deleted === 1 ? '' : 's'} purged.`;
     },
   },
 

@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Loader2, CheckCircle2, XCircle, RotateCcw, ShieldAlert, GraduationCap, History, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import AdminLayout from '@/components/admin/AdminLayout';
+import { adminUpdateRow } from '@/lib/businessApi';
 
 interface Quality {
   brightness?: number;
@@ -142,8 +143,7 @@ export default function AdminStudents() {
   };
 
   const update = async (row: Row, patch: Partial<Row> & Record<string, unknown>) => {
-    const { error } = await supabase.from('student_profiles').update(patch as never).eq('id', row.id);
-    if (error) return toast.error(error.message);
+    await adminUpdateRow('student_profiles', row.id, patch);
     toast.success('Updated');
     load();
   };

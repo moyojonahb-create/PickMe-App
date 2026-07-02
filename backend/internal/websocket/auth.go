@@ -36,7 +36,7 @@ type DriverAuthorizer interface {
 	CanActAsDriver(ctx context.Context, userID uuid.UUID) error
 }
 
-func AuthenticateRequest(c *fiber.Ctx, verifier *auth.SupabaseJWT, authorizer RoomAuthorizer, driverAuthz DriverAuthorizer) (AuthenticatedConnection, int, error) {
+func AuthenticateRequest(c *fiber.Ctx, verifier *auth.SupabaseJWT, authorizer RoomAuthorizer, driverAuthz ...DriverAuthorizer) (AuthenticatedConnection, int, error) {
 	token := websocketToken(c)
 	if token == "" {
 		return AuthenticatedConnection{}, fiber.StatusUnauthorized, errors.New("websocket token is required")
@@ -79,9 +79,13 @@ func AuthenticateRequest(c *fiber.Ctx, verifier *auth.SupabaseJWT, authorizer Ro
 	registerAsRider := false
 
 	// Server-side decision: if authz says the user can act as driver, mark driver.
-	if driverAuthz != nil {
+	var driverAuthorizer DriverAuthorizer
+	if len(driverAuthz) > 0 {
+		driverAuthorizer = driverAuthz[0]
+	}
+	if driverAuthorizer != nil {
 		if uid, parseErr := uuid.Parse(userID); parseErr == nil {
-			if driverAuthz.CanActAsDriver(middleware.RequestContext(c), uid) == nil {
+			if driverAuthorizer.CanActAsDriver(middleware.RequestContext(c), uid) == nil {
 				registerAsDriver = true
 			}
 		}

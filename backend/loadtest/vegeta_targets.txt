@@ -1,0 +1,4 @@
+GET http://localhost:3000/health/live
+GET http://localhost:3000/health/ready
+GET http://localhost:3000/health/dependencies
+GET http://localhost:3000/metrics

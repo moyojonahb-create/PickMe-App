@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
+import { createFavoriteLocation, deleteFavoriteLocation } from '@/lib/businessApi';
 
 interface FavoriteLocation {
   id: string;
@@ -84,16 +85,12 @@ const FavoritesSheet = ({ isOpen, onClose, onSelectLocation }: FavoritesSheetPro
   };
 
   const handleDelete = async (id: string) => {
-    const { error } = await supabase
-      .from('favorite_locations')
-      .delete()
-      .eq('id', id);
-
-    if (error) {
-      toast.error('Failed to delete location');
-    } else {
+    try {
+      await deleteFavoriteLocation(id);
       setFavorites(prev => prev.filter(f => f.id !== id));
       toast.success('Location removed');
+    } catch {
+      toast.error('Failed to delete location');
     }
   };
 
@@ -113,28 +110,22 @@ const FavoritesSheet = ({ isOpen, onClose, onSelectLocation }: FavoritesSheetPro
       return;
     }
 
-    const { data, error } = await supabase
-      .from('favorite_locations')
-      .insert({
-        user_id: user.id,
+    try {
+      const data = await createFavoriteLocation({
         name: newName,
         address: geocoded.formattedAddress,
         latitude: geocoded.latitude,
         longitude: geocoded.longitude,
         icon: newName.toLowerCase().includes('home') ? 'home' : 
               newName.toLowerCase().includes('work') || newName.toLowerCase().includes('office') ? 'work' : 'star'
-      })
-      .select()
-      .single();
-
-    if (error) {
-      toast.error('Failed to add location');
-    } else {
-      setFavorites(prev => [data, ...prev]);
+      });
+      setFavorites(prev => [data as unknown as FavoriteLocation, ...prev]);
       setNewName('');
       setNewAddress('');
       setShowAddForm(false);
       toast.success('Location saved!');
+    } catch {
+      toast.error('Failed to add location');
     }
     setSaving(false);
   };

@@ -1,0 +1,123 @@
+groups:
+  - name: pickme-api
+    rules:
+      - alert: PickMeAPIHighErrorRate
+        expr: sum(rate(requests_total{status=~"5.."}[5m])) / clamp_min(sum(rate(requests_total[5m])), 1) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: PickMe API 5xx error rate is high
+          description: More than 5% of API requests returned 5xx responses over 5 minutes.
+
+      - alert: PickMeAPIHighP95Latency
+        expr: histogram_quantile(0.95, sum by (le) (rate(request_duration_seconds_bucket[5m]))) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: PickMe API p95 latency is high
+          description: API p95 latency is above 500ms for 5 minutes.
+
+      - alert: PickMePostgresDownOrFailing
+        expr: up{job="pickme-backend"} == 0 or sum(increase(postgres_failures_total[5m])) > 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: PickMe PostgreSQL dependency is unavailable or failing
+          description: Backend scraping is down or PostgreSQL failure counters increased.
+
+      - alert: PickMeRedisDownOrFailing
+        expr: sum(increase(redis_failures_total[5m])) > 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: PickMe Redis dependency is failing
+          description: Redis failure counters increased over 5 minutes.
+
+      - alert: PickMeWebSocketConnectionDrop
+        expr: websocket_connections offset 10m - websocket_connections > 20
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: PickMe WebSocket connections dropped sharply
+          description: Active WebSocket connections dropped by more than 20 compared with 10 minutes ago.
+
+  - name: pickme-jobs
+    rules:
+      - alert: PickMeAsynqQueueDepthHigh
+        expr: sum(jobs_queue_size{state=~"pending|retry"}) > 1000
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: PickMe Asynq queue depth is high
+          description: Pending or retrying background jobs exceeded 1000 for 10 minutes.
+
+      - alert: PickMeDispatchFailures
+        expr: sum(increase(postgres_failures_total{operation=~"dispatch_.*"}[5m])) > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: PickMe dispatch failures detected
+          description: Dispatch PostgreSQL operations recorded failures.
+
+      - alert: PickMeWalletFailures
+        expr: sum(increase(wallet_failures_total[5m])) > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: PickMe wallet failures detected
+          description: Wallet operation failure counters increased.
+
+      - alert: PickMeNotificationFailures
+        expr: sum(increase(notifications_failed_total[5m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: PickMe notification failures detected
+          description: Notification delivery failures increased.
+
+      - alert: PickMeRiskScanFailures
+        expr: sum(increase(fraud_scan_failures_total[5m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: PickMe risk scan failures detected
+          description: Fraud or risk scan failures increased.
+
+  - name: host-capacity
+    rules:
+      - alert: PickMeDiskHigh
+        expr: (1 - node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay"}) > 0.85
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: PickMe host disk usage is high
+          description: A monitored host filesystem is above 85% usage.
+
+      - alert: PickMeMemoryHigh
+        expr: (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) > 0.85
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: PickMe host memory usage is high
+          description: Host memory usage is above 85%.
+
+      - alert: PickMeCPUHigh
+        expr: 1 - avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) > 0.85
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: PickMe host CPU usage is high
+          description: Host CPU usage is above 85% for 10 minutes.

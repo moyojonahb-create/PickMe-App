@@ -1,0 +1,27 @@
+{
+  "title": "PickMe WebSockets",
+  "schemaVersion": 39,
+  "version": 1,
+  "tags": ["pickme", "websockets"],
+  "timezone": "browser",
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Active connections",
+      "gridPos": {"h": 6, "w": 8, "x": 0, "y": 0},
+      "targets": [{"expr": "websocket_connections"}]
+    },
+    {
+      "type": "stat",
+      "title": "Active rooms",
+      "gridPos": {"h": 6, "w": 8, "x": 8, "y": 0},
+      "targets": [{"expr": "websocket_rooms"}]
+    },
+    {
+      "type": "timeseries",
+      "title": "Message throughput",
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 6},
+      "targets": [{"expr": "sum(rate(websocket_messages_sent_total[5m]))"}, {"expr": "sum(rate(websocket_messages_received_total[5m]))"}]
+    }
+  ]
+}

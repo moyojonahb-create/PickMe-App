@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+
+	"pickme-backend/internal/observability"
 )
 
 const (
@@ -32,6 +34,7 @@ func Recover() fiber.Handler {
 	return func(c *fiber.Ctx) (err error) {
 		defer func() {
 			if recovered := recover(); recovered != nil {
+				observability.CapturePanic(recovered)
 				requestID, _ := c.Locals(LocalsRequestID).(string)
 				log.Printf("HTTP_PANIC_RECOVERED request_id=%s method=%s path=%s timestamp=%s",
 					requestID,
@@ -77,6 +80,13 @@ type RateLimitConfig struct {
 	Window     time.Duration
 	KeyFunc    func(*fiber.Ctx) string
 	StatusCode int
+	Store      RateLimitStore
+	KeyPrefix  string
+}
+
+type RateLimitStore interface {
+	Enabled() bool
+	IncrWithTTL(ctx context.Context, key string, ttl time.Duration) (int64, error)
 }
 
 func GlobalRateLimit(cfg RateLimitConfig) fiber.Handler {
@@ -97,6 +107,9 @@ func GlobalRateLimit(cfg RateLimitConfig) fiber.Handler {
 			return "ip:" + c.IP()
 		}
 	}
+	if cfg.KeyPrefix == "" {
+		cfg.KeyPrefix = "http:global"
+	}
 
 	limiter := &fixedWindowLimiter{
 		max:    cfg.Max,
@@ -109,7 +122,8 @@ func GlobalRateLimit(cfg RateLimitConfig) fiber.Handler {
 		if key == "" {
 			key = "ip:" + c.IP()
 		}
-		allowed, remaining, resetAt := limiter.allow(key, time.Now())
+		now := time.Now()
+		allowed, remaining, resetAt := allowRequest(cfg, limiter, key, now, c)
 		c.Set("X-RateLimit-Limit", intString(cfg.Max))
 		c.Set("X-RateLimit-Remaining", intString(remaining))
 		c.Set("X-RateLimit-Reset", resetAt.UTC().Format(time.RFC3339))
@@ -126,6 +140,28 @@ func GlobalRateLimit(cfg RateLimitConfig) fiber.Handler {
 		}
 		return c.Next()
 	}
+}
+
+func allowRequest(cfg RateLimitConfig, limiter *fixedWindowLimiter, key string, now time.Time, c *fiber.Ctx) (bool, int, time.Time) {
+	if cfg.Store != nil && cfg.Store.Enabled() {
+		redisKey := cfg.KeyPrefix + ":" + key
+		count, err := cfg.Store.IncrWithTTL(RequestContext(c), redisKey, cfg.Window)
+		if err == nil && count > 0 {
+			remaining := cfg.Max - int(count)
+			if remaining < 0 {
+				remaining = 0
+			}
+			return count <= int64(cfg.Max), remaining, now.Add(cfg.Window)
+		}
+		requestID, _ := c.Locals(LocalsRequestID).(string)
+		log.Printf("HTTP_RATE_LIMIT_REDIS_FALLBACK request_id=%s key=%s error=%v timestamp=%s",
+			requestID,
+			key,
+			err,
+			now.UTC().Format(time.RFC3339),
+		)
+	}
+	return limiter.allow(key, now)
 }
 
 func Observability() fiber.Handler {

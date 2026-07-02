@@ -38,6 +38,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { supabase } from '@/lib/supabaseClient';
+import { adminUpdateRow } from '@/lib/businessApi';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -123,12 +124,7 @@ const AdminDrivers = () => {
 
   const handleStatusChange = async (driverId: string, newStatus: string) => {
     try {
-      const { error } = await supabase
-        .from('drivers')
-        .update({ status: newStatus })
-        .eq('id', driverId);
-
-      if (error) throw error;
+      await adminUpdateRow('drivers', driverId, { status: newStatus });
 
       toast.success(`Driver ${newStatus}`);
       fetchDrivers();

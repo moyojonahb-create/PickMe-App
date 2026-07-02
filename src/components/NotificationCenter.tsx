@@ -9,6 +9,7 @@ import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { showLocalNotification } from '@/lib/push';
+import { markNotificationRead, markNotificationsRead } from '@/lib/businessApi';
 
 interface Notification {
   id: string;
@@ -78,7 +79,7 @@ export function NotificationBell() {
   };
 
   const markAsRead = async (id: string) => {
-    await supabase.from('notifications').update({ is_read: true, read_at: new Date().toISOString() }).eq('id', id);
+    await markNotificationRead(id);
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
   };
 
@@ -86,7 +87,7 @@ export function NotificationBell() {
     if (!user) return;
     const unreadIds = notifications.filter(n => !n.is_read).map(n => n.id);
     if (unreadIds.length === 0) return;
-    await supabase.from('notifications').update({ is_read: true, read_at: new Date().toISOString() }).in('id', unreadIds);
+    await markNotificationsRead(unreadIds);
     setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
   };
 

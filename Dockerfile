@@ -1,0 +1,45 @@
+FROM node:22-alpine AS deps
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci
+
+FROM deps AS build
+ARG VITE_SUPABASE_URL
+ARG VITE_SUPABASE_PUBLISHABLE_KEY
+ARG VITE_GO_BACKEND_URL
+ARG VITE_API_BASE_URL
+ARG VITE_BACKEND_URL
+ARG VITE_GOOGLE_MAPS_API_KEY
+ARG VITE_DD_RUM_ENABLED=false
+ARG VITE_DD_RUM_APPLICATION_ID
+ARG VITE_DD_RUM_CLIENT_TOKEN
+ARG VITE_DD_RUM_SITE=us5.datadoghq.com
+ARG VITE_DD_RUM_SERVICE=koloi-ride-with-confidence
+ARG VITE_DD_RUM_ENV=production
+ARG VITE_DD_RUM_VERSION
+ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL
+ENV VITE_SUPABASE_PUBLISHABLE_KEY=$VITE_SUPABASE_PUBLISHABLE_KEY
+ENV VITE_GO_BACKEND_URL=$VITE_GO_BACKEND_URL
+ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+ENV VITE_BACKEND_URL=$VITE_BACKEND_URL
+ENV VITE_GOOGLE_MAPS_API_KEY=$VITE_GOOGLE_MAPS_API_KEY
+ENV VITE_DD_RUM_ENABLED=$VITE_DD_RUM_ENABLED
+ENV VITE_DD_RUM_APPLICATION_ID=$VITE_DD_RUM_APPLICATION_ID
+ENV VITE_DD_RUM_CLIENT_TOKEN=$VITE_DD_RUM_CLIENT_TOKEN
+ENV VITE_DD_RUM_SITE=$VITE_DD_RUM_SITE
+ENV VITE_DD_RUM_SERVICE=$VITE_DD_RUM_SERVICE
+ENV VITE_DD_RUM_ENV=$VITE_DD_RUM_ENV
+ENV VITE_DD_RUM_VERSION=$VITE_DD_RUM_VERSION
+COPY . .
+RUN npm run build
+
+FROM nginx:1.27-alpine AS runtime
+RUN addgroup -S pickme && adduser -S -D -H -G pickme pickme
+COPY ops/nginx/frontend-nginx.conf /etc/nginx/nginx.conf
+COPY ops/nginx/frontend.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /app/dist /usr/share/nginx/html
+RUN chown -R pickme:pickme /var/cache/nginx /var/run /usr/share/nginx/html /etc/nginx/conf.d
+USER pickme
+EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 CMD wget -qO- http://127.0.0.1:8080/ >/dev/null || exit 1
+CMD ["nginx", "-g", "daemon off;"]

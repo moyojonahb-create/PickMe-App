@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
-import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/hooks/useAuth";
+import { cancelRideWithPolicy } from "@/lib/businessApi";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, X, Clock } from "lucide-react";
 import { toast } from "sonner";
@@ -34,22 +34,10 @@ export default function CancellationPolicy({ rideId, rideStatus, driverAcceptedA
     if (!user || cancelling) return;
     setCancelling(true);
     try {
-      // Record cancellation fee if applicable
-      if (!isFree && driverAcceptedAt) {
-        await supabase.from("cancellation_fees").insert({
-          ride_id: rideId,
-          user_id: user.id,
-          amount: CANCELLATION_FEE,
-          reason: `Cancelled ${elapsedMinutes} min after driver accepted`,
-        });
-      }
-
-      const { error } = await supabase
-        .from("rides")
-        .update({ status: "cancelled", cancellation_fee: isFree ? 0 : CANCELLATION_FEE })
-        .eq("id", rideId);
-
-      if (error) throw error;
+      await cancelRideWithPolicy(rideId, {
+        cancellation_fee: isFree ? 0 : CANCELLATION_FEE,
+        reason: !isFree && driverAcceptedAt ? `Cancelled ${elapsedMinutes} min after driver accepted` : "Rider cancelled",
+      });
 
       toast.info(isFree ? "Ride cancelled — no fee" : `Ride cancelled — $${CANCELLATION_FEE.toFixed(2)} fee applied`);
       onCancelled();

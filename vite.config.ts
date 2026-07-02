@@ -4,12 +4,13 @@ import path from "path";
 import { componentTagger } from "lovable-tagger";
 import { sentryVitePlugin } from "@sentry/vite-plugin";
 
-// Fallback values for Supabase (PUBLIC anon key — safe to embed in client bundle).
-// NOTE: Never add fallbacks for private secrets here (Google Maps key, Twilio,
-// Agora cert, Sentry auth token, etc.). Anything defined here is inlined into
-// the browser bundle and visible to every visitor.
-const FALLBACK_SUPABASE_URL = 'https://jidfganntquilvsytslp.supabase.co';
-const FALLBACK_SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImppZGZnYW5udHF1aWx2c3l0c2xwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkzNDM5MDIsImV4cCI6MjA4NDkxOTkwMn0.clwzOYffNy78E9kN2UnXVSHlWfTm3cMbZu3WtwCT3UM';
+const requiredEnv = (env: Record<string, string>, key: string) => {
+  const value = env[key];
+  if (!value) {
+    throw new Error(`${key} is required for Vite builds`);
+  }
+  return value;
+};
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
@@ -45,13 +46,11 @@ export default defineConfig(({ mode }) => {
     }),
   ].filter(Boolean),
   define: {
-    // Ensure these env vars are ALWAYS defined with fallbacks
-    // This prevents the Supabase client from crashing during preview
     'import.meta.env.VITE_SUPABASE_URL': JSON.stringify(
-      env.VITE_SUPABASE_URL || FALLBACK_SUPABASE_URL
+      requiredEnv(env, 'VITE_SUPABASE_URL')
     ),
     'import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY': JSON.stringify(
-      env.VITE_SUPABASE_PUBLISHABLE_KEY || FALLBACK_SUPABASE_KEY
+      requiredEnv(env, 'VITE_SUPABASE_PUBLISHABLE_KEY')
     ),
     // Google Maps key MUST come from env (with HTTP-referrer restrictions).
     // Do NOT inline a fallback — that would leak the key into every public bundle.

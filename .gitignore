@@ -23,8 +23,16 @@ dist-ssr
 *.sln
 *.sw?
 .env
+.env.*
+!.env.example
+backend/.env
+backend/.env.*
+!backend/.env.example
 
 # Go backend workspace
-backend/.gocache
-backend/tmp
+backend/.gocache/
+backend/tmp/
 backend/*.exe
+backend/bin/
+backend/coverage.out
+ops/prometheus/secrets/backend_metrics_token

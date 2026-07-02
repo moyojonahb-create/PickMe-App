@@ -1,5 +1,4 @@
 import { useEffect, useState, useCallback } from 'react';
-import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/hooks/useAuth';
 import { Switch } from '@/components/ui/switch';
 import { Card, CardContent } from '@/components/ui/card';
@@ -7,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { MapPin, BellRing, Phone } from 'lucide-react';
 import { toast } from 'sonner';
+import { updateMyDriver } from '@/lib/businessApi';
 
 type DriverSettings = {
   preferred_service_area: string;
@@ -28,12 +28,9 @@ export default function DriverSettingsPanel({ driverId, initialArea = 'both', in
 
   const updateField = async (field: string, value: unknown) => {
     if (!user) return;
-    const { error } = await supabase
-      .from('drivers')
-      .update({ [field]: value } as any)
-      .eq('id', driverId);
-
-    if (error) {
+    try {
+      await updateMyDriver({ [field]: value });
+    } catch {
       toast.error('Failed to save setting');
     }
   };

@@ -2,9 +2,14 @@ package dispatch
 
 import (
 	"context"
+	"strconv"
+	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+
+	"pickme-backend/internal/observability"
 )
 
 type DB interface {
@@ -22,6 +27,7 @@ func NewPostgresRepository(db DB) *PostgresRepository {
 }
 
 func (r *PostgresRepository) CreateShadowRun(ctx context.Context, run ShadowRun) error {
+	observability.RecordPostgresQuery("dispatch_create_shadow_run")
 	_, err := r.db.Exec(ctx, `
 		INSERT INTO public.dispatch_shadow_runs (
 			id,
@@ -53,14 +59,41 @@ func (r *PostgresRepository) CreateShadowRun(ctx context.Context, run ShadowRun)
 		)
 		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,NOW())
 	`, run.ID, run.RideID, nullable(run.RiderID), zeroNil(run.PickupLatitude), zeroNil(run.PickupLongitude), run.PickupLocation, run.DropoffLocation, run.VehicleType, run.City, run.Mode, run.Status, run.CandidateCount, run.SelectedCount, run.RedisAvailable, run.RedisLatencyMS, run.CandidateDiscoveryLatencyMS, run.RankingLatencyMS, run.DispatchLatencyMS, zeroNil(run.ShadowWriteLatencyMS), nullable(run.SelectedDriverID), zeroIntNil(run.SelectedRank), run.RankingVersion, nullable(run.Error), run.StartedAt, run.CompletedAt)
+	if err != nil {
+		observability.RecordPostgresFailure("dispatch_create_shadow_run")
+		observability.CaptureError(err)
+	}
 	return err
 }
 
 func (r *PostgresRepository) InsertShadowCandidates(ctx context.Context, runID string, rideID string, candidates []RankedCandidate) error {
-	for _, candidate := range candidates {
-		_, err := r.db.Exec(ctx, `
+	if len(candidates) == 0 {
+		return nil
+	}
+	observability.RecordPostgresQuery("dispatch_insert_shadow_candidate_batch")
+	args := make([]any, 0, len(candidates)*13)
+	values := make([]string, 0, len(candidates))
+	for i, candidate := range candidates {
+		base := i*13 + 1
+		values = append(values, "("+placeholders(base, 13)+",NOW())")
+		args = append(args,
+			runID,
+			rideID,
+			candidate.DriverID,
+			candidate.Rank,
+			candidate.Selected,
+			candidate.DistanceKM,
+			candidate.Score,
+			candidate.ProximityScore,
+			candidate.FreshnessScore,
+			candidate.AvailabilityScore,
+			candidate.LocationAt,
+			candidate.VehicleType,
+			candidate.City,
+		)
+	}
+	_, err := r.db.Exec(ctx, `
 			INSERT INTO public.dispatch_shadow_candidates (
-				id,
 				shadow_run_id,
 				ride_id,
 				driver_id,
@@ -76,25 +109,32 @@ func (r *PostgresRepository) InsertShadowCandidates(ctx context.Context, runID s
 				city,
 				created_at
 			)
-			VALUES (gen_random_uuid(),$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,NOW())
-		`, runID, rideID, candidate.DriverID, candidate.Rank, candidate.Selected, candidate.DistanceKM, candidate.Score, candidate.ProximityScore, candidate.FreshnessScore, candidate.AvailabilityScore, candidate.LocationAt, candidate.VehicleType, candidate.City)
-		if err != nil {
-			return err
-		}
+			VALUES `+strings.Join(values, ",")+`
+	`, args...)
+	if err != nil {
+		observability.RecordPostgresFailure("dispatch_insert_shadow_candidate_batch")
+		observability.CaptureError(err)
+		return err
 	}
 	return nil
 }
 
 func (r *PostgresRepository) UpdateShadowWriteLatency(ctx context.Context, runID string, latencyMS float64) error {
+	observability.RecordPostgresQuery("dispatch_update_shadow_latency")
 	_, err := r.db.Exec(ctx, `
 		UPDATE public.dispatch_shadow_runs
 		SET shadow_write_latency_ms = $2
 		WHERE id = $1
 	`, runID, latencyMS)
+	if err != nil {
+		observability.RecordPostgresFailure("dispatch_update_shadow_latency")
+		observability.CaptureError(err)
+	}
 	return err
 }
 
 func (r *PostgresRepository) RecordFirstOfferOutcome(ctx context.Context, outcome OfferOutcome) error {
+	observability.RecordPostgresQuery("dispatch_record_first_offer")
 	_, err := r.db.Exec(ctx, `
 		INSERT INTO public.dispatch_shadow_outcomes (
 			id,
@@ -135,10 +175,15 @@ func (r *PostgresRepository) RecordFirstOfferOutcome(ctx context.Context, outcom
 			seconds_to_first_offer = COALESCE(public.dispatch_shadow_outcomes.seconds_to_first_offer, EXCLUDED.seconds_to_first_offer),
 			updated_at = NOW()
 	`, outcome.RideID, outcome.DriverID, outcome.At)
+	if err != nil {
+		observability.RecordPostgresFailure("dispatch_record_first_offer")
+		observability.CaptureError(err)
+	}
 	return err
 }
 
 func (r *PostgresRepository) RecordAcceptedOfferOutcome(ctx context.Context, outcome OfferOutcome) error {
+	observability.RecordPostgresQuery("dispatch_record_accepted_offer")
 	_, err := r.db.Exec(ctx, `
 		INSERT INTO public.dispatch_shadow_outcomes (
 			id,
@@ -185,6 +230,95 @@ func (r *PostgresRepository) RecordAcceptedOfferOutcome(ctx context.Context, out
 			seconds_to_acceptance = EXCLUDED.seconds_to_acceptance,
 			updated_at = NOW()
 	`, outcome.RideID, outcome.DriverID, outcome.OfferID, outcome.At)
+	if err != nil {
+		observability.RecordPostgresFailure("dispatch_record_accepted_offer")
+		observability.CaptureError(err)
+	}
+	return err
+}
+
+func (r *PostgresRepository) CreateOfferWave(ctx context.Context, wave OfferWave) error {
+	if len(wave.Offers) == 0 {
+		return nil
+	}
+	observability.RecordPostgresQuery("dispatch_create_offer_wave_batch")
+	args := make([]any, 0, len(wave.Offers)*6)
+	values := make([]string, 0, len(wave.Offers))
+	for i, offer := range wave.Offers {
+		base := i*6 + 1
+		values = append(values, "($"+strconv.Itoa(base)+",$"+strconv.Itoa(base+1)+",$"+strconv.Itoa(base+2)+",$"+strconv.Itoa(base+3)+",$"+strconv.Itoa(base+3)+",$"+strconv.Itoa(base+4)+",'pending',$"+strconv.Itoa(base+5)+",NOW())")
+		args = append(args, offer.OfferID, wave.Ride.RideID, offer.DriverID, minorDecimal(offer.AmountMinor), offer.ETAMinutes, wave.ExpiresAt)
+	}
+	_, err := r.db.Exec(ctx, `
+			INSERT INTO public.ride_offers (
+				id,
+				ride_id,
+				driver_id,
+				offered_fare,
+				offer_price,
+				eta_minutes,
+				status,
+				expires_at,
+				created_at
+			)
+			VALUES `+strings.Join(values, ",")+`
+			ON CONFLICT (driver_id, ride_id)
+			DO UPDATE SET
+				offered_fare = EXCLUDED.offered_fare,
+				offer_price = EXCLUDED.offer_price,
+				eta_minutes = EXCLUDED.eta_minutes,
+				status = 'pending',
+				expires_at = EXCLUDED.expires_at,
+				created_at = NOW()
+	`, args...)
+	if err != nil {
+		observability.RecordPostgresFailure("dispatch_create_offer_wave_batch")
+		observability.CaptureError(err)
+		return err
+	}
+	return nil
+}
+
+func (r *PostgresRepository) ExpireRideOffers(ctx context.Context, rideID string, now time.Time) (int64, error) {
+	observability.RecordPostgresQuery("dispatch_expire_offers")
+	tag, err := r.db.Exec(ctx, `
+		UPDATE public.ride_offers
+		SET status = 'expired',
+		    expired_at = $2
+		WHERE ride_id = $1
+		  AND status = 'pending'
+		  AND expires_at <= $2
+	`, rideID, now)
+	if err != nil {
+		observability.RecordPostgresFailure("dispatch_expire_offers")
+		observability.CaptureError(err)
+		return 0, err
+	}
+	return tag.RowsAffected(), nil
+}
+
+func (r *PostgresRepository) SetDriverAvailability(ctx context.Context, driverID string, availability string, rideID string) error {
+	observability.RecordPostgresQuery("dispatch_set_driver_availability")
+	_, err := r.db.Exec(ctx, `
+		INSERT INTO public.driver_sessions (
+			driver_id,
+			is_online,
+			availability,
+			current_ride_id,
+			last_seen,
+			updated_at
+		)
+		VALUES ($1,true,$2,$3,NOW(),NOW())
+		ON CONFLICT (driver_id)
+		DO UPDATE SET
+			availability = EXCLUDED.availability,
+			current_ride_id = EXCLUDED.current_ride_id,
+			updated_at = NOW()
+	`, driverID, availability, nullable(rideID))
+	if err != nil {
+		observability.RecordPostgresFailure("dispatch_set_driver_availability")
+		observability.CaptureError(err)
+	}
 	return err
 }
 
@@ -207,4 +341,28 @@ func zeroIntNil(value int) any {
 		return nil
 	}
 	return value
+}
+
+func minorDecimal(amountMinor int64) string {
+	sign := ""
+	if amountMinor < 0 {
+		sign = "-"
+		amountMinor = -amountMinor
+	}
+	return sign + strconv.FormatInt(amountMinor/100, 10) + "." + twoDigits(amountMinor%100)
+}
+
+func twoDigits(value int64) string {
+	if value < 10 {
+		return "0" + strconv.FormatInt(value, 10)
+	}
+	return strconv.FormatInt(value, 10)
+}
+
+func placeholders(start int, count int) string {
+	parts := make([]string, count)
+	for i := 0; i < count; i++ {
+		parts[i] = "$" + strconv.Itoa(start+i)
+	}
+	return strings.Join(parts, ",")
 }

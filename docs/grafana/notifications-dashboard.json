@@ -1,0 +1,33 @@
+{
+  "title": "PickMe Notifications",
+  "schemaVersion": 39,
+  "version": 1,
+  "tags": ["pickme", "notifications"],
+  "timezone": "browser",
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Notifications sent",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "targets": [{"expr": "sum by (type, channel) (rate(notifications_sent_total[5m]))"}]
+    },
+    {
+      "type": "timeseries",
+      "title": "Notification failures",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "targets": [{"expr": "sum by (type, channel) (rate(notifications_failed_total[5m]))"}]
+    },
+    {
+      "type": "timeseries",
+      "title": "Notification retries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+      "targets": [{"expr": "sum by (type, channel) (rate(notifications_retry_total[5m]))"}]
+    },
+    {
+      "type": "timeseries",
+      "title": "Delivery latency p95",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+      "targets": [{"expr": "histogram_quantile(0.95, sum by (le, channel) (rate(notifications_delivery_latency_seconds_bucket[5m])))"}]
+    }
+  ]
+}

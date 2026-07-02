@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Navigation, Clock, CreditCard, Users } from 'lucide-react';
+import { Navigation, Clock, CreditCard, Users, ChevronRight } from 'lucide-react';
 import RidePreferenceTags from '@/components/ride/RidePreferenceTags';
 
 interface RidePrefs {
@@ -122,6 +122,16 @@ export default function RideRequestCard({ ride, preferences, secsLeft, index, on
           </div>
         </div>
       )}
+
+      <div className="flex items-center justify-between rounded-xl bg-primary/10 px-3 py-2">
+        <div>
+          <p className="text-xs font-extrabold text-primary">Review and send offer</p>
+          <p className="text-[10px] text-muted-foreground">Confirm pickup, fare, and ETA before accepting.</p>
+        </div>
+        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground">
+          <ChevronRight className="h-4 w-4" />
+        </div>
+      </div>
       </div>
     </motion.button>
   );

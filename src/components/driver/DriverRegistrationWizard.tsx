@@ -11,6 +11,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import CarLoadingSpinner from '@/components/CarLoadingSpinner';
+import { createDriverDocument, createDriverApplication } from '@/lib/businessApi';
 
 const TOTAL_STEPS = 4;
 
@@ -162,20 +163,19 @@ export default function DriverRegistrationWizard({ onSuccess, onClose }: DriverR
       const personal = personalForm.getValues();
       const vehicle = vehicleForm.getValues();
 
-      // Insert driver record
-      const { data: driver, error: driverError } = await supabase.from('drivers').insert({
-        user_id: user.id,
+      // Create driver record through Go. Storage uploads remain in Supabase.
+      const driver = await createDriverApplication({
         vehicle_type: vehicle.vehicleType,
         vehicle_make: vehicle.vehicleMake,
         vehicle_model: vehicle.vehicleModel,
         vehicle_year: vehicle.vehicleYear,
+        vehicle_color: vehicle.vehicleColor,
         plate_number: vehicle.plateNumber,
         gender: personal.gender,
         status: 'pending',
-      }).select('id').single();
-
-      if (driverError) throw driverError;
+      });
       const driverId = driver.id;
+      if (!driverId) throw new Error('Failed to create driver application');
 
       // Upload documents in parallel
       const uploads: Promise<void>[] = [];
@@ -183,7 +183,7 @@ export default function DriverRegistrationWizard({ onSuccess, onClose }: DriverR
       const uploadDoc = async (file: File | null, docType: string) => {
         if (!file) return;
         const path = await uploadFile(file, docType);
-        await supabase.from('driver_documents').insert({
+        await createDriverDocument({
           driver_id: driverId, document_type: docType, file_url: path, status: 'pending',
         });
       };

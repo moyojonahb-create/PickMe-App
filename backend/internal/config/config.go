@@ -9,16 +9,20 @@ import (
 )
 
 type Config struct {
-	DatabaseURL string
-	Port        string
-	AppEnv      string
-	CORS        CORSConfig
-	HTTP        HTTPConfig
-	Auth        AuthConfig
-	Redis       RedisConfig
-	Dispatch    DispatchConfig
-	Wallet      WalletConfig
-	Payments    PaymentsConfig
+	DatabaseURL      string
+	Port             string
+	AppEnv           string
+	ReadinessProfile string
+	CORS             CORSConfig
+	HTTP             HTTPConfig
+	Auth             AuthConfig
+	Redis            RedisConfig
+	Dispatch         DispatchConfig
+	Wallet           WalletConfig
+	Payments         PaymentsConfig
+	Observability    ObservabilityConfig
+	Jobs             JobsConfig
+	Notification     NotificationConfig
 }
 
 type CORSConfig struct {
@@ -49,11 +53,15 @@ type RedisConfig struct {
 }
 
 type DispatchConfig struct {
-	Mode           string
-	ShadowRadiusKM float64
-	CandidateLimit int
-	SelectedLimit  int
-	RankingVersion string
+	Mode                 string
+	ShadowRadiusKM       float64
+	CandidateLimit       int
+	SelectedLimit        int
+	RankingVersion       string
+	OfferTTLSeconds      int
+	RideLockTTLSeconds   int
+	DriverLockTTLSeconds int
+	QueueName            string
 }
 
 type WalletConfig struct {
@@ -97,6 +105,32 @@ type PaymentsConfig struct {
 	CardPilotOnly       bool
 }
 
+type ObservabilityConfig struct {
+	SentryDSN            string
+	SentryEnvironment    string
+	SentryRelease        string
+	OTELEnabled          bool
+	OTLPExporterEndpoint string
+}
+
+type JobsConfig struct {
+	Enabled                bool
+	RedisURL               string
+	Concurrency            int
+	RetryMax               int
+	ShutdownTimeoutSeconds int
+}
+
+type NotificationConfig struct {
+	RateLimitPerMinute int
+	FCMEndpoint        string
+	FCMToken           string
+	SMSEndpoint        string
+	SMSToken           string
+	EmailEndpoint      string
+	EmailToken         string
+}
+
 func Load() (Config, error) {
 	_ = godotenv.Load()
 
@@ -129,11 +163,15 @@ func Load() (Config, error) {
 		PoolSize:                 envInt("REDIS_POOL_SIZE", 16),
 	}
 	dispatch := DispatchConfig{
-		Mode:           envOrDefault("DISPATCH_MODE", "off"),
-		ShadowRadiusKM: envFloat("DISPATCH_SHADOW_RADIUS_KM", 5),
-		CandidateLimit: envInt("DISPATCH_SHADOW_CANDIDATE_LIMIT", 20),
-		SelectedLimit:  envInt("DISPATCH_SHADOW_SELECTED_LIMIT", 3),
-		RankingVersion: envOrDefault("DISPATCH_SHADOW_RANKING_VERSION", "v2.0-b-simple"),
+		Mode:                 envOrDefault("DISPATCH_MODE", "off"),
+		ShadowRadiusKM:       envFloat("DISPATCH_SHADOW_RADIUS_KM", 5),
+		CandidateLimit:       envInt("DISPATCH_SHADOW_CANDIDATE_LIMIT", 20),
+		SelectedLimit:        envInt("DISPATCH_SHADOW_SELECTED_LIMIT", 3),
+		RankingVersion:       envOrDefault("DISPATCH_SHADOW_RANKING_VERSION", "v2.0-b-simple"),
+		OfferTTLSeconds:      envInt("DISPATCH_OFFER_TTL_SECONDS", 30),
+		RideLockTTLSeconds:   envInt("DISPATCH_RIDE_LOCK_TTL_SECONDS", 45),
+		DriverLockTTLSeconds: envInt("DISPATCH_DRIVER_LOCK_TTL_SECONDS", 45),
+		QueueName:            envOrDefault("DISPATCH_QUEUE_NAME", "dispatch:rides"),
 	}
 	wallet := WalletConfig{
 		ActiveSettlementEnabled:                envBool("WALLET_ACTIVE_SETTLEMENT_ENABLED", false),
@@ -174,11 +212,35 @@ func Load() (Config, error) {
 		CardPaymentsEnabled: envBool("CARD_PAYMENTS_ENABLED", false),
 		CardPilotOnly:       envBool("CARD_PILOT_ONLY", true),
 	}
+	observability := ObservabilityConfig{
+		SentryDSN:            os.Getenv("SENTRY_DSN"),
+		SentryEnvironment:    envOrDefault("SENTRY_ENVIRONMENT", envOrDefault("APP_ENV", "production")),
+		SentryRelease:        os.Getenv("SENTRY_RELEASE"),
+		OTELEnabled:          envBool("OTEL_ENABLED", false),
+		OTLPExporterEndpoint: os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"),
+	}
+	jobs := JobsConfig{
+		Enabled:                envBool("ASYNQ_ENABLED", redis.Enabled),
+		RedisURL:               envOrDefault("ASYNQ_REDIS_URL", redis.URL),
+		Concurrency:            envInt("ASYNQ_CONCURRENCY", 10),
+		RetryMax:               envInt("ASYNQ_RETRY_MAX", 5),
+		ShutdownTimeoutSeconds: envInt("ASYNQ_SHUTDOWN_TIMEOUT_SECONDS", 30),
+	}
+	notification := NotificationConfig{
+		RateLimitPerMinute: envInt("NOTIFICATION_RATE_LIMIT_PER_MINUTE", 60),
+		FCMEndpoint:        os.Getenv("NOTIFICATION_FCM_ENDPOINT"),
+		FCMToken:           os.Getenv("NOTIFICATION_FCM_TOKEN"),
+		SMSEndpoint:        os.Getenv("NOTIFICATION_SMS_ENDPOINT"),
+		SMSToken:           os.Getenv("NOTIFICATION_SMS_TOKEN"),
+		EmailEndpoint:      os.Getenv("NOTIFICATION_EMAIL_ENDPOINT"),
+		EmailToken:         os.Getenv("NOTIFICATION_EMAIL_TOKEN"),
+	}
 
 	return Config{
-		DatabaseURL: databaseURL,
-		Port:        port,
-		AppEnv:      envOrDefault("APP_ENV", "production"),
+		DatabaseURL:      databaseURL,
+		Port:             port,
+		AppEnv:           envOrDefault("APP_ENV", "production"),
+		ReadinessProfile: envOrDefault("READINESS_PROFILE", envOrDefault("APP_PROFILE", envOrDefault("APP_ENV", "production"))),
 		CORS: CORSConfig{
 			AllowOrigins: envOrDefault("CORS_ALLOW_ORIGINS", "https://www.voyex.site,https://pickme-co-zw.lovable.app"),
 			AllowMethods: "GET,POST,PUT,DELETE,OPTIONS",
@@ -189,11 +251,14 @@ func Load() (Config, error) {
 			RateLimitMax:          envInt("HTTP_RATE_LIMIT_MAX", 120),
 			RateLimitWindowSecs:   envInt("HTTP_RATE_LIMIT_WINDOW_SECONDS", 60),
 		},
-		Auth:     auth,
-		Redis:    redis,
-		Dispatch: dispatch,
-		Wallet:   wallet,
-		Payments: payments,
+		Auth:          auth,
+		Redis:         redis,
+		Dispatch:      dispatch,
+		Wallet:        wallet,
+		Payments:      payments,
+		Observability: observability,
+		Jobs:          jobs,
+		Notification:  notification,
 	}, nil
 }
 

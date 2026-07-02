@@ -14,8 +14,13 @@ const supabaseMock = vi.hoisted(() => ({
   },
 }));
 
+const goBackendMock = vi.hoisted(() => ({
+  post: vi.fn(),
+}));
+
 vi.mock("@/lib/supabaseClient", () => ({ supabase: supabaseMock }));
 vi.mock("@/integrations/supabase/client", () => ({ supabase: supabaseMock }));
+vi.mock("@/lib/goBackendClient", () => ({ goBackend: goBackendMock }));
 vi.mock("@/lib/avatarUrl", () => ({ resolveAvatarUrl: vi.fn((url) => Promise.resolve(url)) }));
 vi.mock("@/lib/queryCache", () => ({ getCached: vi.fn(() => null), setCache: vi.fn() }));
 
@@ -55,6 +60,7 @@ describe("API call helpers", () => {
     vi.clearAllMocks();
     supabaseMock.auth.getUser.mockResolvedValue({ data: { user: { id: "rider-1" } }, error: null });
     supabaseMock.auth.getSession.mockResolvedValue({ data: { session: { access_token: "token" } } });
+    goBackendMock.post.mockResolvedValue({ ok: true });
   });
 
   it("acceptOffer updates offer, ride assignment, and competing offers", async () => {
@@ -87,20 +93,14 @@ describe("API call helpers", () => {
         })),
       })),
     });
-    supabaseMock.rpc.mockResolvedValue({
-      data: { ok: true, fare_usd: 8, commission_usd: 1.2, driver_earnings_usd: 6.8 },
-      error: null,
-    });
-    supabaseMock.functions.invoke.mockResolvedValue({ data: { ok: true }, error: null });
-
     const result = await completeTrip("ride-1");
 
-    expect(supabaseMock.rpc).toHaveBeenCalledWith("complete_trip_with_commission", { p_trip_id: "ride-1" });
-    expect(supabaseMock.functions.invoke).toHaveBeenCalledWith("settle-trip", { body: { tripId: "ride-1" } });
+    expect(goBackendMock.post).toHaveBeenCalledWith("/api/rides/ride-1/complete");
+    expect(goBackendMock.post).toHaveBeenCalledWith("/api/rides/ride-1/settle");
     expect(result.ok).toBe(true);
   });
 
-  it("completeTrip throws RPC errors", async () => {
+  it("completeTrip throws Go backend errors", async () => {
     supabaseMock.from.mockReturnValue({
       select: vi.fn(() => ({
         eq: vi.fn(() => ({
@@ -111,9 +111,9 @@ describe("API call helpers", () => {
         })),
       })),
     });
-    supabaseMock.rpc.mockResolvedValue({ data: null, error: new Error("RPC failed") });
+    goBackendMock.post.mockRejectedValue(new Error("Go completion failed"));
 
-    await expect(completeTrip("ride-1")).rejects.toThrow("RPC failed");
+    await expect(completeTrip("ride-1")).rejects.toThrow("Go completion failed");
   });
 
   it("completeTrip rejects trips that have not started", async () => {
@@ -129,13 +129,14 @@ describe("API call helpers", () => {
     });
 
     await expect(completeTrip("ride-1")).rejects.toThrow("Trip can only be completed after it has started");
-    expect(supabaseMock.rpc).not.toHaveBeenCalled();
+    expect(goBackendMock.post).not.toHaveBeenCalled();
   });
 
   it("settleTrip rejects invalid user/session", async () => {
     supabaseMock.auth.getSession.mockResolvedValue({ data: { session: null } });
+    goBackendMock.post.mockRejectedValue(new Error("Not authenticated"));
 
     await expect(settleTrip("ride-1")).rejects.toThrow("Not authenticated");
-    expect(supabaseMock.functions.invoke).not.toHaveBeenCalled();
+    expect(goBackendMock.post).toHaveBeenCalledWith("/api/rides/ride-1/settle");
   });
 });

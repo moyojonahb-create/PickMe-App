@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { createFatigueBreak } from '@/lib/businessApi';
 
 const MAX_ONLINE_HOURS = 12;
 const BREAK_HOURS = 6;
@@ -70,8 +71,7 @@ export function useFatigueMonitor(userId: string | undefined, isOnline: boolean)
     if (totalHours >= MAX_ONLINE_HOURS) {
       // Trigger fatigue - set forced break
       const breakUntil = new Date(Date.now() + BREAK_HOURS * 60 * 60 * 1000).toISOString();
-      await supabase.from('driver_sessions').insert({
-        driver_id: userId,
+      await createFatigueBreak({
         went_online_at: new Date().toISOString(),
         went_offline_at: new Date().toISOString(),
         forced_break_until: breakUntil,

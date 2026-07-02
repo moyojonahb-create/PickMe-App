@@ -2,6 +2,7 @@
 import { useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { connectGoRideSocket } from '@/lib/goRideSocket';
+import { isRequestedRideStatus } from '@/lib/rideContract';
 
 export function useRideRealtime(
   rideId: string | null,
@@ -62,7 +63,7 @@ export function useOpenRidesRealtime(onUpdate: () => void) {
       )
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "offers" },
+        { event: "*", schema: "public", table: "ride_offers" },
         () => onUpdateRef.current()
       )
       .subscribe();
@@ -90,7 +91,7 @@ export function useRealtimeRideRequests(onNewRide: (ride: unknown) => void) {
         { event: "INSERT", schema: "public", table: "rides" },
         (payload) => {
           const ride = payload.new;
-          if (ride.status === "pending") {
+          if (isRequestedRideStatus(ride.status, ride.ride_status)) {
             const expiresAt = ride.expires_at ? new Date(ride.expires_at).getTime() : null;
             if (!expiresAt || expiresAt > Date.now()) {
               onNewRideRef.current(ride);

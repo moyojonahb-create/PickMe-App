@@ -1,0 +1,21 @@
+{
+  "title": "PickMe Wallet",
+  "schemaVersion": 39,
+  "version": 1,
+  "tags": ["pickme", "wallet"],
+  "timezone": "browser",
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Wallet operations",
+      "gridPos": {"h": 8, "w": 14, "x": 0, "y": 0},
+      "targets": [{"expr": "sum(rate(wallet_deposits_total[5m])) or vector(0)"}, {"expr": "sum(rate(wallet_withdrawals_total[5m])) or vector(0)"}, {"expr": "sum(rate(wallet_transfers_total[5m])) or vector(0)"}]
+    },
+    {
+      "type": "timeseries",
+      "title": "Wallet failures",
+      "gridPos": {"h": 8, "w": 10, "x": 14, "y": 0},
+      "targets": [{"expr": "sum by (operation) (rate(wallet_failures_total[5m]))"}]
+    }
+  ]
+}

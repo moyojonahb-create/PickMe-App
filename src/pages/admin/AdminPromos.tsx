@@ -10,6 +10,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
+import { adminCreatePromo, adminDeletePromo, adminUpdatePromo } from '@/lib/businessApi';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -91,13 +92,12 @@ const AdminPromos = () => {
     };
 
     if (editingId) {
-      const { error } = await supabase.from('promo_codes').update(payload).eq('id', editingId);
-      if (error) toast.error(error.message);
-      else toast.success('Promo updated');
+      await adminUpdatePromo(editingId, payload);
+      toast.success('Promo updated');
     } else {
-      const { error } = await supabase.from('promo_codes').insert({ ...payload, created_by: (await supabase.auth.getUser()).data.user?.id });
-      if (error) toast.error(error.message);
-      else toast.success('Promo created');
+      const userId = (await supabase.auth.getUser()).data.user?.id;
+      await adminCreatePromo({ ...payload, created_by: userId });
+      toast.success('Promo created');
     }
 
     setSaving(false);
@@ -106,15 +106,14 @@ const AdminPromos = () => {
   };
 
   const toggleActive = async (id: string, current: boolean) => {
-    const { error } = await supabase.from('promo_codes').update({ is_active: !current }).eq('id', id);
-    if (error) { toast.error(error.message); return; }
+    await adminUpdatePromo(id, { is_active: !current });
     setPromos(prev => prev.map(p => p.id === id ? { ...p, is_active: !current } : p));
   };
 
   const deletePromo = async (id: string) => {
-    const { error } = await supabase.from('promo_codes').delete().eq('id', id);
-    if (error) toast.error(error.message);
-    else { toast.success('Promo deleted'); setPromos(prev => prev.filter(p => p.id !== id)); }
+    await adminDeletePromo(id);
+    toast.success('Promo deleted');
+    setPromos(prev => prev.filter(p => p.id !== id));
   };
 
   return (

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -16,6 +17,7 @@ import (
 	"pickme-backend/internal/authz"
 	"pickme-backend/internal/dispatch"
 	"pickme-backend/internal/middleware"
+	"pickme-backend/internal/observability"
 	"pickme-backend/internal/wallet"
 	"pickme-backend/internal/websocket"
 )
@@ -37,6 +39,94 @@ type Tx interface {
 type DriverAuthorizer interface {
 	CanReceiveOffers(ctx context.Context, userID uuid.UUID) error
 	CanAcceptRide(ctx context.Context, userID uuid.UUID) error
+}
+
+type rideAPIRecord struct {
+	ID             string
+	RiderID        string
+	DriverID       string
+	PickupAddress  string
+	DropoffAddress string
+	PickupLat      float64
+	PickupLon      float64
+	DropoffLat     float64
+	DropoffLon     float64
+	FareDecimal    string
+	PaymentMethod  string
+	RideStatus     string
+	CreatedAt      time.Time
+	ExpiresAt      time.Time
+}
+
+func publicRideStatus(rideStatus string) string {
+	switch rideStatus {
+	case "pending", "requested":
+		return "requested"
+	case "ongoing", "in_progress":
+		return "in_progress"
+	case "driver_arrived":
+		return "arrived"
+	case "enroute_pickup":
+		return "enroute"
+	default:
+		if rideStatus == "" {
+			return "requested"
+		}
+		return rideStatus
+	}
+}
+
+func canonicalRideStatus(status string) (string, bool) {
+	status = strings.ToLower(strings.TrimSpace(status))
+	switch status {
+	case "", "ongoing", "in_progress":
+		return "ongoing", true
+	case "pending", "requested":
+		return "requested", true
+	case "accepted":
+		return "accepted", true
+	case "enroute", "enroute_pickup":
+		return "enroute", true
+	case "arrived", "driver_arrived":
+		return "arrived", true
+	case "completed":
+		return "completed", true
+	case "cancelled", "canceled":
+		return "cancelled", true
+	default:
+		return "", false
+	}
+}
+
+func rideAPIResponse(ride rideAPIRecord) fiber.Map {
+	fareMoney, _ := wallet.NewMoneyFromDecimal(ride.FareDecimal, wallet.CurrencyUSD)
+	status := publicRideStatus(ride.RideStatus)
+	driverID := any(nil)
+	if ride.DriverID != "" {
+		driverID = ride.DriverID
+	}
+	return fiber.Map{
+		"id":               ride.ID,
+		"ride_id":          ride.ID,
+		"user_id":          ride.RiderID,
+		"rider_id":         ride.RiderID,
+		"driver_id":        driverID,
+		"pickup_address":   ride.PickupAddress,
+		"pickup_location":  ride.PickupAddress,
+		"dropoff_address":  ride.DropoffAddress,
+		"dropoff_location": ride.DropoffAddress,
+		"pickup_lat":       ride.PickupLat,
+		"pickup_lon":       ride.PickupLon,
+		"dropoff_lat":      ride.DropoffLat,
+		"dropoff_lon":      ride.DropoffLon,
+		"fare":             decimalUSDFromMinor(fareMoney.MinorUnits),
+		"estimated_fare":   decimalUSDFromMinor(fareMoney.MinorUnits),
+		"payment_method":   ride.PaymentMethod,
+		"ride_status":      ride.RideStatus,
+		"status":           status,
+		"created_at":       ride.CreatedAt,
+		"expires_at":       ride.ExpiresAt,
+	}
 }
 
 type Handler struct {
@@ -125,6 +215,14 @@ type dispatchObserver interface {
 	ObserveRide(ctx context.Context, ride dispatch.RideContext)
 	RecordFirstOffer(ctx context.Context, outcome dispatch.OfferOutcome)
 	RecordAcceptedOffer(ctx context.Context, outcome dispatch.OfferOutcome)
+}
+
+type authoritativeDispatchObserver interface {
+	Authoritative() bool
+}
+
+type driverAvailabilityDispatchObserver interface {
+	SetDriverAvailability(ctx context.Context, driverID string, availability string, rideID string)
 }
 
 type reputationTracker interface {
@@ -226,30 +324,53 @@ func NewDB(pool *pgxpool.Pool) DB {
 }
 
 func (d *pgxDB) Begin(ctx context.Context) (Tx, error) {
+	observability.RecordPostgresQuery("rides_begin")
 	tx, err := d.pool.Begin(ctx)
 	if err != nil {
+		observability.RecordPostgresFailure("rides_begin")
+		observability.CaptureError(err)
 		return nil, err
 	}
 	return &pgxTx{tx: tx}, nil
 }
 
 func (d *pgxDB) Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error) {
-	return d.pool.Exec(ctx, sql, args...)
+	observability.RecordPostgresQuery("rides_exec")
+	tag, err := d.pool.Exec(ctx, sql, args...)
+	if err != nil {
+		observability.RecordPostgresFailure("rides_exec")
+		observability.CaptureError(err)
+	}
+	return tag, err
 }
 
 func (d *pgxDB) Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error) {
-	return d.pool.Query(ctx, sql, args...)
+	observability.RecordPostgresQuery("rides_query")
+	rows, err := d.pool.Query(ctx, sql, args...)
+	if err != nil {
+		observability.RecordPostgresFailure("rides_query")
+		observability.CaptureError(err)
+	}
+	return rows, err
 }
 
 func (d *pgxDB) QueryRow(ctx context.Context, sql string, args ...any) pgx.Row {
+	observability.RecordPostgresQuery("rides_query_row")
 	return d.pool.QueryRow(ctx, sql, args...)
 }
 
 func (t *pgxTx) Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error) {
-	return t.tx.Exec(ctx, sql, args...)
+	observability.RecordPostgresQuery("rides_tx_exec")
+	tag, err := t.tx.Exec(ctx, sql, args...)
+	if err != nil {
+		observability.RecordPostgresFailure("rides_tx_exec")
+		observability.CaptureError(err)
+	}
+	return tag, err
 }
 
 func (t *pgxTx) QueryRow(ctx context.Context, sql string, args ...any) pgx.Row {
+	observability.RecordPostgresQuery("rides_tx_query_row")
 	return t.tx.QueryRow(ctx, sql, args...)
 }
 
@@ -272,10 +393,14 @@ func RegisterRoutes(app fiber.Router, h *Handler, requireAuth fiber.Handler) {
 
 func RegisterCompatibilityRoutes(app fiber.Router, h *Handler, requireAuth fiber.Handler) {
 	app.Post("/api/rides", requireAuth, h.Request)
+	app.Get("/api/rides/open", requireAuth, h.ListOpenRides)
+	app.Get("/api/rides/:rideId", requireAuth, h.GetRide)
+	app.Patch("/api/rides/:rideId", requireAuth, h.PatchRide)
 	app.Post("/api/rides/:rideId/offers", requireAuth, h.SubmitOffer)
 	app.Get("/api/rides/:rideId/offers", requireAuth, h.ListOffers)
 	app.Post("/api/rides/:rideId/offers/:offerId/accept", requireAuth, h.AcceptOffer)
 	app.Post("/api/rides/:rideId/offers/:offerId/reject", requireAuth, h.RejectOffer)
+	app.Post("/api/rides/offers/:offerId/reject", requireAuth, h.RejectOfferByID)
 	app.Post("/api/rides/:rideId/status", requireAuth, h.UpdateStatus)
 	app.Post("/api/rides/:rideId/complete", requireAuth, h.CompleteRide)
 	app.Post("/api/rides/:rideId/settle", requireAuth, h.SettleRide)
@@ -332,20 +457,118 @@ func (h *Handler) List(c *fiber.Ctx) error {
 		}
 
 		response = append(response, fiber.Map{
-			"id":                   ride.ID,
-			"rider_id":             ride.RiderID,
-			"pickup_location":      ride.PickupLocation,
-			"dropoff_location":     ride.DropoffLocation,
-			"estimated_fare_minor": ride.EstimatedFareMinor,
-			"ride_status":          ride.RideStatus,
-			"created_at":           ride.CreatedAt,
+			"id":               ride.ID,
+			"rider_id":         ride.RiderID,
+			"user_id":          ride.RiderID,
+			"pickup_location":  ride.PickupLocation,
+			"dropoff_location": ride.DropoffLocation,
+			"estimated_fare":   decimalUSDFromMinor(ride.EstimatedFareMinor),
+			"ride_status":      ride.RideStatus,
+			"status":           publicRideStatus(ride.RideStatus),
+			"created_at":       ride.CreatedAt,
 		})
 	}
 
 	return c.JSON(response)
 }
 
+func (h *Handler) GetRide(c *fiber.Ctx) error {
+	authUserID, ok := middleware.AuthenticatedUserID(c)
+	if !ok {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Authentication required"})
+	}
+	rideID := c.Params("rideId")
+	var ride rideAPIRecord
+	err := h.db.QueryRow(middleware.RequestContext(c), `
+		SELECT id, rider_id::text, COALESCE(driver_id::text, ''),
+		       COALESCE(pickup_location, pickup_address, ''),
+		       COALESCE(dropoff_location, dropoff_address, ''),
+		       COALESCE(pickup_lat, 0), COALESCE(pickup_lon, 0),
+		       COALESCE(dropoff_lat, 0), COALESCE(dropoff_lon, 0),
+		       COALESCE(estimated_fare, fare, 0), COALESCE(payment_method, 'cash'),
+		       COALESCE(ride_status, status, 'requested'), created_at,
+		       COALESCE(expires_at, created_at + interval '5 minutes')
+		FROM public.rides
+		WHERE id = $1
+		  AND (rider_id::text = $2 OR driver_id::text = $2)
+	`, rideID, authUserID).Scan(
+		&ride.ID,
+		&ride.RiderID,
+		&ride.DriverID,
+		&ride.PickupAddress,
+		&ride.DropoffAddress,
+		&ride.PickupLat,
+		&ride.PickupLon,
+		&ride.DropoffLat,
+		&ride.DropoffLon,
+		&ride.FareDecimal,
+		&ride.PaymentMethod,
+		&ride.RideStatus,
+		&ride.CreatedAt,
+		&ride.ExpiresAt,
+	)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Ride not found"})
+		}
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+	return c.JSON(rideAPIResponse(ride))
+}
+
+func (h *Handler) ListOpenRides(c *fiber.Ctx) error {
+	if _, ok := middleware.AuthenticatedUserID(c); !ok {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Authentication required"})
+	}
+	rows, err := h.db.Query(middleware.RequestContext(c), `
+		SELECT id, rider_id::text, COALESCE(driver_id::text, ''),
+		       COALESCE(pickup_location, pickup_address, ''),
+		       COALESCE(dropoff_location, dropoff_address, ''),
+		       COALESCE(pickup_lat, 0), COALESCE(pickup_lon, 0),
+		       COALESCE(dropoff_lat, 0), COALESCE(dropoff_lon, 0),
+		       COALESCE(estimated_fare, fare, 0), COALESCE(payment_method, 'cash'),
+		       COALESCE(ride_status, status, 'requested'), created_at,
+		       COALESCE(expires_at, created_at + interval '5 minutes')
+		FROM public.rides
+		WHERE COALESCE(ride_status, status) IN ('requested', 'pending')
+		  AND created_at >= NOW() - interval '5 minutes'
+		ORDER BY created_at DESC
+		LIMIT 30
+	`)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+	defer rows.Close()
+	var rides []fiber.Map
+	for rows.Next() {
+		var ride rideAPIRecord
+		if err := rows.Scan(
+			&ride.ID,
+			&ride.RiderID,
+			&ride.DriverID,
+			&ride.PickupAddress,
+			&ride.DropoffAddress,
+			&ride.PickupLat,
+			&ride.PickupLon,
+			&ride.DropoffLat,
+			&ride.DropoffLon,
+			&ride.FareDecimal,
+			&ride.PaymentMethod,
+			&ride.RideStatus,
+			&ride.CreatedAt,
+			&ride.ExpiresAt,
+		); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+		}
+		rides = append(rides, rideAPIResponse(ride))
+	}
+	return c.JSON(rides)
+}
+
 func (h *Handler) Request(c *fiber.Ctx) error {
+	ctx, span := observability.StartSpan(middleware.RequestContext(c), "Ride Request")
+	defer span.End()
+
 	authUserID, ok := middleware.AuthenticatedUserID(c)
 	if !ok {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Authentication required"})
@@ -378,10 +601,10 @@ func (h *Handler) Request(c *fiber.Ctx) error {
 	var err error
 	walletAuthorizationRequired := req.PaymentMethod == "wallet" && h.walletAuthorizer != nil && h.walletAuthorizer.Enabled()
 	if walletAuthorizationRequired {
-		if h.pilotGate != nil && h.pilotGate.Enabled() && !h.pilotGate.IsPilotEligible(context.Background(), req.RiderID, wallet.PilotRoleRider) {
+		if h.pilotGate != nil && h.pilotGate.Enabled() && !h.pilotGate.IsPilotEligible(ctx, req.RiderID, wallet.PilotRoleRider) {
 			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Wallet internal pilot access required"})
 		}
-		if err := h.guardWalletPilot(context.Background(), wallet.WalletPilotMutationRequest{
+		if err := h.guardWalletPilot(ctx, wallet.WalletPilotMutationRequest{
 			Endpoint:        "/rides/request",
 			UserID:          req.RiderID,
 			ParticipantType: wallet.WalletPilotParticipantTypeRider,
@@ -393,7 +616,7 @@ func (h *Handler) Request(c *fiber.Ctx) error {
 			return walletPilotDeniedResponse(c, err)
 		}
 		rideID = uuid.NewString()
-		authorization, err = h.walletAuthorizer.AuthorizeRideFunds(context.Background(), wallet.AuthorizationRequest{
+		authorization, err = h.walletAuthorizer.AuthorizeRideFunds(ctx, wallet.AuthorizationRequest{
 			RideID:         rideID,
 			RiderID:        req.RiderID,
 			AmountMinor:    req.EstimatedFareMinor,
@@ -407,7 +630,7 @@ func (h *Handler) Request(c *fiber.Ctx) error {
 	}
 
 	if walletAuthorizationRequired {
-		err = h.db.QueryRow(context.Background(), `
+		err = h.db.QueryRow(ctx, `
 		INSERT INTO public.rides (
 			id,
 			rider_id,
@@ -430,7 +653,7 @@ func (h *Handler) Request(c *fiber.Ctx) error {
 			req.PaymentMethod,
 		).Scan(&createdAt)
 	} else {
-		err = h.db.QueryRow(context.Background(), `
+		err = h.db.QueryRow(ctx, `
 			INSERT INTO public.rides (
 				rider_id,
 				pickup_location,
@@ -453,8 +676,10 @@ func (h *Handler) Request(c *fiber.Ctx) error {
 	}
 
 	if err != nil {
+		observability.RecordPostgresFailure("rides_create")
+		observability.CaptureError(err)
 		if walletAuthorizationRequired {
-			_, releaseErr := h.walletAuthorizer.ReleaseRideFunds(context.Background(), wallet.ReleaseRequest{
+			_, releaseErr := h.walletAuthorizer.ReleaseRideFunds(ctx, wallet.ReleaseRequest{
 				RideID:         authorization.RideID,
 				RiderID:        authorization.RiderID,
 				Reason:         "ride insert failed after wallet authorization",
@@ -466,6 +691,7 @@ func (h *Handler) Request(c *fiber.Ctx) error {
 		}
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
+	observability.RecordRideCreated()
 
 	offer := RideOfferBroadcast{
 		Event:              "ride_offer",
@@ -473,28 +699,33 @@ func (h *Handler) Request(c *fiber.Ctx) error {
 		RiderID:            req.RiderID,
 		PickupLocation:     req.PickupLocation,
 		DropoffLocation:    req.DropoffLocation,
+		EstimatedFare:      decimalUSDFromMinor(req.EstimatedFareMinor),
 		EstimatedFareMinor: req.EstimatedFareMinor,
 		PaymentMethod:      req.PaymentMethod,
 	}
 
-	h.offerNotifier.NotifyRideOffer(offer)
-	h.recordReputationOfferSent(context.Background(), rideID, h.driverIDsSnapshot())
-	h.observeDispatchRide(context.Background(), dispatch.RideContext{
-		RideID:          rideID,
-		RiderID:         req.RiderID,
-		PickupLocation:  req.PickupLocation,
-		DropoffLocation: req.DropoffLocation,
-		PickupLatitude:  req.PickupLatitude,
-		PickupLongitude: req.PickupLongitude,
-		City:            req.City,
-		VehicleType:     req.VehicleType,
-		CreatedAt:       createdAt,
+	if !h.authoritativeDispatchEnabled() {
+		h.offerNotifier.NotifyRideOffer(offer)
+		h.recordReputationOfferSent(context.Background(), rideID, h.driverIDsSnapshot())
+	}
+	h.observeDispatchRide(ctx, dispatch.RideContext{
+		RideID:             rideID,
+		RiderID:            req.RiderID,
+		PickupLocation:     req.PickupLocation,
+		DropoffLocation:    req.DropoffLocation,
+		PickupLatitude:     req.PickupLatitude,
+		PickupLongitude:    req.PickupLongitude,
+		City:               req.City,
+		VehicleType:        req.VehicleType,
+		EstimatedFareMinor: req.EstimatedFareMinor,
+		CreatedAt:          createdAt,
 	})
 
 	return c.Status(201).JSON(fiber.Map{
 		"message":     "Ride request created and broadcast successfully 🚖",
 		"ride_id":     rideID,
 		"ride_status": "requested",
+		"status":      publicRideStatus("requested"),
 		"created_at":  createdAt,
 	})
 }
@@ -566,12 +797,13 @@ func (h *Handler) acceptRide(c *fiber.Ctx, rideID string) error {
 		}
 	}
 
+	var riderID string
 	var paymentMethod string
 	err := h.db.QueryRow(
 		context.Background(),
-		`SELECT COALESCE(payment_method, 'cash') FROM public.rides WHERE id = $1`,
+		`SELECT rider_id, COALESCE(payment_method, 'cash') FROM public.rides WHERE id = $1`,
 		rideID,
-	).Scan(&paymentMethod)
+	).Scan(&riderID, &paymentMethod)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Ride not found"})
@@ -585,7 +817,9 @@ func (h *Handler) acceptRide(c *fiber.Ctx, rideID string) error {
 	commandTag, err := h.db.Exec(context.Background(), `
 		UPDATE public.rides
 		SET driver_id = $1,
-		    ride_status = 'accepted'
+		    ride_status = 'accepted',
+		    status = 'accepted',
+		    updated_at = NOW()
 		WHERE id = $2
 		  AND ride_status = 'requested'
 	`, req.DriverID, rideID)
@@ -599,36 +833,27 @@ func (h *Handler) acceptRide(c *fiber.Ctx, rideID string) error {
 			"error": "Ride already accepted or not found",
 		})
 	}
+	h.setDispatchDriverAvailability(context.Background(), req.DriverID, "busy", rideID)
 
 	roomID := "ride_" + rideID
 
-	var riderID string
-	err = h.db.QueryRow(
-		context.Background(),
-		`SELECT rider_id FROM public.rides WHERE id = $1`,
-		rideID,
-	).Scan(&riderID)
-
-	if err == nil {
-		if riderSocket, exists := h.riders.Get(riderID); exists {
-			acceptMsg := fiber.Map{
-				"event":       "ride_accepted",
-				"ride_id":     rideID,
-				"driver_id":   req.DriverID,
-				"room":        roomID,
-				"ride_status": "accepted",
-			}
-
-			msgBytes, _ := json.Marshal(acceptMsg)
-			if h.ws == nil || !h.ws.Send(riderSocket, msgBytes) {
-				log.Println("Ride acceptance send failed")
-				h.riders.Delete(riderID)
-			} else {
-				log.Println("Ride acceptance sent to rider:", riderID)
-			}
+	if riderSocket, exists := h.riders.Get(riderID); exists {
+		acceptMsg := fiber.Map{
+			"event":       "ride_accepted",
+			"ride_id":     rideID,
+			"driver_id":   req.DriverID,
+			"room":        roomID,
+			"ride_status": "accepted",
+			"status":      publicRideStatus("accepted"),
 		}
-	} else {
-		log.Println("Could not fetch rider for accepted ride:", err)
+
+		msgBytes, _ := json.Marshal(acceptMsg)
+		if h.ws == nil || !h.ws.Send(riderSocket, msgBytes) {
+			log.Println("Ride acceptance send failed")
+			h.riders.Delete(riderID)
+		} else {
+			log.Println("Ride acceptance sent to rider:", riderID)
+		}
 	}
 
 	return c.JSON(fiber.Map{
@@ -636,11 +861,15 @@ func (h *Handler) acceptRide(c *fiber.Ctx, rideID string) error {
 		"ride_id":     rideID,
 		"driver_id":   req.DriverID,
 		"ride_status": "accepted",
+		"status":      publicRideStatus("accepted"),
 		"room":        roomID,
 	})
 }
 
 func (h *Handler) SubmitOffer(c *fiber.Ctx) error {
+	ctx, span := observability.StartSpan(middleware.RequestContext(c), "Offer Creation")
+	defer span.End()
+
 	authUserID, ok := middleware.AuthenticatedUserID(c)
 	if !ok {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Authentication required"})
@@ -672,18 +901,20 @@ func (h *Handler) SubmitOffer(c *fiber.Ctx) error {
 	rideID := c.Params("rideId")
 	var rideStatus string
 	var paymentMethod string
-	err := h.db.QueryRow(context.Background(), `
+	err := h.db.QueryRow(ctx, `
 		SELECT ride_status, COALESCE(payment_method, 'cash')
 		FROM public.rides
 		WHERE id = $1
 	`, rideID).Scan(&rideStatus, &paymentMethod)
 	if err != nil {
+		observability.RecordPostgresFailure("rides_submit_offer_lookup")
+		observability.CaptureError(err)
 		if err == pgx.ErrNoRows {
 			return c.Status(404).JSON(fiber.Map{"error": "Ride not found"})
 		}
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
-	if h.walletPilotRequiredForDriver(context.Background(), paymentMethod, req.DriverID) {
+	if h.walletPilotRequiredForDriver(ctx, paymentMethod, req.DriverID) {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Wallet internal pilot access required"})
 	}
 
@@ -704,7 +935,7 @@ func (h *Handler) SubmitOffer(c *fiber.Ctx) error {
 	expiresAt := time.Now().Add(defaultOfferTTL)
 	var createdAt time.Time
 
-	err = h.db.QueryRow(context.Background(), `
+	err = h.db.QueryRow(ctx, `
 		INSERT INTO public.ride_offers (
 			id,
 			ride_id,
@@ -720,6 +951,8 @@ func (h *Handler) SubmitOffer(c *fiber.Ctx) error {
 		RETURNING created_at, expires_at
 	`, offerID, rideID, req.DriverID, wallet.MinorDecimalString(amountMinor, wallet.CurrencyUSD), etaMinutes, expiresAt).Scan(&createdAt, &expiresAt)
 	if err != nil {
+		observability.RecordPostgresFailure("rides_submit_offer")
+		observability.CaptureError(err)
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
 
@@ -732,11 +965,17 @@ func (h *Handler) SubmitOffer(c *fiber.Ctx) error {
 	h.recordReputationOfferSubmitted(context.Background(), req.DriverID, rideID, offerID)
 
 	return c.Status(201).JSON(OfferResponse{
+		ID:               offerID,
 		OfferID:          offerID,
 		RideID:           rideID,
+		RequestID:        rideID,
 		DriverID:         req.DriverID,
+		Amount:           decimalUSDFromMinor(amountMinor),
 		AmountMinor:      amountMinor,
+		Price:            decimalUSDFromMinor(amountMinor),
+		Fare:             decimalUSDFromMinor(amountMinor),
 		FareMinor:        amountMinor,
+		OfferedFare:      decimalUSDFromMinor(amountMinor),
 		OfferedFareMinor: amountMinor,
 		ETAMinutes:       etaMinutes,
 		Status:           "pending",
@@ -788,8 +1027,7 @@ func (h *Handler) ListOffers(c *fiber.Ctx) error {
 		SELECT id, driver_id, offered_fare, COALESCE(eta_minutes, 0), status, expires_at, created_at
 		FROM public.ride_offers
 		WHERE ride_id = $1
-		  AND status = 'pending'
-		  AND expires_at > NOW()
+		  AND (status = 'accepted' OR (status = 'pending' AND expires_at > NOW()))
 		ORDER BY created_at ASC
 	`, rideID)
 	if err != nil {
@@ -812,8 +1050,14 @@ func (h *Handler) ListOffers(c *fiber.Ctx) error {
 			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 		}
 		offer.RideID = rideID
+		offer.ID = offer.OfferID
+		offer.RequestID = rideID
 		offer.AmountMinor = offer.OfferedFareMinor
 		offer.FareMinor = offer.OfferedFareMinor
+		offer.Amount = decimalUSDFromMinor(offer.OfferedFareMinor)
+		offer.Fare = offer.Amount
+		offer.Price = offer.Amount
+		offer.OfferedFare = offer.Amount
 		offers = append(offers, offer)
 	}
 
@@ -821,13 +1065,33 @@ func (h *Handler) ListOffers(c *fiber.Ctx) error {
 }
 
 func (h *Handler) RejectOffer(c *fiber.Ctx) error {
+	return h.rejectOffer(c, c.Params("rideId"), c.Params("offerId"))
+}
+
+func (h *Handler) RejectOfferByID(c *fiber.Ctx) error {
+	return h.rejectOffer(c, "", c.Params("offerId"))
+}
+
+func (h *Handler) rejectOffer(c *fiber.Ctx, rideID string, offerID string) error {
 	authUserID, ok := middleware.AuthenticatedUserID(c)
 	if !ok {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Authentication required"})
 	}
 
-	rideID := c.Params("rideId")
-	offerID := c.Params("offerId")
+	if rideID == "" {
+		err := h.db.QueryRow(context.Background(), `
+			SELECT ride_id
+			FROM public.ride_offers
+			WHERE id = $1
+			  AND driver_id = $2
+		`, offerID, authUserID).Scan(&rideID)
+		if err != nil {
+			if err == pgx.ErrNoRows {
+				return c.Status(404).JSON(fiber.Map{"error": "Offer not found"})
+			}
+			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+		}
+	}
 
 	commandTag, err := h.db.Exec(context.Background(), `
 		UPDATE public.ride_offers
@@ -845,6 +1109,7 @@ func (h *Handler) RejectOffer(c *fiber.Ctx) error {
 	if commandTag.RowsAffected() == 0 {
 		return c.Status(409).JSON(fiber.Map{"error": "Offer cannot be rejected"})
 	}
+	h.setDispatchDriverAvailability(context.Background(), authUserID, "available", "")
 
 	return c.JSON(fiber.Map{
 		"message":  "Offer declined successfully",
@@ -853,11 +1118,60 @@ func (h *Handler) RejectOffer(c *fiber.Ctx) error {
 	})
 }
 
+func (h *Handler) PatchRide(c *fiber.Ctx) error {
+	authUserID, ok := middleware.AuthenticatedUserID(c)
+	if !ok {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Authentication required"})
+	}
+
+	var req struct {
+		FareMinor          int64 `json:"fare_minor"`
+		EstimatedFareMinor int64 `json:"estimated_fare_minor"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "Invalid request body"})
+	}
+
+	amountMinor := req.FareMinor
+	if amountMinor <= 0 {
+		amountMinor = req.EstimatedFareMinor
+	}
+	if amountMinor <= 0 {
+		return c.Status(400).JSON(fiber.Map{"error": "fare_minor is required"})
+	}
+
+	rideID := c.Params("rideId")
+	commandTag, err := h.db.Exec(context.Background(), `
+		UPDATE public.rides
+		SET estimated_fare = $3,
+		    updated_at = NOW()
+		WHERE id = $1
+		  AND rider_id = $2
+		  AND COALESCE(ride_status, status) IN ('requested', 'pending')
+	`, rideID, authUserID, wallet.MinorDecimalString(amountMinor, wallet.CurrencyUSD))
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+	}
+	if commandTag.RowsAffected() == 0 {
+		return c.Status(409).JSON(fiber.Map{"error": "Ride cannot be updated"})
+	}
+
+	return c.JSON(fiber.Map{
+		"ok":         true,
+		"ride_id":    rideID,
+		"fare":       decimalUSDFromMinor(amountMinor),
+		"fare_minor": amountMinor,
+	})
+}
+
 func (h *Handler) AcceptOffer(c *fiber.Ctx) error {
 	return h.acceptOffer(c, c.Params("rideId"), c.Params("offerId"))
 }
 
 func (h *Handler) acceptOffer(c *fiber.Ctx, rideID, offerID string) error {
+	ctx, span := observability.StartSpan(middleware.RequestContext(c), "Offer Acceptance")
+	defer span.End()
+
 	authUserID, ok := middleware.AuthenticatedUserID(c)
 	if !ok {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Authentication required"})
@@ -868,7 +1182,6 @@ func (h *Handler) acceptOffer(c *fiber.Ctx, rideID, offerID string) error {
 		return c.Status(400).JSON(fiber.Map{"error": "Invalid request body"})
 	}
 
-	ctx := context.Background()
 	tx, err := h.db.Begin(ctx)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
@@ -939,7 +1252,9 @@ func (h *Handler) acceptOffer(c *fiber.Ctx, rideID, offerID string) error {
 	commandTag, err := tx.Exec(ctx, `
 		UPDATE public.rides
 		SET driver_id = $1,
-		    ride_status = 'accepted'
+		    ride_status = 'accepted',
+		    status = 'accepted',
+		    updated_at = NOW()
 		WHERE id = $2
 		  AND ride_status = 'requested'
 	`, offer.DriverID, rideID)
@@ -965,7 +1280,7 @@ func (h *Handler) acceptOffer(c *fiber.Ctx, rideID, offerID string) error {
 		return c.Status(409).JSON(fiber.Map{"error": "Offer no longer available"})
 	}
 
-	_, err = tx.Exec(ctx, `
+	commandTag, err = tx.Exec(ctx, `
 		UPDATE public.ride_offers
 		SET status = 'expired',
 		    expired_at = NOW()
@@ -976,19 +1291,22 @@ func (h *Handler) acceptOffer(c *fiber.Ctx, rideID, offerID string) error {
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
+	observability.RecordDispatchOfferExpired(commandTag.RowsAffected())
 
 	if err = tx.Commit(ctx); err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
 
 	log.Printf("Offer accepted: offer_id=%s ride_id=%s driver_id=%s rider_id=%s", offerID, rideID, offer.DriverID, authUserID)
-	h.recordDispatchAcceptedOffer(context.Background(), dispatch.OfferOutcome{
+	observability.RecordDispatchOfferAcceptance()
+	h.recordDispatchAcceptedOffer(ctx, dispatch.OfferOutcome{
 		RideID:   rideID,
 		OfferID:  offerID,
 		DriverID: offer.DriverID,
 		At:       time.Now(),
 	})
-	h.recordReputationOfferAccepted(context.Background(), offer.DriverID, rideID, offerID)
+	h.setDispatchDriverAvailability(ctx, offer.DriverID, "busy", rideID)
+	h.recordReputationOfferAccepted(ctx, offer.DriverID, rideID, offerID)
 
 	roomID := "ride_" + rideID
 	if riderSocket, exists := h.riders.Get(riderID); exists {
@@ -999,6 +1317,7 @@ func (h *Handler) acceptOffer(c *fiber.Ctx, rideID, offerID string) error {
 			"offer_id":    offerID,
 			"room":        roomID,
 			"ride_status": "accepted",
+			"status":      publicRideStatus("accepted"),
 		}
 
 		msgBytes, _ := json.Marshal(acceptMsg)
@@ -1016,6 +1335,7 @@ func (h *Handler) acceptOffer(c *fiber.Ctx, rideID, offerID string) error {
 		"offer_id":    offerID,
 		"driver_id":   offer.DriverID,
 		"ride_status": "accepted",
+		"status":      publicRideStatus("accepted"),
 		"room":        roomID,
 	})
 }
@@ -1025,6 +1345,19 @@ func (h *Handler) observeDispatchRide(ctx context.Context, ride dispatch.RideCon
 		return
 	}
 	h.dispatchObserver.ObserveRide(ctx, ride)
+}
+
+func (h *Handler) authoritativeDispatchEnabled() bool {
+	observer, ok := h.dispatchObserver.(authoritativeDispatchObserver)
+	return ok && observer.Authoritative()
+}
+
+func (h *Handler) setDispatchDriverAvailability(ctx context.Context, driverID string, availability string, rideID string) {
+	observer, ok := h.dispatchObserver.(driverAvailabilityDispatchObserver)
+	if !ok {
+		return
+	}
+	observer.SetDriverAvailability(ctx, driverID, availability, rideID)
 }
 
 func (h *Handler) recordDispatchFirstOffer(ctx context.Context, outcome dispatch.OfferOutcome) {
@@ -1100,6 +1433,9 @@ func (h *Handler) recordActiveCashSettlement(ctx context.Context, ride wallet.Co
 }
 
 func (h *Handler) captureWalletSettlement(ctx context.Context, ride wallet.CompletedRide) {
+	ctx, span := observability.StartSpan(ctx, "Wallet Settlement")
+	defer span.End()
+
 	if h.walletAuthorizer == nil || !h.walletAuthorizer.Enabled() || ride.PaymentMethod != "wallet" {
 		return
 	}
@@ -1121,6 +1457,8 @@ func (h *Handler) captureWalletSettlement(ctx context.Context, ride wallet.Compl
 			IdempotencyKey: "ride-completion-capture:" + ride.RideID,
 		})
 		if err != nil {
+			observability.RecordWalletFailure("ride_capture")
+			observability.CaptureError(err)
 			log.Println("Wallet ride capture warning:", err)
 		}
 	}()
@@ -1140,10 +1478,123 @@ func (h *Handler) Start(c *fiber.Ctx) error {
 }
 
 func (h *Handler) UpdateStatus(c *fiber.Ctx) error {
-	return h.startRide(c, c.Params("rideId"))
+	var req struct {
+		Status         string `json:"status"`
+		RideStatus     string `json:"ride_status"`
+		ExpectedStatus string `json:"expected_status"`
+	}
+	if len(c.Body()) > 0 {
+		if err := c.BodyParser(&req); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
+		}
+	}
+
+	status := req.RideStatus
+	if status == "" {
+		status = req.Status
+	}
+	canonicalStatus, ok := canonicalRideStatus(status)
+	if !ok {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Unsupported ride status"})
+	}
+	switch canonicalStatus {
+	case "ongoing":
+		return h.startRide(c, c.Params("rideId"))
+	case "completed":
+		return h.completeRide(c, c.Params("rideId"))
+	case "enroute", "arrived", "cancelled":
+		return h.updateRideStatus(c, c.Params("rideId"), canonicalStatus, req.ExpectedStatus)
+	default:
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Unsupported ride status transition"})
+	}
+}
+
+func (h *Handler) updateRideStatus(c *fiber.Ctx, rideID string, rideStatus string, expectedStatus string) error {
+	ctx := middleware.RequestContext(c)
+	authUserID, ok := middleware.AuthenticatedUserID(c)
+	if !ok {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Authentication required"})
+	}
+
+	if expectedStatus != "" {
+		if canonicalExpected, ok := canonicalRideStatus(expectedStatus); ok {
+			expectedStatus = canonicalExpected
+		}
+	}
+
+	var allowedPrevious []string
+	event := "ride_status_updated"
+	if rideStatus == "enroute" {
+		allowedPrevious = []string{"accepted"}
+	} else if rideStatus == "arrived" {
+		allowedPrevious = []string{"accepted", "enroute"}
+	} else {
+		allowedPrevious = []string{"requested", "accepted", "enroute", "arrived", "ongoing"}
+		event = "ride_cancelled"
+	}
+
+	var riderID string
+	var driverID string
+	var err error
+	if rideStatus == "cancelled" {
+		err = h.db.QueryRow(ctx, `
+			UPDATE public.rides
+			SET ride_status = 'cancelled',
+			    status = 'cancelled',
+			    updated_at = NOW()
+			WHERE id = $1
+			  AND (rider_id::text = $2 OR driver_id::text = $2)
+			  AND ride_status = ANY($3)
+			  AND ($4 = '' OR ride_status = $4)
+			RETURNING rider_id::text, COALESCE(driver_id::text, '')
+		`, rideID, authUserID, allowedPrevious, expectedStatus).Scan(&riderID, &driverID)
+	} else {
+		authorized, authErr := h.isAssignedDriver(rideID, authUserID)
+		if authErr != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": authErr.Error()})
+		}
+		if !authorized {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Cannot update a ride assigned to another driver"})
+		}
+		err = h.db.QueryRow(ctx, `
+			UPDATE public.rides
+			SET ride_status = $1,
+			    status = $1,
+			    updated_at = NOW()
+			WHERE id = $2
+			  AND driver_id::text = $3
+			  AND ride_status = ANY($4)
+			  AND ($5 = '' OR ride_status = $5)
+			RETURNING rider_id::text, driver_id::text
+		`, rideStatus, rideID, authUserID, allowedPrevious, expectedStatus).Scan(&riderID, &driverID)
+	}
+	if err != nil {
+		observability.RecordPostgresFailure("rides_update_status")
+		observability.CaptureError(err)
+		if err == pgx.ErrNoRows {
+			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "Ride cannot transition to requested status"})
+		}
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	h.emitRideLifecycle(event, rideID, driverID, rideStatus, riderID)
+	if rideStatus == "cancelled" && driverID != "" {
+		h.recordReputationRideCancelled(ctx, driverID, rideID)
+		h.setDispatchDriverAvailability(ctx, driverID, "available", "")
+	}
+
+	return c.JSON(fiber.Map{
+		"message":     "Ride status updated successfully",
+		"ride_id":     rideID,
+		"ride_status": rideStatus,
+		"status":      publicRideStatus(rideStatus),
+	})
 }
 
 func (h *Handler) startRide(c *fiber.Ctx, rideID string) error {
+	ctx, span := observability.StartSpan(middleware.RequestContext(c), "Ride Start")
+	defer span.End()
+
 	authUserID, ok := middleware.AuthenticatedUserID(c)
 	if !ok {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Authentication required"})
@@ -1159,16 +1610,20 @@ func (h *Handler) startRide(c *fiber.Ctx, rideID string) error {
 
 	var riderID string
 	var driverID string
-	err = h.db.QueryRow(context.Background(), `
+	err = h.db.QueryRow(ctx, `
 		UPDATE public.rides
 		SET ride_status = 'ongoing',
-		    started_at = NOW()
+		    status = 'in_progress',
+		    started_at = COALESCE(started_at, NOW()),
+		    updated_at = NOW()
 		WHERE id = $1
-		  AND ride_status = 'accepted'
+		  AND ride_status IN ('accepted', 'enroute', 'arrived')
 		  AND driver_id = $2
 		RETURNING rider_id::text, driver_id::text
 	`, rideID, authUserID).Scan(&riderID, &driverID)
 	if err != nil {
+		observability.RecordPostgresFailure("rides_start")
+		observability.CaptureError(err)
 		if err == pgx.ErrNoRows {
 			return c.Status(409).JSON(fiber.Map{
 				"error": "Ride must be accepted before it can start",
@@ -1177,12 +1632,14 @@ func (h *Handler) startRide(c *fiber.Ctx, rideID string) error {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
 
+	observability.RecordRideStarted()
 	h.emitRideLifecycle("ride_started", rideID, driverID, "ongoing", riderID)
 
 	return c.JSON(fiber.Map{
 		"message":     "Ride started successfully ðŸš–",
 		"ride_id":     rideID,
 		"ride_status": "ongoing",
+		"status":      publicRideStatus("ongoing"),
 	})
 }
 
@@ -1210,6 +1667,9 @@ func (h *Handler) SettleRide(c *fiber.Ctx) error {
 }
 
 func (h *Handler) completeRide(c *fiber.Ctx, rideID string) error {
+	ctx, span := observability.StartSpan(middleware.RequestContext(c), "Ride Complete")
+	defer span.End()
+
 	authUserID, ok := middleware.AuthenticatedUserID(c)
 	if !ok {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Authentication required"})
@@ -1227,16 +1687,20 @@ func (h *Handler) completeRide(c *fiber.Ctx, rideID string) error {
 	var driverID string
 	var fareDecimal string
 	var paymentMethod string
-	err = h.db.QueryRow(context.Background(), `
+	err = h.db.QueryRow(ctx, `
 		UPDATE public.rides
 		SET ride_status = 'completed',
-		    completed_at = NOW()
+		    status = 'completed',
+		    completed_at = NOW(),
+		    updated_at = NOW()
 		WHERE id = $1
-		  AND ride_status = 'ongoing'
+		  AND ride_status IN ('ongoing', 'in_progress')
 		  AND driver_id = $2
 		RETURNING rider_id::text, driver_id::text, COALESCE(estimated_fare, 0), COALESCE(payment_method, 'cash')
 	`, rideID, authUserID).Scan(&riderID, &driverID, &fareDecimal, &paymentMethod)
 	if err != nil {
+		observability.RecordPostgresFailure("rides_complete")
+		observability.CaptureError(err)
 		if err == pgx.ErrNoRows {
 			return c.Status(409).JSON(fiber.Map{
 				"error": "Ride must be ongoing before it can be completed",
@@ -1245,8 +1709,9 @@ func (h *Handler) completeRide(c *fiber.Ctx, rideID string) error {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
 
+	observability.RecordRideCompleted()
 	h.emitRideLifecycle("ride_completed", rideID, driverID, "completed", riderID)
-	h.recordReputationRideCompleted(context.Background(), driverID, rideID)
+	h.recordReputationRideCompleted(ctx, driverID, rideID)
 	fareMoney, err := wallet.NewPositiveMoneyFromDecimal(fareDecimal, wallet.CurrencyUSD)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
@@ -1261,14 +1726,16 @@ func (h *Handler) completeRide(c *fiber.Ctx, rideID string) error {
 		City:          wallet.WalletPilotCityGwanda,
 		CompletedAt:   time.Now().UTC(),
 	}
-	h.recordShadowSettlement(context.Background(), completedRide)
-	h.recordActiveCashSettlement(context.Background(), completedRide)
-	h.captureWalletSettlement(context.Background(), completedRide)
+	h.recordShadowSettlement(ctx, completedRide)
+	h.recordActiveCashSettlement(ctx, completedRide)
+	h.captureWalletSettlement(ctx, completedRide)
+	h.setDispatchDriverAvailability(ctx, driverID, "available", "")
 
 	return c.JSON(fiber.Map{
 		"message":     "Ride completed successfully ðŸš–",
 		"ride_id":     rideID,
 		"ride_status": "completed",
+		"status":      publicRideStatus("completed"),
 	})
 }
 

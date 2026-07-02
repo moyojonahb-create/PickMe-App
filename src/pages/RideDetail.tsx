@@ -20,6 +20,9 @@ import DisputeForm from "@/components/ride/DisputeForm";
 import TopFlashBanner from "@/components/ui/top-flash-banner";
 import { goBackend } from "@/lib/goBackendClient";
 import { getRideSettlement, settleRideThroughGo } from "@/lib/walletApi";
+import { createMessage } from "@/lib/businessApi";
+import { fetchPendingOffers } from "@/lib/offerHelpers";
+import { normalizeRideRow } from "@/lib/rideContract";
 
 
 /** Avatar with automatic fallback to initial when image fails or is missing. */
@@ -96,7 +99,7 @@ function SettlementInfo({ tripId, onSettled }: { tripId: string; onSettled?: () 
 
 type RideRow = {
   id: string; user_id: string; pickup_address: string | null; dropoff_address: string | null;
-  fare: number | null; status: string | null; pickup_lat?: number | null; pickup_lon?: number | null;
+  fare: number | null; status: string | null; ride_status?: string | null; pickup_lat?: number | null; pickup_lon?: number | null;
   dropoff_lat?: number | null; dropoff_lon?: number | null; driver_id?: string | null;
   distance_km?: number | null; duration_minutes?: number | null; payment_method?: string | null;
 };
@@ -147,7 +150,7 @@ export default function RideDetail() {
   useEffect(() => {
     if (!ride?.driver_id) { setDriverUserIdForTracking(null); return; }
     (async () => {
-      const { data } = await supabase.from("drivers").select("user_id").eq("id", ride.driver_id!).maybeSingle();
+      const { data } = await supabase.from("drivers").select("user_id").or(`id.eq.${ride.driver_id},user_id.eq.${ride.driver_id}`).maybeSingle();
       if (data) setDriverUserIdForTracking(data.user_id);
     })();
   }, [ride?.driver_id]);
@@ -158,7 +161,7 @@ export default function RideDetail() {
       const { data: d } = await supabase
         .from("drivers")
         .select("user_id, vehicle_make, vehicle_model, vehicle_color, plate_number, rating_avg, total_trips, avatar_url")
-        .eq("id", ride.driver_id)
+        .or(`id.eq.${ride.driver_id},user_id.eq.${ride.driver_id}`)
         .maybeSingle();
       if (!d) return;
       const { data: p } = await supabase
@@ -203,11 +206,18 @@ export default function RideDetail() {
     if (!rideId) return;
     if (!silent) setLoading(true);
     try {
-      const { data: r, error: rErr } = await supabase.from("rides").select("*").eq("id", rideId).single();
-      if (rErr) throw new Error(rErr.message);
-      setRide(r as RideRow);
-      const { data: o } = await supabase.from("offers").select("*").eq("ride_id", rideId).order("created_at", { ascending: false });
-      const rawOffers = o as OfferRow[] || [];
+      const r = normalizeRideRow(await goBackend.get<Record<string, unknown>>(`/api/rides/${rideId}`)) as unknown as RideRow;
+      setRide(r);
+      const rawOffers = (await fetchPendingOffers(rideId)).map((offer) => ({
+        id: offer.id,
+        ride_id: offer.ride_id,
+        driver_id: offer.driver_id,
+        price: offer.price,
+        eta_minutes: offer.eta_minutes,
+        message: offer.message,
+        status: offer.status,
+        created_at: offer.created_at,
+      })) as OfferRow[];
       setOffers(rawOffers);
 
       const pendingRaw = rawOffers.filter((off) => off.status === "pending");
@@ -259,7 +269,7 @@ export default function RideDetail() {
     if (!rideId) return;
     const ch = supabase
       .channel(`db:ride:${rideId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "offers", filter: `ride_id=eq.${rideId}` }, () => load(true))
+      .on("postgres_changes", { event: "*", schema: "public", table: "ride_offers", filter: `ride_id=eq.${rideId}` }, () => load(true))
       .on("postgres_changes", { event: "*", schema: "public", table: "rides", filter: `id=eq.${rideId}` }, () => load(true))
       .on("postgres_changes", { event: "*", schema: "public", table: "messages", filter: `ride_id=eq.${rideId}` }, () => load(true))
       .subscribe();
@@ -294,8 +304,7 @@ export default function RideDetail() {
   const sendMessage = async () => {
     if (!rideId || !msgText.trim()) return;
     try {
-      const { error } = await supabase.from("messages").insert({ ride_id: rideId, sender_id: userId, text: msgText.trim() });
-      if (error) throw new Error(error.message);
+      await createMessage({ ride_id: rideId, text: msgText.trim() });
       setMsgText("");
     } catch (e: unknown) { setToast((e as Error)?.message || "Message failed."); }
   };
@@ -303,8 +312,7 @@ export default function RideDetail() {
   const sendQuickReply = async (text: string) => {
     if (!rideId || !text.trim()) return;
     try {
-      const { error } = await supabase.from("messages").insert({ ride_id: rideId, sender_id: userId, text: text.trim() });
-      if (error) throw new Error(error.message);
+      await createMessage({ ride_id: rideId, text: text.trim() });
     } catch (e: unknown) { setToast((e as Error)?.message || "Message failed."); }
   };
 
@@ -474,14 +482,15 @@ export default function RideDetail() {
     );
   }
 
-  const rideStatus = ride.status ?? "pending";
-  const isSearching = rideStatus === "pending" || rideStatus === "searching";
+  const rideStatus = ride.status ?? "requested";
+  const isSearching = rideStatus === "pending" || rideStatus === "requested" || rideStatus === "searching";
   const isActive = ["accepted", "enroute_pickup", "driver_arriving", "driver_arrived", "arrived", "in_progress", "near_destination"].includes(rideStatus);
   const isCompleted = rideStatus === "completed";
   const isCancelled = rideStatus === "cancelled";
   const isDriverArrived = rideStatus === "driver_arrived" || rideStatus === "arrived";
   const statusConfig: Record<string, { label: string; color: string; icon: string }> = {
     pending: { label: "Looking for drivers", color: "bg-yellow-500", icon: "🔍" },
+    requested: { label: "Looking for drivers", color: "bg-yellow-500", icon: "🔍" },
     searching: { label: "Looking for drivers", color: "bg-yellow-500", icon: "🔍" },
     accepted: { label: "Driver accepted", color: "bg-primary", icon: "✓" },
     enroute_pickup: { label: "Driver on the way", color: "bg-primary", icon: "🚗" },

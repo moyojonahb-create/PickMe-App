@@ -4,8 +4,8 @@ import { AlertTriangle, Phone, X, Shield, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
-import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/hooks/useAuth";
+import { createEmergencyEvent } from "@/lib/businessApi";
 
 interface EmergencyButtonProps {
   rideId?: string;
@@ -30,9 +30,8 @@ export default function EmergencyButton({ rideId, pickupAddress, dropoffAddress,
   const writeEmergencyAlert = async (latitude: number, longitude: number) => {
     if (!user) return;
     try {
-      await supabase.from("emergency_alerts").insert({
+      await createEmergencyEvent({
         ride_id: rideId || null,
-        user_id: user.id,
         latitude,
         longitude,
       });

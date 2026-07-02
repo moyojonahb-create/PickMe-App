@@ -1,0 +1,77 @@
+name: CD
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main, master]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        required: true
+        default: staging
+        type: choice
+        options:
+          - staging
+          - production
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  deploy-staging:
+    name: Deploy staging
+    if: ${{ (github.event_name == 'workflow_dispatch' && (inputs.environment == 'staging' || inputs.environment == 'production')) || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') }}
+    runs-on: ubuntu-latest
+    environment: staging
+    env:
+      STAGING_SSH_HOST: ${{ secrets.STAGING_SSH_HOST }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build deployment bundle
+        run: tar -czf pickme-staging-bundle.tgz Dockerfile docker-compose.yml backend/Dockerfile ops docs package.json package-lock.json backend/go.mod backend/go.sum
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pickme-staging-bundle
+          path: pickme-staging-bundle.tgz
+      - name: Deploy staging over SSH
+        if: ${{ env.STAGING_SSH_HOST != '' }}
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.STAGING_SSH_HOST }}
+          username: ${{ secrets.STAGING_SSH_USER }}
+          key: ${{ secrets.STAGING_SSH_KEY }}
+          script: |
+            cd /opt/pickme
+            git pull --ff-only
+            docker compose build
+            docker compose up -d
+            docker compose ps
+
+  deploy-production:
+    name: Deploy production
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.environment == 'production' }}
+    runs-on: ubuntu-latest
+    needs: deploy-staging
+    environment: production
+    env:
+      PRODUCTION_SSH_HOST: ${{ secrets.PRODUCTION_SSH_HOST }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy production over SSH
+        if: ${{ env.PRODUCTION_SSH_HOST != '' }}
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.PRODUCTION_SSH_HOST }}
+          username: ${{ secrets.PRODUCTION_SSH_USER }}
+          key: ${{ secrets.PRODUCTION_SSH_KEY }}
+          script: |
+            cd /opt/pickme
+            git fetch --all --prune
+            git checkout main
+            git pull --ff-only
+            docker compose build
+            docker compose up -d --remove-orphans
+            docker compose ps

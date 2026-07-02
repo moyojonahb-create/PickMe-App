@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -13,7 +14,9 @@ import (
 	"time"
 
 	"pickme-backend/internal/config"
+	"pickme-backend/internal/dispatch"
 	"pickme-backend/internal/geo"
+	"pickme-backend/internal/observability"
 )
 
 type Client struct {
@@ -166,6 +169,29 @@ func (c *Client) Expire(ctx context.Context, key string, ttl time.Duration) erro
 	return err
 }
 
+func (c *Client) IncrWithTTL(ctx context.Context, key string, ttl time.Duration) (int64, error) {
+	if !c.Enabled() {
+		return 0, nil
+	}
+	reply, err := c.do(ctx, "INCR", key)
+	if err != nil {
+		return 0, err
+	}
+	if ttl > 0 {
+		if err := c.Expire(ctx, key, ttl); err != nil {
+			return 0, err
+		}
+	}
+	switch value := reply.(type) {
+	case int64:
+		return value, nil
+	case string:
+		return strconv.ParseInt(value, 10, 64)
+	default:
+		return 0, nil
+	}
+}
+
 func (c *Client) GeoAdd(ctx context.Context, key string, longitude float64, latitude float64, member string) error {
 	if !c.Enabled() {
 		return nil
@@ -212,12 +238,109 @@ func (c *Client) GeoSearch(ctx context.Context, key string, longitude float64, l
 	return results, nil
 }
 
+func (c *Client) EnqueueDispatchJob(ctx context.Context, queue string, job dispatch.DispatchJob) (string, error) {
+	if !c.Enabled() {
+		return "", nil
+	}
+	payload, err := json.Marshal(job)
+	if err != nil {
+		return "", err
+	}
+	reply, err := c.do(ctx, "XADD", queue, "*", "payload", string(payload), "ride_id", job.Ride.RideID, "attempt", strconv.Itoa(job.Attempt))
+	if err != nil {
+		return "", err
+	}
+	id, _ := reply.(string)
+	return id, nil
+}
+
+func (c *Client) AcquireLock(ctx context.Context, key string, value string, ttl time.Duration) (bool, error) {
+	if !c.Enabled() {
+		return true, nil
+	}
+	if ttl <= 0 {
+		ttl = 30 * time.Second
+	}
+	reply, err := c.do(ctx, "SET", key, value, "NX", "PX", strconv.FormatInt(ttl.Milliseconds(), 10))
+	if err != nil {
+		return false, err
+	}
+	return reply == "OK", nil
+}
+
+func (c *Client) ReleaseLock(ctx context.Context, key string, value string) error {
+	if !c.Enabled() {
+		return nil
+	}
+	script := "if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('DEL', KEYS[1]) else return 0 end"
+	_, err := c.do(ctx, "EVAL", script, "1", key, value)
+	return err
+}
+
+func (c *Client) Publish(ctx context.Context, channel string, payload []byte) error {
+	if !c.Enabled() {
+		return nil
+	}
+	_, err := c.do(ctx, "PUBLISH", channel, string(payload))
+	return err
+}
+
+func (c *Client) Subscribe(ctx context.Context, channel string, handler func([]byte)) error {
+	if !c.Enabled() {
+		return nil
+	}
+	conn, err := c.dedicatedConn(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = conn.Close()
+		c.releaseSlot()
+	}()
+
+	_ = conn.SetDeadline(time.Time{})
+	reader := bufio.NewReader(conn)
+	if err := writeArray(conn, "SUBSCRIBE", channel); err != nil {
+		return err
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
+		reply, err := readRESP(reader)
+		if err != nil {
+			return err
+		}
+		items, ok := reply.([]any)
+		if !ok || len(items) < 3 {
+			continue
+		}
+		kind, _ := items[0].(string)
+		if kind != "message" {
+			continue
+		}
+		payloadText, _ := items[2].(string)
+		handler([]byte(payloadText))
+	}
+}
+
 func (c *Client) do(ctx context.Context, args ...string) (any, error) {
 	if !c.Enabled() {
 		return nil, nil
 	}
+	operation := "unknown"
+	if len(args) > 0 {
+		operation = strings.ToLower(args[0])
+	}
+	observability.RecordRedisOperation(operation)
 	conn, err := c.acquire(ctx)
 	if err != nil {
+		observability.RecordRedisFailure(operation)
+		observability.CaptureError(err)
 		return nil, err
 	}
 	reusable := false
@@ -232,14 +355,27 @@ func (c *Client) do(ctx context.Context, args ...string) (any, error) {
 	_ = conn.SetDeadline(time.Now().Add(3 * time.Second))
 	reader := bufio.NewReader(conn)
 	if err := writeArray(conn, args...); err != nil {
+		observability.RecordRedisFailure(operation)
+		observability.CaptureError(err)
 		return nil, err
 	}
 	reply, err := readRESP(reader)
 	if err != nil {
+		observability.RecordRedisFailure(operation)
+		observability.CaptureError(err)
 		return nil, err
 	}
 	reusable = true
 	return reply, nil
+}
+
+func (c *Client) dedicatedConn(ctx context.Context) (net.Conn, error) {
+	select {
+	case c.semaphore <- struct{}{}:
+		return c.dial(ctx)
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 }
 
 func (c *Client) acquire(ctx context.Context) (net.Conn, error) {
