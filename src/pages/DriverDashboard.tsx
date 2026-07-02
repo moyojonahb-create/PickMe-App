@@ -905,8 +905,6 @@ export default function DriverDashboard() {
         subtitle="They've left and are heading to your location now"
       />
 
-      <div className="shrink-0 bg-background/95 backdrop-blur-lg border-b border-border/60 px-5 py-3.5 z-10">
-        <div className="flex items-center justify-between max-w-lg mx-auto">
       <div className="shrink-0 backdrop-blur-2xl bg-background/70 border-b border-border/40 px-4 py-3 z-10 shadow-[0_1px_0_hsl(var(--border)/0.5)]">
         <div className="flex items-center justify-between max-w-lg mx-auto gap-2">
           <Button variant="ghost" size="icon" onClick={() => nav(-1)} className="w-11 h-11 rounded-2xl hover:bg-primary/10 active:scale-90 transition-all">
