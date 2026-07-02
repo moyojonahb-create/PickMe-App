@@ -156,16 +156,28 @@ export default function DriverWalletPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b p-4 flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
+    <div className="min-h-screen bg-gradient-to-b from-primary/[0.05] via-background to-background relative">
+      {/* Ambient blue glow */}
+      <div className="pointer-events-none absolute top-0 left-1/2 -translate-x-1/2 w-[520px] h-[280px] bg-primary/15 rounded-full blur-[120px]" aria-hidden />
+
+      <div className="sticky top-0 z-10 backdrop-blur-2xl bg-background/70 border-b border-border/40 px-4 py-3 flex items-center gap-3 shadow-[0_1px_0_hsl(var(--border)/0.5)]">
+        <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="w-10 h-10 rounded-2xl hover:bg-primary/10 active:scale-90">
           <ArrowLeft className="h-5 w-5" />
         </Button>
-        <h1 className="text-lg font-bold">Driver Wallet (USD)</h1>
+        <div className="flex-1 min-w-0">
+          <h1 className="text-base font-black tracking-tight leading-none">Driver Wallet</h1>
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mt-1">USD balance</p>
+        </div>
+        <span className="w-2 h-2 rounded-full bg-destructive shadow-[0_0_8px_hsl(0_84%_60%/0.7)]" aria-hidden />
       </div>
 
-      <div className="p-4 space-y-4 max-w-md mx-auto pb-28">
-        {msg && <div className="text-destructive font-bold text-sm">{msg}</div>}
+      <div className="p-4 space-y-4 max-w-md mx-auto pb-28 relative">
+        {msg && (
+          <div className="rounded-2xl border border-destructive/30 bg-destructive/5 text-destructive font-bold text-sm p-3 flex items-start gap-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-destructive mt-1.5 shrink-0" />
+            <span>{msg}</span>
+          </div>
+        )}
 
         {/* Bank-card style wallet */}
         <WalletCard
@@ -176,36 +188,42 @@ export default function DriverWalletPage() {
 
         {/* Driver actions: Deposit, Transfer, Withdraw */}
         <div className="grid grid-cols-3 gap-2">
-          <Button onClick={() => navigate("/drivers/deposit")} className="h-12 flex-col gap-0.5 py-1">
+          <Button onClick={() => navigate("/drivers/deposit")} className="h-14 flex-col gap-1 py-1 rounded-2xl shadow-[0_8px_24px_-8px_hsl(224_71%_37%/0.4)]">
             <Plus className="h-4 w-4" />
             <span className="text-[11px] font-bold">Deposit</span>
           </Button>
-          <Button onClick={() => setShowTransfer(true)} disabled={balance <= 0} variant="secondary" className="h-12 flex-col gap-0.5 py-1">
+          <Button onClick={() => setShowTransfer(true)} disabled={balance <= 0} variant="secondary" className="h-14 flex-col gap-1 py-1 rounded-2xl glass-card border border-primary/10">
             <Send className="h-4 w-4" />
             <span className="text-[11px] font-bold">Transfer</span>
           </Button>
-          <Button onClick={() => setShowWithdraw(true)} disabled={balance < 5} variant="outline" className="h-12 flex-col gap-0.5 py-1">
+          <Button onClick={() => setShowWithdraw(true)} disabled={balance < 5} variant="outline" className="h-14 flex-col gap-1 py-1 rounded-2xl glass-card border-primary/20">
             <ArrowUpRight className="h-4 w-4" />
             <span className="text-[11px] font-bold">Withdraw</span>
           </Button>
         </div>
 
-        {/* Stats Strip */}
+        {/* Stats Strip — premium glass */}
         <div className="grid grid-cols-3 gap-2">
-          <div className="bg-card border rounded-xl p-3 text-center">
-            <TrendingUp className="h-4 w-4 mx-auto text-green-500 mb-1" />
-            <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Earned</div>
-            <div className="text-sm font-black">${totalEarned.toFixed(2)}</div>
+          <div className="glass-card rounded-2xl p-3 text-center border border-primary/10 transition-transform active:scale-95">
+            <div className="w-8 h-8 rounded-xl bg-emerald-500/10 flex items-center justify-center mx-auto mb-1.5">
+              <TrendingUp className="h-4 w-4 text-emerald-600" />
+            </div>
+            <div className="text-[9px] text-muted-foreground uppercase tracking-wider font-bold">Earned</div>
+            <div className="text-sm font-black tabular-nums mt-0.5">${totalEarned.toFixed(2)}</div>
           </div>
-          <div className="bg-card border rounded-xl p-3 text-center">
-            <Receipt className="h-4 w-4 mx-auto text-primary mb-1" />
-            <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Trips</div>
-            <div className="text-sm font-black">{totalRides}</div>
+          <div className="glass-card rounded-2xl p-3 text-center border border-primary/10 transition-transform active:scale-95">
+            <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center mx-auto mb-1.5">
+              <Receipt className="h-4 w-4 text-primary" />
+            </div>
+            <div className="text-[9px] text-muted-foreground uppercase tracking-wider font-bold">Trips</div>
+            <div className="text-sm font-black tabular-nums mt-0.5">{totalRides}</div>
           </div>
-          <div className="bg-card border rounded-xl p-3 text-center">
-            <Percent className="h-4 w-4 mx-auto text-amber-500 mb-1" />
-            <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Fees</div>
-            <div className="text-sm font-black">${totalCommission.toFixed(2)}</div>
+          <div className="glass-card rounded-2xl p-3 text-center border border-primary/10 transition-transform active:scale-95">
+            <div className="w-8 h-8 rounded-xl bg-destructive/10 flex items-center justify-center mx-auto mb-1.5">
+              <Percent className="h-4 w-4 text-destructive" />
+            </div>
+            <div className="text-[9px] text-muted-foreground uppercase tracking-wider font-bold">Fees</div>
+            <div className="text-sm font-black tabular-nums mt-0.5">${totalCommission.toFixed(2)}</div>
           </div>
         </div>
 
