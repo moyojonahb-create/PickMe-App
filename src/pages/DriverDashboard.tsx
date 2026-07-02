@@ -907,16 +907,26 @@ export default function DriverDashboard() {
 
       <div className="shrink-0 bg-background/95 backdrop-blur-lg border-b border-border/60 px-5 py-3.5 z-10">
         <div className="flex items-center justify-between max-w-lg mx-auto">
-          <Button variant="ghost" size="icon" onClick={() => nav(-1)} className="w-11 h-11 rounded-2xl active:scale-90 transition-all">
+      <div className="shrink-0 backdrop-blur-2xl bg-background/70 border-b border-border/40 px-4 py-3 z-10 shadow-[0_1px_0_hsl(var(--border)/0.5)]">
+        <div className="flex items-center justify-between max-w-lg mx-auto gap-2">
+          <Button variant="ghost" size="icon" onClick={() => nav(-1)} className="w-11 h-11 rounded-2xl hover:bg-primary/10 active:scale-90 transition-all">
             <ArrowLeft className="h-5 w-5" />
           </Button>
-          <h1 className="font-extrabold tracking-tight text-base">Driver Dashboard</h1>
-          <div className="flex items-center gap-2.5">
+          <div className="flex flex-col items-center min-w-0">
+            <h1 className="font-extrabold tracking-tight text-[15px] leading-none">Driver</h1>
+            <div className="flex items-center gap-1.5 mt-1">
+              <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-500 shadow-[0_0_8px_hsl(142_71%_45%/0.7)] animate-pulse' : 'bg-destructive'}`} />
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                {isOnline ? 'Online' : 'Offline'}
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5">
             <Button
               variant="ghost"
               size="icon"
               onClick={() => setEarningsOpen(!earningsOpen)}
-              className="w-11 h-11 rounded-2xl text-muted-foreground active:scale-90 transition-all"
+              className="w-10 h-10 rounded-2xl hover:bg-primary/10 text-muted-foreground active:scale-90 transition-all"
               title="Earnings"
             >
               <BarChart3 className="h-5 w-5" />
@@ -925,7 +935,7 @@ export default function DriverDashboard() {
               variant="ghost"
               size="icon"
               onClick={() => setTransactionsOpen(true)}
-              className="w-11 h-11 rounded-2xl text-muted-foreground active:scale-90 transition-all"
+              className="w-10 h-10 rounded-2xl hover:bg-primary/10 text-muted-foreground active:scale-90 transition-all"
             >
               <History className="h-5 w-5" />
             </Button>
@@ -948,7 +958,7 @@ export default function DriverDashboard() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto overscroll-contain">
+      <div className="flex-1 overflow-y-auto overscroll-contain relative z-[1]">
       <div className="max-w-lg mx-auto p-5 space-y-5 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))]">
 
         {/* Quick Stats */}
