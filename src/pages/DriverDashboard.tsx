@@ -719,19 +719,24 @@ export default function DriverDashboard() {
 
   if (authLoading || loading) {
     return (
-      <div className="flex flex-col h-[100dvh] bg-background">
-        <div className="shrink-0 bg-background/95 backdrop-blur-lg border-b border-border/60 px-5 py-3.5">
+      <div className="flex flex-col h-[100dvh] bg-gradient-to-b from-primary/[0.04] via-background to-background">
+        <div className="shrink-0 backdrop-blur-xl bg-background/80 border-b border-border/40 px-5 py-3.5">
           <div className="flex items-center justify-between max-w-lg mx-auto">
-            <div className="w-11 h-11 rounded-2xl bg-muted animate-pulse" />
-            <div className="h-5 w-36 rounded bg-muted animate-pulse" />
-            <div className="w-11 h-11 rounded-2xl bg-muted animate-pulse" />
+            <div className="w-11 h-11 rounded-2xl bg-primary/10 animate-pulse" />
+            <div className="h-5 w-40 rounded-full bg-primary/10 animate-pulse" />
+            <div className="w-11 h-11 rounded-2xl bg-primary/10 animate-pulse" />
           </div>
         </div>
-        <div className="flex-1 bg-muted/30 animate-pulse" />
-        <div className="p-4 space-y-3">
-          <div className="h-14 rounded-2xl bg-muted animate-pulse" />
-          <div className="h-20 rounded-2xl bg-muted animate-pulse" />
-          <div className="h-14 rounded-2xl bg-muted animate-pulse w-2/3" />
+        <div className="max-w-lg w-full mx-auto p-5 space-y-4">
+          <div className="grid grid-cols-3 gap-2">
+            {[0,1,2].map(i => (
+              <div key={i} className="h-20 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 animate-pulse" />
+            ))}
+          </div>
+          <div className="h-32 rounded-3xl bg-primary/5 animate-pulse" />
+          <div className="h-24 rounded-3xl bg-primary/5 animate-pulse" />
+          <div className="h-24 rounded-3xl bg-primary/5 animate-pulse" />
+          <div className="h-64 rounded-3xl bg-primary/5 animate-pulse" />
         </div>
       </div>
     );
@@ -840,7 +845,10 @@ export default function DriverDashboard() {
   }
 
   return (
-    <div className="flex flex-col h-[100dvh] bg-background">
+    <div className="flex flex-col h-[100dvh] bg-gradient-to-b from-primary/[0.04] via-background to-background">
+      {/* Ambient glow */}
+      <div className="pointer-events-none fixed top-0 left-1/2 -translate-x-1/2 w-[520px] h-[280px] bg-primary/10 rounded-full blur-[120px] -z-0" aria-hidden />
+
       {/* Selfie Verification */}
       <DriverSelfieCheck
         open={selfieCheckOpen}
@@ -897,18 +905,26 @@ export default function DriverDashboard() {
         subtitle="They've left and are heading to your location now"
       />
 
-      <div className="shrink-0 bg-background/95 backdrop-blur-lg border-b border-border/60 px-5 py-3.5 z-10">
-        <div className="flex items-center justify-between max-w-lg mx-auto">
-          <Button variant="ghost" size="icon" onClick={() => nav(-1)} className="w-11 h-11 rounded-2xl active:scale-90 transition-all">
+      <div className="shrink-0 backdrop-blur-2xl bg-background/70 border-b border-border/40 px-4 py-3 z-10 shadow-[0_1px_0_hsl(var(--border)/0.5)]">
+        <div className="flex items-center justify-between max-w-lg mx-auto gap-2">
+          <Button variant="ghost" size="icon" onClick={() => nav(-1)} className="w-11 h-11 rounded-2xl hover:bg-primary/10 active:scale-90 transition-all">
             <ArrowLeft className="h-5 w-5" />
           </Button>
-          <h1 className="font-extrabold tracking-tight text-base">Driver Dashboard</h1>
-          <div className="flex items-center gap-2.5">
+          <div className="flex flex-col items-center min-w-0">
+            <h1 className="font-extrabold tracking-tight text-[15px] leading-none">Driver</h1>
+            <div className="flex items-center gap-1.5 mt-1">
+              <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-500 shadow-[0_0_8px_hsl(142_71%_45%/0.7)] animate-pulse' : 'bg-destructive'}`} />
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                {isOnline ? 'Online' : 'Offline'}
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5">
             <Button
               variant="ghost"
               size="icon"
               onClick={() => setEarningsOpen(!earningsOpen)}
-              className="w-11 h-11 rounded-2xl text-muted-foreground active:scale-90 transition-all"
+              className="w-10 h-10 rounded-2xl hover:bg-primary/10 text-muted-foreground active:scale-90 transition-all"
               title="Earnings"
             >
               <BarChart3 className="h-5 w-5" />
@@ -917,7 +933,7 @@ export default function DriverDashboard() {
               variant="ghost"
               size="icon"
               onClick={() => setTransactionsOpen(true)}
-              className="w-11 h-11 rounded-2xl text-muted-foreground active:scale-90 transition-all"
+              className="w-10 h-10 rounded-2xl hover:bg-primary/10 text-muted-foreground active:scale-90 transition-all"
             >
               <History className="h-5 w-5" />
             </Button>
@@ -940,27 +956,30 @@ export default function DriverDashboard() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto overscroll-contain">
+      <div className="flex-1 overflow-y-auto overscroll-contain relative z-[1]">
       <div className="max-w-lg mx-auto p-5 space-y-5 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))]">
 
-        {/* Quick Stats */}
-        <div className="grid grid-cols-3 gap-1.5">
+        {/* Quick Stats — premium glass tiles */}
+        <div className="grid grid-cols-3 gap-2.5">
           {[
-            { icon: Star, value: profile.rating_avg?.toFixed(1) || '—', label: 'Rating' },
-            { icon: TrendingUp, value: String(profile.total_trips || 0), label: 'Trips' },
-            { icon: Zap, value: `$${driverBalance % 1 === 0 ? driverBalance : driverBalance.toFixed(2)}`, label: 'Wallet' },
+            { icon: Star, value: profile.rating_avg?.toFixed(1) || '—', label: 'Rating', accent: 'text-amber-400' },
+            { icon: TrendingUp, value: String(profile.total_trips || 0), label: 'Trips', accent: 'text-emerald-300' },
+            { icon: Wallet, value: `$${driverBalance % 1 === 0 ? driverBalance : driverBalance.toFixed(2)}`, label: 'Balance', accent: 'text-white' },
           ].map((stat, i) => (
             <motion.div
               key={stat.label}
-              initial={{ opacity: 0, y: 12 }}
+              initial={{ opacity: 0, y: 14 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.08, type: 'spring', stiffness: 400, damping: 30 }}
-              className="rounded-lg p-1.5 text-center flex flex-col items-center justify-center"
-              style={{ background: 'var(--gradient-primary)' }}
+              transition={{ delay: i * 0.07, type: 'spring', stiffness: 380, damping: 28 }}
+              className="relative overflow-hidden rounded-2xl p-3.5 flex flex-col items-start justify-center min-h-[78px] shadow-[0_8px_24px_-8px_hsl(224_71%_37%/0.35)]"
+              style={{ background: 'linear-gradient(135deg, hsl(var(--pickme-blue)) 0%, hsl(var(--pickme-blue-dark)) 100%)' }}
             >
-              <stat.icon className="h-3 w-3 text-primary-foreground/80 mb-0.5" />
-              <p className="text-sm font-extrabold tabular-nums text-primary-foreground leading-tight">{stat.value}</p>
-              <p className="text-[8px] text-primary-foreground/70 font-medium">{stat.label}</p>
+              <div className="absolute -top-6 -right-6 w-20 h-20 rounded-full bg-white/10 blur-2xl" aria-hidden />
+              <div className="relative flex items-center gap-1.5 mb-1">
+                <stat.icon className={`h-3.5 w-3.5 ${stat.accent}`} />
+                <p className="text-[10px] uppercase tracking-wider font-bold text-primary-foreground/70">{stat.label}</p>
+              </div>
+              <p className="relative text-lg font-black tabular-nums text-primary-foreground leading-none">{stat.value}</p>
             </motion.div>
           ))}
         </div>
