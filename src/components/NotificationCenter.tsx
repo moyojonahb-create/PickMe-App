@@ -95,16 +95,17 @@ export function NotificationBell() {
       <motion.button
         whileTap={{ scale: 0.9 }}
         onClick={() => setOpen(true)}
-        className="relative w-10 h-10 flex items-center justify-center rounded-full glass-card"
+        className="relative w-11 h-11 flex items-center justify-center rounded-full glass-card-heavy hover:shadow-[0_8px_20px_-8px_hsl(224_71%_37%/0.35)] transition-shadow"
+        aria-label="Notifications"
       >
-        <Bell className="w-5 h-5 text-foreground" />
+        <Bell className="w-5 h-5 text-foreground" strokeWidth={2.2} />
         <AnimatePresence>
           {unreadCount > 0 && (
             <motion.span
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               exit={{ scale: 0 }}
-              className="absolute -top-1 -right-1 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold px-1"
+              className="absolute -top-1 -right-1 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold px-1 ring-2 ring-background"
             >
               {unreadCount > 9 ? '9+' : unreadCount}
             </motion.span>
@@ -113,73 +114,111 @@ export function NotificationBell() {
       </motion.button>
 
       <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent side="right" className="w-full sm:max-w-md p-0">
-          <SheetHeader className="px-5 pt-5 pb-3 border-b border-border/30">
-            <div className="flex items-center justify-between">
-              <SheetTitle className="text-lg font-black">Notifications</SheetTitle>
-              {unreadCount > 0 && (
-                <Button variant="ghost" size="sm" className="text-xs text-primary" onClick={markAllRead}>
-                  <Check className="w-3.5 h-3.5 mr-1" />
-                  Mark all read
-                </Button>
-              )}
-            </div>
-          </SheetHeader>
+        <SheetContent side="right" className="w-full sm:max-w-md p-0 border-l border-border/40 bg-background">
+          {/* Gradient header */}
+          <div
+            className="px-5 pt-6 pb-5 text-primary-foreground"
+            style={{ background: 'linear-gradient(135deg, hsl(224 71% 37%), hsl(225 65% 48%))' }}
+          >
+            <SheetHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <SheetTitle className="text-xl font-black text-primary-foreground text-left">Notifications</SheetTitle>
+                  <p className="text-xs text-primary-foreground/80 mt-0.5">
+                    {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up'}
+                  </p>
+                </div>
+                {unreadCount > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs text-primary-foreground hover:bg-white/15 hover:text-primary-foreground rounded-full"
+                    onClick={markAllRead}
+                  >
+                    <Check className="w-3.5 h-3.5 mr-1" />
+                    Mark all read
+                  </Button>
+                )}
+              </div>
+            </SheetHeader>
+          </div>
 
-          <div className="overflow-y-auto h-[calc(100dvh-80px)]">
+          <div className="overflow-y-auto h-[calc(100dvh-112px)] bg-background">
             {loading && (
-              <div className="flex items-center justify-center py-12">
-                <div className="animate-pulse text-muted-foreground text-sm">Loading…</div>
+              <div className="p-4 space-y-3">
+                {[0, 1, 2, 3].map(i => (
+                  <div key={i} className="flex items-start gap-3 p-3 rounded-2xl skeleton h-16" />
+                ))}
               </div>
             )}
 
             {!loading && notifications.length === 0 && (
-              <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
-                <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
-                  <Bell className="w-7 h-7 text-muted-foreground" />
+              <div className="flex flex-col items-center justify-center py-20 px-6 text-center">
+                <div
+                  className="w-20 h-20 rounded-3xl flex items-center justify-center mb-5"
+                  style={{
+                    background: 'linear-gradient(135deg, hsl(224 71% 37% / 0.12), hsl(225 65% 48% / 0.06))',
+                    boxShadow: '0 8px 24px -8px hsl(224 71% 37% / 0.25)',
+                  }}
+                >
+                  <Bell className="w-8 h-8 text-primary" strokeWidth={2} />
                 </div>
-                <p className="font-bold text-foreground">No notifications yet</p>
-                <p className="text-sm text-muted-foreground mt-1">We'll notify you about rides, payments, and more</p>
+                <p className="font-bold text-foreground text-base">You're all caught up</p>
+                <p className="text-sm text-muted-foreground mt-1.5 max-w-[240px]">
+                  Ride updates, payments and promotions will land here.
+                </p>
               </div>
             )}
 
-            {!loading && notifications.map((n, i) => {
-              const Icon = typeIcons[n.notification_type] || Bell;
-              return (
-                <motion.div
-                  key={n.id}
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: i * 0.03 }}
-                  onClick={() => !n.is_read && markAsRead(n.id)}
-                  className={cn(
-                    'flex items-start gap-3 px-5 py-4 border-b border-border/20 cursor-pointer transition-colors',
-                    !n.is_read ? 'bg-primary/5' : 'hover:bg-muted/50'
-                  )}
-                >
-                  <div className={cn(
-                    'w-10 h-10 rounded-full flex items-center justify-center shrink-0 mt-0.5',
-                    !n.is_read ? 'bg-primary/10' : 'bg-muted'
-                  )}>
-                    <Icon className={cn('w-4.5 h-4.5', !n.is_read ? 'text-primary' : 'text-muted-foreground')} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className={cn('text-sm font-semibold truncate', !n.is_read ? 'text-foreground' : 'text-muted-foreground')}>
-                        {n.title}
-                      </p>
-                      {!n.is_read && (
-                        <span className="w-2 h-2 rounded-full bg-primary shrink-0" />
+            {!loading && notifications.length > 0 && (
+              <div className="p-3 space-y-2">
+                {notifications.map((n, i) => {
+                  const Icon = typeIcons[n.notification_type] || Bell;
+                  return (
+                    <motion.button
+                      key={n.id}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: Math.min(i * 0.02, 0.2) }}
+                      onClick={() => !n.is_read && markAsRead(n.id)}
+                      className={cn(
+                        'w-full flex items-start gap-3 p-3.5 rounded-2xl text-left transition-all active:scale-[0.99]',
+                        !n.is_read
+                          ? 'bg-primary/[0.06] border border-primary/15 shadow-[0_2px_8px_-4px_hsl(224_71%_37%/0.15)]'
+                          : 'bg-card border border-border/40 hover:border-border'
                       )}
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{n.body}</p>
-                    <p className="text-[10px] text-muted-foreground/60 mt-1">
-                      {format(new Date(n.created_at), 'MMM d · h:mm a')}
-                    </p>
-                  </div>
-                </motion.div>
-              );
-            })}
+                    >
+                      <div
+                        className={cn(
+                          'w-11 h-11 rounded-2xl flex items-center justify-center shrink-0',
+                          !n.is_read ? 'text-primary-foreground' : 'bg-muted text-muted-foreground'
+                        )}
+                        style={!n.is_read ? {
+                          background: 'linear-gradient(135deg, hsl(224 71% 37%), hsl(225 65% 48%))',
+                          boxShadow: '0 4px 12px -4px hsl(224 71% 37% / 0.4)',
+                        } : undefined}
+                      >
+                        <Icon className="w-5 h-5" strokeWidth={2.2} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className={cn('text-sm font-bold truncate', !n.is_read ? 'text-foreground' : 'text-muted-foreground')}>
+                            {n.title}
+                          </p>
+                          {!n.is_read && (
+                            <span className="w-2 h-2 rounded-full bg-primary shrink-0 animate-pulse-subtle" />
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2 leading-relaxed">{n.body}</p>
+                        <p className="text-[10px] text-muted-foreground/60 mt-1.5 font-medium">
+                          {format(new Date(n.created_at), 'MMM d · h:mm a')}
+                        </p>
+                      </div>
+                    </motion.button>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </SheetContent>
       </Sheet>
