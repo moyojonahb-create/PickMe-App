@@ -349,22 +349,26 @@ const AdminDashboard = () => {
                     </Button>
                   </div>
                   <div className="grid grid-cols-3 gap-3">
-                    <div className="bg-primary/10 rounded-xl p-4 text-center">
-                      <p className="text-[10px] font-bold text-muted-foreground uppercase">Today</p>
-                      <p className="text-xl font-black text-primary">${sum(todayEarnings).toFixed(2)}</p>
-                      <p className="text-[10px] text-muted-foreground">{countTrips(todayEarnings)} trips</p>
-                    </div>
-                    <div className="bg-primary/10 rounded-xl p-4 text-center">
-                      <p className="text-[10px] font-bold text-muted-foreground uppercase">This Week</p>
-                      <p className="text-xl font-black text-primary">${sum(weekEarnings).toFixed(2)}</p>
-                      <p className="text-[10px] text-muted-foreground">{countTrips(weekEarnings)} trips</p>
-                    </div>
-                    <div className="bg-primary/10 rounded-xl p-4 text-center">
-                      <p className="text-[10px] font-bold text-muted-foreground uppercase">This Month</p>
-                      <p className="text-xl font-black text-primary">${sum(monthEarnings).toFixed(2)}</p>
-                      <p className="text-[10px] text-muted-foreground">{countTrips(monthEarnings)} trips</p>
-                    </div>
+                    {[
+                      { label: 'Today', total: sum(todayEarnings), trips: countTrips(todayEarnings) },
+                      { label: 'This Week', total: sum(weekEarnings), trips: countTrips(weekEarnings) },
+                      { label: 'This Month', total: sum(monthEarnings), trips: countTrips(monthEarnings) },
+                    ].map(({ label, total, trips }) => (
+                      <div
+                        key={label}
+                        className="rounded-2xl p-4 text-center text-primary-foreground relative overflow-hidden"
+                        style={{
+                          background: 'linear-gradient(135deg, hsl(224 71% 37%), hsl(225 65% 48%))',
+                          boxShadow: '0 8px 20px -8px hsl(224 71% 37% / 0.45)',
+                        }}
+                      >
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-primary-foreground/80">{label}</p>
+                        <p className="text-xl font-black mt-1">${total.toFixed(2)}</p>
+                        <p className="text-[10px] text-primary-foreground/75 mt-0.5">{trips} trips</p>
+                      </div>
+                    ))}
                   </div>
+
                 </CardContent>
               </Card>
             );
