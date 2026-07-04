@@ -1175,22 +1175,6 @@ export default function RideView() {
             </div>
           )}
 
-          {/* ── Fare estimate: empty hint when destinations not yet picked ── */}
-          {(!pickupLocation || !dropoffLocation) && (
-            <div className="rounded-2xl border border-dashed border-primary/25 bg-primary/[0.03] px-3.5 py-3 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center shrink-0">
-                <Navigation className="w-5 h-5 text-primary" strokeWidth={2.2} />
-              </div>
-              <div className="min-w-0">
-                <p className="text-[12px] font-bold text-foreground leading-tight">
-                  {!pickupLocation ? 'Set your pickup point' : 'Where are you going?'}
-                </p>
-                <p className="text-[10px] text-muted-foreground leading-snug mt-0.5">
-                  Fare estimate, ETA and distance appear once both locations are set.
-                </p>
-              </div>
-            </div>
-          )}
 
           {/* ── Fare breakdown + Negotiation (expanded) ── */}
           {pickupLocation && dropoffLocation && fareEstimate && (() => {
@@ -1353,9 +1337,15 @@ export default function RideView() {
           })() :
           <SecondaryButton
             disabled
-            className="w-full h-[52px] text-[15px] font-bold rounded-2xl bg-primary/30 text-primary-foreground border-transparent">
-              {pickupLocation && dropoffLocation ? <><div className="w-4 h-4 border-2 border-primary-foreground/50 border-t-transparent rounded-full animate-spin mr-2" />Calculating…</> : 'Find Nearby Drivers'}
+            className={cn(
+              "w-full h-[52px] text-[15px] font-bold rounded-2xl border-transparent transition-colors",
+              pickupLocation && dropoffLocation
+                ? "bg-primary text-primary-foreground shadow-[0_10px_24px_-8px_hsl(224_71%_37%/0.55)]"
+                : "bg-muted text-muted-foreground"
+            )}>
+              {pickupLocation && dropoffLocation ? <><div className="w-4 h-4 border-2 border-primary-foreground/60 border-t-transparent rounded-full animate-spin mr-2 inline-block align-middle" />Calculating…</> : 'Find Nearby Drivers'}
             </SecondaryButton>
+
           }
 
           {/* Nearby drivers presence indicator */}
