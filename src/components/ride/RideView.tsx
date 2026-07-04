@@ -1337,9 +1337,15 @@ export default function RideView() {
           })() :
           <SecondaryButton
             disabled
-            className="w-full h-[52px] text-[15px] font-bold rounded-2xl bg-primary/30 text-primary-foreground border-transparent">
-              {pickupLocation && dropoffLocation ? <><div className="w-4 h-4 border-2 border-primary-foreground/50 border-t-transparent rounded-full animate-spin mr-2" />Calculating…</> : 'Find Nearby Drivers'}
+            className={cn(
+              "w-full h-[52px] text-[15px] font-bold rounded-2xl border-transparent transition-colors",
+              pickupLocation && dropoffLocation
+                ? "bg-primary text-primary-foreground shadow-[0_10px_24px_-8px_hsl(224_71%_37%/0.55)]"
+                : "bg-muted text-muted-foreground"
+            )}>
+              {pickupLocation && dropoffLocation ? <><div className="w-4 h-4 border-2 border-primary-foreground/60 border-t-transparent rounded-full animate-spin mr-2 inline-block align-middle" />Calculating…</> : 'Find Nearby Drivers'}
             </SecondaryButton>
+
           }
 
           {/* Nearby drivers presence indicator */}
