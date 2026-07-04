@@ -141,6 +141,8 @@ export default function RideView() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [luggageOpen, setLuggageOpen] = useState(false);
   const [luggageDraft, setLuggageDraft] = useState<import('@/components/luggage/LuggageSheet').LuggageDraft | null>(null);
+  const [luggagePromptOpen, setLuggagePromptOpen] = useState(false);
+  const [luggageAsked, setLuggageAsked] = useState(false);
   const [selectedTown, setSelectedTown] = useState<TownConfig>(DEFAULT_TOWN);
   const [rideStops, setRideStops] = useState<RideStop[]>([]);
   const [scheduledAt, setScheduledAt] = useState<Date | null>(null);
@@ -1366,7 +1368,13 @@ export default function RideView() {
                   />
                 </div> */}
                 <PrimaryButton
-                  onClick={() => setShowPaymentPrompt({ open: true, fare: totalFare })}
+                  onClick={() => {
+                    if (!luggageAsked && !luggageDraft) {
+                      setLuggagePromptOpen(true);
+                    } else {
+                      setShowPaymentPrompt({ open: true, fare: totalFare });
+                    }
+                  }}
                   disabled={isRequesting}
                   className="w-full h-[52px] text-[15px] font-bold rounded-2xl gap-2 inline-flex items-center justify-center active:scale-[0.97] transition-transform"
                   style={{ boxShadow: '0 10px 24px -8px hsl(224 71% 37% / 0.55)' }}>
