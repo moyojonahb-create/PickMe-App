@@ -143,6 +143,7 @@ export default function RideView() {
   const [luggageDraft, setLuggageDraft] = useState<import('@/components/luggage/LuggageSheet').LuggageDraft | null>(null);
   const [luggagePromptOpen, setLuggagePromptOpen] = useState(false);
   const [luggageAsked, setLuggageAsked] = useState(false);
+  const [pendingFare, setPendingFare] = useState(0);
   const [selectedTown, setSelectedTown] = useState<TownConfig>(DEFAULT_TOWN);
   const [rideStops, setRideStops] = useState<RideStop[]>([]);
   const [scheduledAt, setScheduledAt] = useState<Date | null>(null);
@@ -1370,6 +1371,7 @@ export default function RideView() {
                 <PrimaryButton
                   onClick={() => {
                     if (!luggageAsked && !luggageDraft) {
+                      setPendingFare(totalFare);
                       setLuggagePromptOpen(true);
                     } else {
                       setShowPaymentPrompt({ open: true, fare: totalFare });
@@ -1629,6 +1631,51 @@ export default function RideView() {
         initial={luggageDraft}
         onSave={setLuggageDraft}
       />
+
+      {/* Luggage Yes/No prompt shown once after rider fills all details */}
+      {luggagePromptOpen && (
+        <div
+          className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm animate-fade-in"
+          onClick={() => setLuggagePromptOpen(false)}
+        >
+          <div
+            className="w-full sm:max-w-sm bg-card rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl border border-border/50"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex flex-col items-center text-center gap-2 mb-5">
+              <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center mb-1">
+                <span className="text-3xl">🧳</span>
+              </div>
+              <h3 className="text-lg font-bold text-foreground">Any luggage?</h3>
+              <p className="text-sm text-muted-foreground">
+                Let your driver know if you'll be bringing bags so they can prepare.
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => {
+                  setLuggageAsked(true);
+                  setLuggagePromptOpen(false);
+                  setShowPaymentPrompt({ open: true, fare: pendingFare });
+                }}
+                className="h-12 rounded-2xl border border-border bg-secondary text-foreground font-semibold hover:bg-secondary/70 active:scale-[0.97] transition"
+              >
+                No
+              </button>
+              <button
+                onClick={() => {
+                  setLuggageAsked(true);
+                  setLuggagePromptOpen(false);
+                  setLuggageOpen(true);
+                }}
+                className="h-12 rounded-2xl bg-primary text-primary-foreground font-semibold hover:bg-primary/90 active:scale-[0.97] transition shadow-[0_8px_20px_-6px_hsl(224_71%_37%/0.55)]"
+              >
+                Yes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>);
 
 }
