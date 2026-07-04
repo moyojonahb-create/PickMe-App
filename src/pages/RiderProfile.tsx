@@ -209,17 +209,39 @@ export default function RiderProfile() {
           />
         </div>
 
-        {/* Ride Activity Summary */}
-        {stats.completedRides > 0 && (
-          <div className="glass-card rounded-2xl p-3.5">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Ride Activity</p>
-            <div className="grid grid-cols-3 gap-3">
-              <StatMini icon={<Navigation className="w-3.5 h-3.5 text-primary" />} value={`${stats.totalDistance.toFixed(0)} km`} label="Distance" />
-              <StatMini icon={<Banknote className="w-3.5 h-3.5 text-accent" />} value={`$${stats.totalSpent.toFixed(0)}`} label="Spent" />
-              <StatMini icon={<TrendingUp className="w-3.5 h-3.5 text-primary" />} value={`${stats.completedRides}`} label="Trips" />
+        <div className="rounded-2xl border border-border/50 bg-card/80 p-3.5 shadow-sm">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-muted-foreground">Account overview</p>
+              <p className="mt-1 text-sm font-semibold text-foreground">Your ride essentials, all in one place</p>
+            </div>
+            <Badge className="bg-primary/10 text-primary border-0">Premium</Badge>
+          </div>
+          <div className="mt-3 grid grid-cols-3 gap-2">
+            <div className="rounded-xl bg-muted/60 p-2.5">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Trips</p>
+              <p className="mt-1 text-sm font-black text-foreground">{stats.completedRides || 0}</p>
+            </div>
+            <div className="rounded-xl bg-primary/10 p-2.5">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Wallet</p>
+              <p className="mt-1 text-sm font-black text-foreground">${walletLoading ? '—' : walletBalance.toFixed(2)}</p>
+            </div>
+            <div className="rounded-xl bg-accent/10 p-2.5">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Safety</p>
+              <p className="mt-1 text-sm font-black text-foreground">SOS ready</p>
             </div>
           </div>
-        )}
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            <button onClick={() => navigate('/history')} className="rounded-xl border border-border/50 bg-background/70 p-3 text-left active:scale-[0.99] transition-all">
+              <p className="text-sm font-semibold text-foreground">Ride history</p>
+              <p className="text-[11px] text-muted-foreground">Review recent trips, fares, and pickups.</p>
+            </button>
+            <button onClick={() => navigate('/wallet')} className="rounded-xl border border-border/50 bg-background/70 p-3 text-left active:scale-[0.99] transition-all">
+              <p className="text-sm font-semibold text-foreground">Wallet shortcuts</p>
+              <p className="text-[11px] text-muted-foreground">Deposit, transfer, and keep your balance in view.</p>
+            </button>
+          </div>
+        </div>
 
         {/* Referral Card */}
         {stats.referralCode && (

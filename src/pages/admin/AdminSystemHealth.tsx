@@ -849,12 +849,12 @@ export default function AdminSystemHealth() {
           </Card>
 
           {/* Metrics */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
             {metrics.map(m => (
-              <Card key={m.label}>
+              <Card key={m.label} className="border-border/50 bg-card/80 shadow-sm">
                 <CardContent className="pt-4">
                   <div className="flex items-center gap-3">
-                    <div className={`p-2 rounded-xl ${STATUS_BG[m.status]}`}>
+                    <div className={`rounded-2xl p-2.5 ${STATUS_BG[m.status]}`}>
                       <Gauge className={`h-5 w-5 ${STATUS_COLORS[m.status]}`} />
                     </div>
                     <div>
@@ -896,12 +896,15 @@ export default function AdminSystemHealth() {
 
           {/* Live Scan Findings */}
           <div>
-            <h2 className="font-bold text-lg flex items-center gap-2 mb-3">
-              <Eye className="h-5 w-5 text-primary" />
-              Live Scan Findings
-            </h2>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <h2 className="font-bold text-lg flex items-center gap-2">
+                <Eye className="h-5 w-5 text-primary" />
+                Live Scan Findings
+              </h2>
+              <p className="text-sm text-muted-foreground">Prioritized by severity and urgency.</p>
+            </div>
 
-            <div className="flex gap-2 flex-wrap mb-4">
+            <div className="flex gap-2 flex-wrap mb-4 overflow-x-auto pb-1">
               {categories.map(cat => (
                 <Button
                   key={cat}
@@ -939,7 +942,7 @@ export default function AdminSystemHealth() {
                 filteredChecks.map(check => {
                   const Icon = CATEGORY_ICONS[check.category] || Bug;
                   return (
-                    <Card key={check.id} className={check.severity === 'critical' ? 'border-red-500/30' : check.severity === 'high' ? 'border-amber-500/30' : ''}>
+                    <Card key={check.id} className={check.severity === 'critical' ? 'border-red-500/30 bg-red-500/5' : check.severity === 'high' ? 'border-amber-500/30 bg-amber-500/5' : 'border-border/50 bg-card/80 shadow-sm'}>
                       <CardContent className="pt-4">
                         <div className="flex items-start gap-3">
                           <div className={`p-2 rounded-xl shrink-0 ${

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
@@ -151,11 +151,29 @@ export default function DriverDashboard() {
   const [fullNavMode, setFullNavMode] = useState(false);
   const [riderComingBanner, setRiderComingBanner] = useState<{ open: boolean; name?: string }>({ open: false });
   const [statusUpdating, setStatusUpdating] = useState(false);
+  const [driverBalance, setDriverBalance] = useState(0);
+
+  const quickStats = useMemo(() => [
+    { label: "Rating", value: profile?.rating_avg?.toFixed(1) || "—", icon: Star, tone: "primary" },
+    { label: "Trips", value: String(profile?.total_trips || 0), icon: TrendingUp, tone: "accent" },
+    { label: "Wallet", value: `$${driverBalance % 1 === 0 ? driverBalance : driverBalance.toFixed(2)}`, icon: Zap, tone: "gradient" },
+  ], [profile?.rating_avg, profile?.total_trips, driverBalance]);
+
+  const shiftSummary = useMemo(() => isOnline
+    ? {
+        title: "Online & ready",
+        description: "You can receive nearby requests now.",
+        tone: "emerald",
+      }
+    : {
+        title: "Offline",
+        description: "Use the settings menu to go online when you're ready.",
+        tone: "muted",
+      }, [isOnline]);
 
   const lastRideIds = useRef<Set<string>>(new Set());
   const locationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const { speak, isSupported: voiceSupported } = useVoiceNavigation({ enabled: voiceEnabled });
-  const [driverBalance, setDriverBalance] = useState(0);
   const fetchDriverBalance = useCallback(async () => {
     if (!user) return;
     const data = await getDriverWalletSummary();
@@ -851,26 +869,35 @@ export default function DriverDashboard() {
       <div className="flex-1 overflow-y-auto overscroll-contain">
       <div className="max-w-lg mx-auto p-5 space-y-5 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))]">
 
-        {/* Quick Stats */}
-        <div className="grid grid-cols-3 gap-1.5">
-          {[
-            { icon: Star, value: profile.rating_avg?.toFixed(1) || '—', label: 'Rating' },
-            { icon: TrendingUp, value: String(profile.total_trips || 0), label: 'Trips' },
-            { icon: Zap, value: `$${driverBalance % 1 === 0 ? driverBalance : driverBalance.toFixed(2)}`, label: 'Wallet' },
-          ].map((stat, i) => (
-            <motion.div
-              key={stat.label}
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.08, type: 'spring', stiffness: 400, damping: 30 }}
-              className="rounded-lg p-1.5 text-center flex flex-col items-center justify-center"
-              style={{ background: 'var(--gradient-primary)' }}
-            >
-              <stat.icon className="h-3 w-3 text-primary-foreground/80 mb-0.5" />
-              <p className="text-sm font-extrabold tabular-nums text-primary-foreground leading-tight">{stat.value}</p>
-              <p className="text-[8px] text-primary-foreground/70 font-medium">{stat.label}</p>
-            </motion.div>
-          ))}
+        <div className="rounded-2xl border border-border/50 bg-card/80 p-4 shadow-sm">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">Shift status</p>
+              <p className="mt-1 text-base font-bold text-foreground">{shiftSummary.title}</p>
+              <p className="text-sm text-muted-foreground">{shiftSummary.description}</p>
+            </div>
+            <div className={`rounded-full px-3 py-1 text-xs font-semibold ${shiftSummary.tone === 'emerald' ? 'bg-emerald-500/10 text-emerald-600' : 'bg-muted text-muted-foreground'}`}>
+              {isOnline ? 'Online' : 'Offline'}
+            </div>
+          </div>
+          <div className="mt-3 grid grid-cols-3 gap-2">
+            {quickStats.map((stat, i) => {
+              const Icon = stat.icon;
+              return (
+                <motion.div
+                  key={stat.label}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.05 }}
+                  className={`rounded-xl p-2.5 text-center ${stat.tone === 'gradient' ? 'bg-primary/10' : stat.tone === 'accent' ? 'bg-accent/10' : 'bg-muted/60'}`}
+                >
+                  <Icon className={`mx-auto mb-1 h-3.5 w-3.5 ${stat.tone === 'gradient' ? 'text-primary' : stat.tone === 'accent' ? 'text-accent' : 'text-foreground'}`} />
+                  <p className="text-sm font-bold tabular-nums text-foreground">{stat.value}</p>
+                  <p className="text-[8px] font-medium uppercase tracking-[0.18em] text-muted-foreground">{stat.label}</p>
+                </motion.div>
+              );
+            })}
+          </div>
         </div>
 
         <PilotReadinessCard
@@ -951,10 +978,29 @@ export default function DriverDashboard() {
             ) : undefined}
           />
 
+          {activeTrip && (
+            <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4 shadow-sm">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">Active trip</p>
+                  <p className="mt-1 text-sm font-bold text-foreground">{activeTrip.pickup_address}</p>
+                  <p className="text-sm text-muted-foreground">{activeTrip.dropoff_address}</p>
+                </div>
+                <div className="rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary">{activeTrip.status}</div>
+              </div>
+              <div className="mt-3 flex items-center justify-between gap-2">
+                <p className="text-sm font-semibold text-foreground">{fmtUSD(Number(activeTrip.fare))}</p>
+                <Button size="sm" variant="secondary" onClick={() => setFullNavMode(true)}>
+                  Open navigation
+                </Button>
+              </div>
+            </div>
+          )}
+
           {!isOnline ? (
             <EmptyState
               title="You're currently offline"
-              description="Go online from settings to see ride requests"
+              description="Switch online from the settings menu to start receiving ride requests."
               className="py-8"
             />
           ) : rides.length === 0 ? (

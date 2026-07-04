@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, ArrowDownLeft, ArrowUpRight, Send, TrendingUp, Receipt, Percent, Plus } from "lucide-react";
@@ -115,6 +115,7 @@ export default function DriverWalletPage() {
   const totalEarned = earnings.reduce((s, e) => s + Number(e.driver_earnings), 0);
   const totalCommission = earnings.reduce((s, e) => s + Number(e.platform_fee), 0);
   const totalRides = earnings.length;
+  const pendingItems = useMemo(() => deposits.filter((d) => d.status === 'pending').length + withdrawals.filter((w) => w.status === 'pending').length, [deposits, withdrawals]);
 
   // PIN gate: BLOCK access until PIN is set up or verified
   if (pinLoading || !pinVerified) {
@@ -141,7 +142,10 @@ export default function DriverWalletPage() {
         <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
           <ArrowLeft className="h-5 w-5" />
         </Button>
-        <h1 className="text-lg font-bold">Driver Wallet (USD)</h1>
+        <div>
+          <h1 className="text-lg font-bold">Driver Wallet</h1>
+          <p className="text-xs text-muted-foreground">USD balance, earnings, and transfer activity</p>
+        </div>
       </div>
 
       <div className="p-4 space-y-4 max-w-md mx-auto pb-28">
@@ -154,9 +158,21 @@ export default function DriverWalletPage() {
           pickmeAccount={pickme_account}
         />
 
+        {pendingItems > 0 && (
+          <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <p className="text-sm font-semibold text-foreground">Pending review</p>
+                <p className="text-xs text-muted-foreground">{pendingItems} item{pendingItems === 1 ? '' : 's'} waiting for approval.</p>
+              </div>
+              <div className="rounded-full bg-amber-500/15 px-2.5 py-1 text-[11px] font-semibold text-amber-700">{pendingItems}</div>
+            </div>
+          </div>
+        )}
+
         {/* Driver actions: Deposit, Transfer, Withdraw */}
         <div className="grid grid-cols-3 gap-2">
-          <Button onClick={() => navigate("/drivers/deposit")} className="h-12 flex-col gap-0.5 py-1">
+          <Button onClick={() => navigate("/driver/deposit")} className="h-12 flex-col gap-0.5 py-1">
             <Plus className="h-4 w-4" />
             <span className="text-[11px] font-bold">Deposit</span>
           </Button>

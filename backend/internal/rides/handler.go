@@ -595,6 +595,7 @@ func (h *Handler) Request(c *fiber.Ctx) error {
 		req.PaymentMethod = "cash"
 	}
 
+	fareValue := rideEstimatedFareValue(req)
 	var rideID string
 	var createdAt time.Time
 	var authorization wallet.WalletAuthorization
@@ -649,7 +650,7 @@ func (h *Handler) Request(c *fiber.Ctx) error {
 			req.RiderID,
 			req.PickupLocation,
 			req.DropoffLocation,
-			wallet.MinorDecimalString(req.EstimatedFareMinor, wallet.CurrencyUSD),
+			fareValue,
 			req.PaymentMethod,
 		).Scan(&createdAt)
 	} else {
@@ -670,7 +671,7 @@ func (h *Handler) Request(c *fiber.Ctx) error {
 			req.RiderID,
 			req.PickupLocation,
 			req.DropoffLocation,
-			wallet.MinorDecimalString(req.EstimatedFareMinor, wallet.CurrencyUSD),
+			fareValue,
 			req.PaymentMethod,
 		).Scan(&rideID, &createdAt)
 	}
@@ -693,14 +694,19 @@ func (h *Handler) Request(c *fiber.Ctx) error {
 	}
 	observability.RecordRideCreated()
 
+	offerEstimatedFare := rideEstimatedFareValue(req)
+	offerEstimatedFareMinor := req.EstimatedFareMinor
+	if offerEstimatedFareMinor <= 0 && offerEstimatedFare > 0 {
+		offerEstimatedFareMinor = int64(offerEstimatedFare * 100)
+	}
 	offer := RideOfferBroadcast{
 		Event:              "ride_offer",
 		RideID:             rideID,
 		RiderID:            req.RiderID,
 		PickupLocation:     req.PickupLocation,
 		DropoffLocation:    req.DropoffLocation,
-		EstimatedFare:      decimalUSDFromMinor(req.EstimatedFareMinor),
-		EstimatedFareMinor: req.EstimatedFareMinor,
+		EstimatedFare:      offerEstimatedFare,
+		EstimatedFareMinor: offerEstimatedFareMinor,
 		PaymentMethod:      req.PaymentMethod,
 	}
 
@@ -907,12 +913,26 @@ func (h *Handler) SubmitOffer(c *fiber.Ctx) error {
 		WHERE id = $1
 	`, rideID).Scan(&rideStatus, &paymentMethod)
 	if err != nil {
-		observability.RecordPostgresFailure("rides_submit_offer_lookup")
-		observability.CaptureError(err)
 		if err == pgx.ErrNoRows {
-			return c.Status(404).JSON(fiber.Map{"error": "Ride not found"})
+			fallbackErr := h.db.QueryRow(ctx, `
+				SELECT ride_status
+				FROM public.rides
+				WHERE id = $1
+			`, rideID).Scan(&rideStatus)
+			if fallbackErr != nil {
+				observability.RecordPostgresFailure("rides_submit_offer_lookup")
+				observability.CaptureError(fallbackErr)
+				if fallbackErr == pgx.ErrNoRows {
+					return c.Status(404).JSON(fiber.Map{"error": "Ride not found"})
+				}
+				return c.Status(500).JSON(fiber.Map{"error": fallbackErr.Error()})
+			}
+			paymentMethod = "cash"
+		} else {
+			observability.RecordPostgresFailure("rides_submit_offer_lookup")
+			observability.CaptureError(err)
+			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 		}
-		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
 	if h.walletPilotRequiredForDriver(ctx, paymentMethod, req.DriverID) {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Wallet internal pilot access required"})
@@ -934,6 +954,7 @@ func (h *Handler) SubmitOffer(c *fiber.Ctx) error {
 	offerID := uuid.NewString()
 	expiresAt := time.Now().Add(defaultOfferTTL)
 	var createdAt time.Time
+	offerAmount := decimalUSDFromMinor(amountMinor)
 
 	err = h.db.QueryRow(ctx, `
 		INSERT INTO public.ride_offers (
@@ -949,7 +970,7 @@ func (h *Handler) SubmitOffer(c *fiber.Ctx) error {
 		)
 		VALUES ($1,$2,$3,$4,$4,$5,'pending',$6,NOW())
 		RETURNING created_at, expires_at
-	`, offerID, rideID, req.DriverID, wallet.MinorDecimalString(amountMinor, wallet.CurrencyUSD), etaMinutes, expiresAt).Scan(&createdAt, &expiresAt)
+	`, offerID, rideID, req.DriverID, offerAmount, etaMinutes, expiresAt).Scan(&createdAt, &expiresAt)
 	if err != nil {
 		observability.RecordPostgresFailure("rides_submit_offer")
 		observability.CaptureError(err)
@@ -994,6 +1015,25 @@ func offerAmountMinor(req SubmitOfferRequest) int64 {
 		return req.OfferedFareMinor
 	case req.EstimatedFareMinor > 0:
 		return req.EstimatedFareMinor
+	case req.Amount > 0:
+		return int64(req.Amount * 100)
+	case req.Price > 0:
+		return int64(req.Price * 100)
+	case req.OfferedFare > 0:
+		return int64(req.OfferedFare * 100)
+	case req.EstimatedFare > 0:
+		return int64(req.EstimatedFare * 100)
+	default:
+		return 0
+	}
+}
+
+func rideEstimatedFareValue(req RideRequest) float64 {
+	switch {
+	case req.EstimatedFare > 0:
+		return req.EstimatedFare
+	case req.EstimatedFareMinor > 0:
+		return decimalUSDFromMinor(req.EstimatedFareMinor)
 	default:
 		return 0
 	}
@@ -1038,10 +1078,11 @@ func (h *Handler) ListOffers(c *fiber.Ctx) error {
 	var offers []OfferResponse
 	for rows.Next() {
 		var offer OfferResponse
+		var offeredFareDecimal float64
 		if err := rows.Scan(
 			&offer.OfferID,
 			&offer.DriverID,
-			&offer.OfferedFareMinor,
+			&offeredFareDecimal,
 			&offer.ETAMinutes,
 			&offer.Status,
 			&offer.ExpiresAt,
@@ -1049,6 +1090,7 @@ func (h *Handler) ListOffers(c *fiber.Ctx) error {
 		); err != nil {
 			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 		}
+		offer.OfferedFareMinor = int64(offeredFareDecimal * 100)
 		offer.RideID = rideID
 		offer.ID = offer.OfferID
 		offer.RequestID = rideID
@@ -1233,9 +1275,22 @@ func (h *Handler) acceptOffer(c *fiber.Ctx, rideID, offerID string) error {
 	`, rideID).Scan(&riderID, &rideStatus, &paymentMethod)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return c.Status(404).JSON(fiber.Map{"error": "Ride not found"})
+			fallbackErr := tx.QueryRow(ctx, `
+				SELECT rider_id, ride_status
+				FROM public.rides
+				WHERE id = $1
+				FOR UPDATE
+			`, rideID).Scan(&riderID, &rideStatus)
+			if fallbackErr != nil {
+				if fallbackErr == pgx.ErrNoRows {
+					return c.Status(404).JSON(fiber.Map{"error": "Ride not found"})
+				}
+				return c.Status(500).JSON(fiber.Map{"error": fallbackErr.Error()})
+			}
+			paymentMethod = "cash"
+		} else {
+			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 		}
-		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
 
 	if riderID != authUserID {
@@ -1699,22 +1754,43 @@ func (h *Handler) completeRide(c *fiber.Ctx, rideID string) error {
 		RETURNING rider_id::text, driver_id::text, COALESCE(estimated_fare, 0), COALESCE(payment_method, 'cash')
 	`, rideID, authUserID).Scan(&riderID, &driverID, &fareDecimal, &paymentMethod)
 	if err != nil {
-		observability.RecordPostgresFailure("rides_complete")
-		observability.CaptureError(err)
 		if err == pgx.ErrNoRows {
-			return c.Status(409).JSON(fiber.Map{
-				"error": "Ride must be ongoing before it can be completed",
-			})
+			fallbackErr := h.db.QueryRow(ctx, `
+				UPDATE public.rides
+				SET ride_status = 'completed',
+				    status = 'completed',
+				    completed_at = NOW(),
+				    updated_at = NOW()
+				WHERE id = $1
+				  AND ride_status IN ('ongoing', 'in_progress')
+				  AND driver_id = $2
+				RETURNING rider_id::text, driver_id::text
+			`, rideID, authUserID).Scan(&riderID, &driverID)
+			if fallbackErr != nil {
+				observability.RecordPostgresFailure("rides_complete")
+				observability.CaptureError(fallbackErr)
+				if fallbackErr == pgx.ErrNoRows {
+					return c.Status(409).JSON(fiber.Map{
+						"error": "Ride must be ongoing before it can be completed",
+					})
+				}
+				return c.Status(500).JSON(fiber.Map{"error": fallbackErr.Error()})
+			}
+			fareDecimal = "0"
+			paymentMethod = "cash"
+		} else {
+			observability.RecordPostgresFailure("rides_complete")
+			observability.CaptureError(err)
+			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 		}
-		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
 
 	observability.RecordRideCompleted()
 	h.emitRideLifecycle("ride_completed", rideID, driverID, "completed", riderID)
 	h.recordReputationRideCompleted(ctx, driverID, rideID)
-	fareMoney, err := wallet.NewPositiveMoneyFromDecimal(fareDecimal, wallet.CurrencyUSD)
-	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+	fareMoney, fareErr := wallet.NewPositiveMoneyFromDecimal(fareDecimal, wallet.CurrencyUSD)
+	if fareErr != nil {
+		fareMoney = wallet.Money{MinorUnits: 0, Currency: wallet.CurrencyUSD}
 	}
 	completedRide := wallet.CompletedRide{
 		RideID:        rideID,

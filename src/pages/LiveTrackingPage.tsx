@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
-import { MapPin, Navigation, Clock, Car, Shield, Phone } from "lucide-react";
+import { MapPin, Navigation, Clock, Car, Shield, Phone, MessageCircle, AlertCircle, Radio, ChevronRight } from "lucide-react";
 import { motion } from "framer-motion";
 import TripGoogleMap from "@/components/TripGoogleMap";
 
@@ -51,6 +51,7 @@ export default function LiveTrackingPage() {
   const [driverLoc, setDriverLoc] = useState<DriverLocation | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'live' | 'offline'>('connecting');
 
   useEffect(() => {
     if (!tripId) return;
@@ -67,6 +68,7 @@ export default function LiveTrackingPage() {
         return;
       }
       setRide(rideData as unknown as RideInfo);
+      setConnectionStatus('connecting');
 
       if (rideData.driver_id) {
         const { data: driverData } = await supabase
@@ -90,18 +92,19 @@ export default function LiveTrackingPage() {
   // Realtime driver location
   useEffect(() => {
     if (!driver?.user_id) return;
+    setConnectionStatus('connecting');
     supabase
       .from("live_locations")
       .select("latitude, longitude, heading, speed, updated_at")
       .eq("user_id", driver.user_id)
       .eq("user_type", "driver")
       .maybeSingle()
-      .then(({ data }) => { if (data) setDriverLoc(data); });
+      .then(({ data }) => { if (data) { setDriverLoc(data); setConnectionStatus('live'); } else { setConnectionStatus('offline'); } });
 
     const channel = supabase
       .channel(`track-driver-${driver.user_id}-${Date.now()}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "live_locations", filter: `user_id=eq.${driver.user_id}` },
-        (payload) => { const loc = payload.new as DriverLocation; if (loc?.latitude) setDriverLoc(loc); }
+        (payload) => { const loc = payload.new as DriverLocation; if (loc?.latitude) { setDriverLoc(loc); setConnectionStatus('live'); } }
       ).subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [driver?.user_id]);
@@ -119,12 +122,13 @@ export default function LiveTrackingPage() {
 
   if (loading) {
     return (
-      <div className="min-h-[100dvh] bg-background flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
-            <Car className="w-7 h-7 text-primary animate-bounce" style={{ animationDuration: '2s' }} />
+      <div className="min-h-[100dvh] bg-background flex items-center justify-center px-6">
+        <div className="w-full max-w-sm rounded-[24px] border border-border/50 bg-card/80 p-6 text-center shadow-sm">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+            <Car className="h-7 w-7 animate-bounce" style={{ animationDuration: '2s' }} />
           </div>
-          <span className="text-sm text-muted-foreground">Loading trip…</span>
+          <p className="mt-4 text-lg font-semibold text-foreground">Preparing your trip view</p>
+          <p className="mt-1 text-sm text-muted-foreground">We’re loading the latest trip details and location feed.</p>
         </div>
       </div>
     );
@@ -170,6 +174,12 @@ export default function LiveTrackingPage() {
     cancelled: { label: "Trip cancelled", color: "text-destructive", bg: "bg-destructive" },
   };
   const status = statusLabels[ride.status] || statusLabels.pending;
+  const timelineSteps = useMemo(() => [
+    { label: 'Request placed', active: true },
+    { label: 'Driver assigned', active: ['accepted', 'driver_arriving', 'driver_arrived', 'in_progress', 'completed'].includes(ride.status) },
+    { label: 'Driver en route', active: ['driver_arriving', 'driver_arrived', 'in_progress', 'completed'].includes(ride.status) },
+    { label: 'Trip complete', active: isCompleted },
+  ], [isCompleted, ride.status]);
 
   return (
     <div className="relative h-[100dvh] w-full overflow-hidden bg-background">
@@ -202,7 +212,7 @@ export default function LiveTrackingPage() {
               className="text-right"
             >
               <p className="text-xl font-black text-primary tabular-nums">{etaMinutes}</p>
-              <p className="text-[9px] font-semibold text-muted-foreground uppercase">min</p>
+              <p className="text-[9px] font-semibold text-muted-foreground uppercase">min eta</p>
             </motion.div>
           )}
         </div>
@@ -215,15 +225,18 @@ export default function LiveTrackingPage() {
 
         <div className="px-5 pb-4 space-y-3">
           {/* Status badge */}
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2.5 rounded-2xl border border-border/40 bg-muted/30 px-3 py-2.5">
             <motion.div
               animate={isActive ? { scale: [1, 1.3, 1] } : {}}
               transition={{ repeat: Infinity, duration: 1.5 }}
-              className={`w-2.5 h-2.5 rounded-full ${status.bg}`}
+              className={`h-2.5 w-2.5 rounded-full ${status.bg}`}
             />
-            <span className={`text-sm font-bold ${status.color}`}>{status.label}</span>
+            <div className="flex-1">
+              <p className={`text-sm font-bold ${status.color}`}>{status.label}</p>
+              <p className="text-[11px] text-muted-foreground">{connectionStatus === 'live' ? 'Location feed connected' : connectionStatus === 'offline' ? 'Waiting for a fresh location update' : 'Connecting to live updates'}</p>
+            </div>
             {distKm !== null && isActive && (
-              <span className="ml-auto text-xs text-muted-foreground">{distKm.toFixed(1)} km away</span>
+              <span className="text-xs font-semibold text-muted-foreground">{distKm.toFixed(1)} km away</span>
             )}
           </div>
 
@@ -242,15 +255,28 @@ export default function LiveTrackingPage() {
 
           {/* Driver card */}
           {driver && (
-            <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-muted/40">
-              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                <Car className="w-5 h-5 text-primary" />
+            <div className="rounded-2xl border border-border/40 bg-muted/40 p-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                  <Car className="h-5 w-5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold text-foreground">{driver.fullName}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {driver.vehicle_make} {driver.vehicle_model} · {driver.plate_number}
+                  </p>
+                </div>
+                <div className="flex items-center gap-1 rounded-full bg-background/70 px-2.5 py-1 text-[10px] font-semibold text-muted-foreground">
+                  <Radio className="h-3 w-3" /> {connectionStatus === 'live' ? 'Live' : connectionStatus === 'offline' ? 'Offline' : 'Syncing'}
+                </div>
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold text-foreground">{driver.fullName}</p>
-                <p className="text-xs text-muted-foreground">
-                  {driver.vehicle_make} {driver.vehicle_model} · {driver.plate_number}
-                </p>
+
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                {timelineSteps.map((step) => (
+                  <div key={step.label} className={`rounded-xl px-2 py-2 text-center text-[10px] font-semibold ${step.active ? 'bg-primary/10 text-primary' : 'bg-background/70 text-muted-foreground'}`}>
+                    {step.label}
+                  </div>
+                ))}
               </div>
             </div>
           )}
@@ -291,7 +317,18 @@ export default function LiveTrackingPage() {
             </div>
           )}
 
-          {/* CTA */}
+          <div className="grid grid-cols-3 gap-2">
+            <a href="tel:995" className="flex items-center justify-center gap-1 rounded-2xl border border-border/40 bg-background/70 px-2 py-2.5 text-[11px] font-semibold text-foreground">
+              <Phone className="h-3.5 w-3.5" /> Help
+            </a>
+            <a href="sms:" className="flex items-center justify-center gap-1 rounded-2xl border border-border/40 bg-background/70 px-2 py-2.5 text-[11px] font-semibold text-foreground">
+              <MessageCircle className="h-3.5 w-3.5" /> Chat
+            </a>
+            <a href="tel:995" className="flex items-center justify-center gap-1 rounded-2xl bg-destructive px-2 py-2.5 text-[11px] font-semibold text-destructive-foreground">
+              <AlertCircle className="h-3.5 w-3.5" /> SOS
+            </a>
+          </div>
+
           <a
             href="/"
             className="block w-full py-3 rounded-2xl bg-primary text-primary-foreground font-semibold text-sm text-center active:scale-[0.98] transition-all"

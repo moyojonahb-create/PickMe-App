@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { RefreshCw, Wallet, Car, Navigation, Users, MapPin, TrendingUp, Clock, Eye, DollarSign, BarChart3 } from 'lucide-react';
+import { RefreshCw, Wallet, Car, Navigation, Users, MapPin, TrendingUp, Clock, Eye, DollarSign, BarChart3, Loader2, AlertCircle } from 'lucide-react';
 import { startOfDay, startOfWeek, startOfMonth, isAfter, subDays, format, eachDayOfInterval } from 'date-fns';
 import { supabase } from '@/lib/supabaseClient';
 import AdminGuard from '@/components/admin/AdminGuard';
@@ -218,6 +218,15 @@ const AdminDashboard = () => {
     }))
   , [activeRides]);
 
+  const summaryMetrics = useMemo(() => [
+    { label: "Today's rides", value: todayTrips, icon: Navigation, tone: 'primary' },
+    { label: 'Online now', value: onlineDrivers.length, icon: Car, tone: 'emerald' },
+    { label: 'Pending approvals', value: pendingDrivers.length, icon: Clock, tone: 'amber' },
+    { label: 'Total drivers', value: totalDrivers, icon: Users, tone: 'accent' },
+  ], [onlineDrivers.length, pendingDrivers.length, todayTrips, totalDrivers]);
+
+  const latestRidePreview = useMemo(() => latestRides.slice(0, 8), [latestRides]);
+
   return (
     <AdminGuard>
       <AdminLayout>
@@ -252,59 +261,40 @@ const AdminDashboard = () => {
           )}
 
           {/* Metric Cards */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <Card>
-              <CardContent className="pt-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-xl bg-primary/10">
-                    <Navigation className="h-5 w-5 text-primary" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-black text-foreground">{todayTrips}</p>
-                    <p className="text-xs text-muted-foreground">Today's Rides</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-xl bg-emerald-500/10">
-                    <Car className="h-5 w-5 text-emerald-600" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-black text-foreground">{onlineDrivers.length}</p>
-                    <p className="text-xs text-muted-foreground">Online Now</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-xl bg-amber-500/10">
-                    <Clock className="h-5 w-5 text-amber-600" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-black text-foreground">{pendingDrivers.length}</p>
-                    <p className="text-xs text-muted-foreground">Pending Approval</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-4">
-                <div className="flex items-center gap-3">
-                   <div className="p-2 rounded-xl bg-primary/10">
-                    <Users className="h-5 w-5 text-primary" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-black text-foreground">{totalDrivers}</p>
-                    <p className="text-xs text-muted-foreground">Total Drivers</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+          <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+            {loading ? (
+              Array.from({ length: 4 }).map((_, index) => (
+                <Card key={index} className="border-border/50">
+                  <CardContent className="pt-4">
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-2xl bg-muted animate-pulse" />
+                      <div className="flex-1 space-y-2">
+                        <div className="h-5 w-12 rounded-full bg-muted animate-pulse" />
+                        <div className="h-3 w-20 rounded-full bg-muted animate-pulse" />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))
+            ) : summaryMetrics.map((metric) => {
+              const Icon = metric.icon;
+              const toneClass = metric.tone === 'emerald' ? 'bg-emerald-500/10 text-emerald-600' : metric.tone === 'amber' ? 'bg-amber-500/10 text-amber-600' : metric.tone === 'accent' ? 'bg-primary/10 text-primary' : 'bg-primary/10 text-primary';
+              return (
+                <Card key={metric.label} className="border-border/50 bg-card/80 shadow-sm">
+                  <CardContent className="pt-4">
+                    <div className="flex items-center gap-3">
+                      <div className={`rounded-2xl p-2.5 ${toneClass}`}>
+                        <Icon className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <p className="text-2xl font-black text-foreground">{metric.value}</p>
+                        <p className="text-xs text-muted-foreground">{metric.label}</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
 
           {/* Commission Revenue Summary */}
@@ -316,7 +306,7 @@ const AdminDashboard = () => {
             const sum = (items: typeof earnings) => items.reduce((a, e) => a + Number(e.platform_fee), 0);
             const countTrips = (items: typeof earnings) => items.length;
             return (
-              <Card>
+              <Card className="border-border/50 bg-card/80 shadow-sm">
                 <CardContent className="pt-4">
                   <div className="flex items-center justify-between mb-3">
                     <h2 className="font-bold text-sm flex items-center gap-2">
@@ -327,20 +317,20 @@ const AdminDashboard = () => {
                       View Details
                     </Button>
                   </div>
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="bg-primary/10 rounded-xl p-4 text-center">
+                  <div className="grid gap-3 md:grid-cols-3">
+                    <div className="rounded-2xl border border-border/40 bg-primary/10 p-4 text-center">
                       <p className="text-[10px] font-bold text-muted-foreground uppercase">Today</p>
-                      <p className="text-xl font-black text-primary">${sum(todayEarnings).toFixed(2)}</p>
+                      <p className="mt-1 text-xl font-black text-primary">${sum(todayEarnings).toFixed(2)}</p>
                       <p className="text-[10px] text-muted-foreground">{countTrips(todayEarnings)} trips</p>
                     </div>
-                    <div className="bg-primary/10 rounded-xl p-4 text-center">
+                    <div className="rounded-2xl border border-border/40 bg-primary/10 p-4 text-center">
                       <p className="text-[10px] font-bold text-muted-foreground uppercase">This Week</p>
-                      <p className="text-xl font-black text-primary">${sum(weekEarnings).toFixed(2)}</p>
+                      <p className="mt-1 text-xl font-black text-primary">${sum(weekEarnings).toFixed(2)}</p>
                       <p className="text-[10px] text-muted-foreground">{countTrips(weekEarnings)} trips</p>
                     </div>
-                    <div className="bg-primary/10 rounded-xl p-4 text-center">
+                    <div className="rounded-2xl border border-border/40 bg-primary/10 p-4 text-center">
                       <p className="text-[10px] font-bold text-muted-foreground uppercase">This Month</p>
-                      <p className="text-xl font-black text-primary">${sum(monthEarnings).toFixed(2)}</p>
+                      <p className="mt-1 text-xl font-black text-primary">${sum(monthEarnings).toFixed(2)}</p>
                       <p className="text-[10px] text-muted-foreground">{countTrips(monthEarnings)} trips</p>
                     </div>
                   </div>
@@ -363,7 +353,7 @@ const AdminDashboard = () => {
               };
             });
             return (
-              <Card>
+              <Card className="border-border/50 bg-card/80 shadow-sm">
                 <CardContent className="pt-4">
                   <div className="flex items-center justify-between mb-3">
                     <h2 className="font-bold text-sm flex items-center gap-2">
@@ -385,9 +375,12 @@ const AdminDashboard = () => {
             );
           })()}
 
-          <Card>
+          <Card className="border-border/50 bg-card/80 shadow-sm">
             <CardContent className="pt-4">
-              <h2 className="font-bold text-sm mb-3">Live Map — Drivers & Active Rides</h2>
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <h2 className="font-bold text-sm">Live Map — Drivers & Active Rides</h2>
+                <span className="rounded-full bg-primary/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-primary">Realtime</span>
+              </div>
               <AdminMap 
                 drivers={mapDrivers} 
                 rides={mapRides} 
@@ -398,11 +391,20 @@ const AdminDashboard = () => {
 
           <div className="grid lg:grid-cols-2 gap-6">
             {/* Pending Approvals */}
-            <Card>
+            <Card className="border-border/50 bg-card/80 shadow-sm">
               <CardContent className="pt-4">
                 <h2 className="font-bold text-sm mb-3">Pending Driver Approvals</h2>
-                {pendingDrivers.length === 0 ? (
-                  <p className="text-sm text-muted-foreground py-4 text-center">No pending drivers</p>
+                {loading ? (
+                  <div className="space-y-2">
+                    {Array.from({ length: 3 }).map((_, index) => (
+                      <div key={index} className="h-14 rounded-2xl bg-muted animate-pulse" />
+                    ))}
+                  </div>
+                ) : pendingDrivers.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-border/60 bg-background/70 p-6 text-center">
+                    <AlertCircle className="mx-auto h-6 w-6 text-muted-foreground" />
+                    <p className="mt-2 text-sm text-muted-foreground">No pending drivers</p>
+                  </div>
                 ) : (
                   <div className="space-y-3">
                     {pendingDrivers.map((d) => (
@@ -429,11 +431,20 @@ const AdminDashboard = () => {
             </Card>
 
             {/* Live Tracking */}
-            <Card>
+            <Card className="border-border/50 bg-card/80 shadow-sm">
               <CardContent className="pt-4">
                 <h2 className="font-bold text-sm mb-3">Online Drivers</h2>
-                {onlineDrivers.length === 0 ? (
-                  <p className="text-sm text-muted-foreground py-4 text-center">No drivers online</p>
+                {loading ? (
+                  <div className="space-y-2">
+                    {Array.from({ length: 3 }).map((_, index) => (
+                      <div key={index} className="h-14 rounded-2xl bg-muted animate-pulse" />
+                    ))}
+                  </div>
+                ) : onlineDrivers.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-border/60 bg-background/70 p-6 text-center">
+                    <AlertCircle className="mx-auto h-6 w-6 text-muted-foreground" />
+                    <p className="mt-2 text-sm text-muted-foreground">No drivers online</p>
+                  </div>
                 ) : (
                   <div className="space-y-3">
                     {onlineDrivers.map((d) => (
@@ -466,7 +477,7 @@ const AdminDashboard = () => {
           </div>
 
           {/* Ride Monitoring */}
-          <Card>
+          <Card className="border-border/50 bg-card/80 shadow-sm">
             <CardContent className="pt-4">
               <div className="flex items-center justify-between mb-3">
                 <h2 className="font-bold text-sm">Ride Monitoring</h2>
@@ -484,7 +495,7 @@ const AdminDashboard = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {latestRides.slice(0, 20).map((r) => (
+                    {latestRidePreview.map((r) => (
                       <tr key={r.id} className="border-b border-border/50 hover:bg-muted/50 transition-colors">
                         <td className="py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">
                           {new Date(r.created_at).toLocaleString()}

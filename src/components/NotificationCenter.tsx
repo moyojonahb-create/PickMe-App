@@ -1,5 +1,5 @@
 /* eslint-disable react-hooks/exhaustive-deps */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Bell, X, Check, Car, DollarSign, AlertTriangle, Star, Gift, MapPin, CheckCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/integrations/supabase/client';
@@ -10,6 +10,8 @@ import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { showLocalNotification } from '@/lib/push';
 import { markNotificationRead, markNotificationsRead } from '@/lib/businessApi';
+
+type NotificationCategory = 'all' | 'ride' | 'wallet' | 'system';
 
 interface Notification {
   id: string;
@@ -35,13 +37,46 @@ const typeIcons: Record<string, typeof Bell> = {
   promo: Gift,
 };
 
+function getNotificationCategory(type: string): Exclude<NotificationCategory, 'all'> {
+  switch (type) {
+    case 'ride':
+    case 'ride_request':
+    case 'ride_accepted':
+    case 'ride_completed':
+    case 'ride_cancelled':
+    case 'driver_arrived':
+    case 'new_offer':
+      return 'ride';
+    case 'deposit_approved':
+    case 'payment':
+      return 'wallet';
+    default:
+      return 'system';
+  }
+}
+
 export function NotificationBell() {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(false);
+  const [activeFilter, setActiveFilter] = useState<NotificationCategory>('all');
 
   const unreadCount = notifications.filter(n => !n.is_read).length;
+  const filteredNotifications = useMemo(() => {
+    if (activeFilter === 'all') return notifications;
+    return notifications.filter((n) => getNotificationCategory(n.notification_type) === activeFilter);
+  }, [activeFilter, notifications]);
+
+  const groupedNotifications = useMemo(() => {
+    const grouped: Record<string, Notification[]> = {};
+    filteredNotifications.forEach((n) => {
+      const category = getNotificationCategory(n.notification_type);
+      grouped[category] = grouped[category] ?? [];
+      grouped[category].push(n);
+    });
+    return grouped;
+  }, [filteredNotifications]);
 
   useEffect(() => {
     if (!user) return;
@@ -128,6 +163,30 @@ export function NotificationBell() {
           </SheetHeader>
 
           <div className="overflow-y-auto h-[calc(100dvh-80px)]">
+            <div className="px-5 py-3 border-b border-border/30">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">Inbox</p>
+                  <p className="text-sm font-semibold text-foreground">{unreadCount > 0 ? `${unreadCount} unread` : 'All caught up'}</p>
+                </div>
+                <div className="rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary">{notifications.length}</div>
+              </div>
+              <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+                {(['all', 'ride', 'wallet', 'system'] as NotificationCategory[]).map((filter) => (
+                  <button
+                    key={filter}
+                    onClick={() => setActiveFilter(filter)}
+                    className={cn(
+                      'rounded-full px-3 py-1.5 text-xs font-semibold capitalize',
+                      activeFilter === filter ? 'bg-foreground text-background' : 'bg-muted text-muted-foreground'
+                    )}
+                  >
+                    {filter === 'all' ? 'All' : filter}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {loading && (
               <div className="flex items-center justify-center py-12">
                 <div className="animate-pulse text-muted-foreground text-sm">Loading…</div>
@@ -144,43 +203,57 @@ export function NotificationBell() {
               </div>
             )}
 
-            {!loading && notifications.map((n, i) => {
-              const Icon = typeIcons[n.notification_type] || Bell;
-              return (
-                <motion.div
-                  key={n.id}
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: i * 0.03 }}
-                  onClick={() => !n.is_read && markAsRead(n.id)}
-                  className={cn(
-                    'flex items-start gap-3 px-5 py-4 border-b border-border/20 cursor-pointer transition-colors',
-                    !n.is_read ? 'bg-primary/5' : 'hover:bg-muted/50'
-                  )}
-                >
-                  <div className={cn(
-                    'w-10 h-10 rounded-full flex items-center justify-center shrink-0 mt-0.5',
-                    !n.is_read ? 'bg-primary/10' : 'bg-muted'
-                  )}>
-                    <Icon className={cn('w-4.5 h-4.5', !n.is_read ? 'text-primary' : 'text-muted-foreground')} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className={cn('text-sm font-semibold truncate', !n.is_read ? 'text-foreground' : 'text-muted-foreground')}>
-                        {n.title}
-                      </p>
-                      {!n.is_read && (
-                        <span className="w-2 h-2 rounded-full bg-primary shrink-0" />
-                      )}
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{n.body}</p>
-                    <p className="text-[10px] text-muted-foreground/60 mt-1">
-                      {format(new Date(n.created_at), 'MMM d · h:mm a')}
-                    </p>
-                  </div>
-                </motion.div>
-              );
-            })}
+            {!loading && notifications.length > 0 && filteredNotifications.length === 0 && (
+              <div className="flex flex-col items-center justify-center py-14 px-6 text-center">
+                <p className="font-semibold text-foreground">No {activeFilter === 'all' ? 'notifications' : activeFilter} updates in this view</p>
+                <p className="text-sm text-muted-foreground mt-1">Try another inbox filter to view older activity.</p>
+              </div>
+            )}
+
+            {!loading && Object.entries(groupedNotifications).map(([category, items]) => (
+              <div key={category} className="px-5 py-3">
+                <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">{category}</p>
+                <div className="space-y-1">
+                  {items.map((n, i) => {
+                    const Icon = typeIcons[n.notification_type] || Bell;
+                    return (
+                      <motion.div
+                        key={n.id}
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: i * 0.03 }}
+                        onClick={() => !n.is_read && markAsRead(n.id)}
+                        className={cn(
+                          'flex items-start gap-3 rounded-2xl px-3 py-3 border border-border/25 cursor-pointer transition-colors',
+                          !n.is_read ? 'bg-primary/5' : 'hover:bg-muted/50'
+                        )}
+                      >
+                        <div className={cn(
+                          'w-10 h-10 rounded-full flex items-center justify-center shrink-0 mt-0.5',
+                          !n.is_read ? 'bg-primary/10' : 'bg-muted'
+                        )}>
+                          <Icon className={cn('w-4.5 h-4.5', !n.is_read ? 'text-primary' : 'text-muted-foreground')} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className={cn('text-sm font-semibold truncate', !n.is_read ? 'text-foreground' : 'text-muted-foreground')}>
+                              {n.title}
+                            </p>
+                            {!n.is_read && (
+                              <span className="w-2 h-2 rounded-full bg-primary shrink-0" />
+                            )}
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{n.body}</p>
+                          <p className="text-[10px] text-muted-foreground/60 mt-1">
+                            {format(new Date(n.created_at), 'MMM d · h:mm a')}
+                          </p>
+                        </div>
+                      </motion.div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
           </div>
         </SheetContent>
       </Sheet>
