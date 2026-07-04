@@ -1,0 +1,1 @@
+DROP POLICY IF EXISTS "Admins can view wallet pins metadata" ON public.wallet_pins; REVOKE SELECT ON public.wallet_pins FROM authenticated, anon;
