@@ -1266,9 +1266,6 @@ export default function DriverDashboard() {
       <DepositModal
         isOpen={depositModalOpen}
         onClose={() => { setDepositModalOpen(false); fetchDriverBalance(); }}
-        onDeposit={async (amount: number, desc?: string) => {
-          return { error: 'Use the deposit page at /drivers/deposit' };
-        }}
         currentBalance={driverBalance}
       />
 
