@@ -74,7 +74,7 @@ import VoiceCallButton from "@/components/ride/VoiceCallButton";
 import DriverEarningsDashboard from "@/components/driver/DriverEarningsDashboard";
 import DriverSelfieCheck from "@/components/driver/DriverSelfieCheck";
 import DemandHeatmap from "@/components/driver/DemandHeatmap";
-import MapGoogle from "@/components/MapGoogle";
+import MapboxMap from "@/components/MapboxMap";
 import { useNearbyDrivers } from "@/hooks/useNearbyDrivers";
 import { useOSRMRoute } from "@/hooks/useOSRMRoute";
 import { runLocationFraudChecks } from "@/lib/fraudDetection";
@@ -1124,7 +1124,7 @@ export default function DriverDashboard() {
             className="rounded-2xl overflow-hidden border border-border/30 shadow-sm"
           >
             <div className="h-[45vh] min-h-[300px]">
-              <MapGoogle
+              <MapboxMap
                 driverLocation={driverCoords ? { lat: driverCoords.lat, lng: driverCoords.lng } : undefined}
                 drivers={nearbyDrivers}
                 defaultCenter={driverCoords ? { lat: driverCoords.lat, lng: driverCoords.lng } : undefined}

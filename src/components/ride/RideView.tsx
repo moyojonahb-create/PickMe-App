@@ -16,7 +16,6 @@ import { searchZW, reverseZW } from '@/lib/geo_osm';
 import { cachePlaceFromNominatim } from '@/lib/placeCache';
 import { searchCachedPlacesPrefix } from '@/lib/placeCache';
 import { useToast } from '@/hooks/use-toast';
-import { useGooglePlacesAutocomplete } from '@/hooks/useGooglePlacesAutocomplete';
 import { useTownPricing, calculateRecommendedFare, formatFare } from '@/hooks/useTownPricing';
 import { uuid } from '@/lib/uuid';
 import { useStudentDiscountAvailable } from '@/hooks/useStudentProfile';
@@ -34,7 +33,7 @@ import {
   Sheet, SheetContent, SheetHeader, SheetTitle } from
 '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
-import MapGoogle from '@/components/MapGoogle';
+import MapboxMap from '@/components/MapboxMap';
 import RideStatusBanner, { type RideStatus } from './RideStatusBanner';
 import OffersModal, { type DriverViewing, type DriverOffer } from '@/components/OffersModal';
 import AuthModalWrapper from '@/components/auth/AuthModalWrapper';
@@ -138,14 +137,6 @@ export default function RideView() {
 
   const { landmarks, loading: landmarksLoading } = useLandmarksSearch({ searchQuery, limit: 30, userLocation: gpsState.coords, radiusKm: proximityRadius, townCenter: selectedTown.center, townRadiusKm: selectedTown.radiusKm });
   const nearbyDrivers = useNearbyDrivers(rideStatus === 'idle' || rideStatus === 'searching');
-  const { suggestions: googleSuggestions, loading: googleLoading, search: searchGoogle, getPlaceDetails, clear: clearGoogleSuggestions, setTownBias } = useGooglePlacesAutocomplete();
-
-  // Restrict Google Places to selected town (strict geofence)
-  useEffect(() => {
-    const vb = selectedTown.nominatimViewbox;
-    const viewbox = `${vb.left},${vb.top},${vb.right},${vb.bottom}`;
-    setTownBias(selectedTown.center, selectedTown.radiusKm, viewbox);
-  }, [selectedTown, setTownBias]);
 
   // ── effects ──
   useEffect(() => {
@@ -182,7 +173,7 @@ export default function RideView() {
   const handleUseMyLocation = useCallback(() => {
     if (!navigator.geolocation) {
       setGpsState({ status: 'unavailable', coords: null, error: 'Geolocation not supported' });
-      // Fallback to Harare if no geolocation
+      // Fallback to the pilot town if no geolocation
       const defaultCity = DEFAULT_TOWN;
       setSelectedTown(defaultCity);
       return;
@@ -214,7 +205,7 @@ export default function RideView() {
           coords: null, 
           error: err.code === err.PERMISSION_DENIED ? 'Location access denied' : 'Unable to get location' 
         });
-        // Fallback to Harare on error
+        // Fallback to the pilot town on error
         setSelectedTown(DEFAULT_TOWN);
       },
       { enableHighAccuracy: true, timeout: 10000 }
@@ -522,39 +513,11 @@ export default function RideView() {
 
   const handleSearchChange = (value: string) => {
     setSearchQuery(value);
-    if (value.trim().length >= 3) {searchGoogle(value);} else {clearGoogleSuggestions();}
     handleCachedPlacesSearch(value);
-    // Only run Nominatim as silent fallback — don't show if Google has results
     handleNominatimSearch(value);
   };
-
-  const handleGooglePlaceSelect = async (suggestion: {placeId: string;name: string;lat?: number;lng?: number;source?: string;}) => {
-    // If coordinates already available (OSM source), use directly
-    if (suggestion.lat && suggestion.lng) {
-      const loc: SelectedLocation = { name: suggestion.name, lat: suggestion.lat, lng: suggestion.lng };
-      if (activeField === 'pickup') setPickupLocation(loc);else setDropoffLocation(loc);
-      setActiveField(null);setSearchQuery('');setNominatimResults([]);clearGoogleSuggestions();
-      haptic('light');
-      return;
-    }
-    // Google source — fetch details from server
-    const details = await getPlaceDetails(suggestion.placeId, suggestion as any);
-    if (!details) return;
-    const loc: SelectedLocation = { name: suggestion.name, lat: details.lat, lng: details.lng };
-    if (activeField === 'pickup') setPickupLocation(loc);else setDropoffLocation(loc);
-    setActiveField(null);setSearchQuery('');setNominatimResults([]);clearGoogleSuggestions();
-    haptic('light');
-  };
-
   const canRequestRide = pickupLocation && dropoffLocation && fareEstimate && !isRequesting;
-  const unifiedPlaceResults = [...cachedPlaceResults, ...googleSuggestions.map((item) => ({
-    name: item.name,
-    lat: item.lat ?? 0,
-    lng: item.lng ?? 0,
-    displayName: item.description,
-    placeId: item.placeId,
-    source: 'google' as const,
-  })), ...nominatimResults.map((item) => ({ ...item, source: 'nominatim' as const }))]
+  const unifiedPlaceResults = [...cachedPlaceResults, ...nominatimResults.map((item) => ({ ...item, source: 'nominatim' as const }))]
     .filter((item, index, arr) => {
       const key = `${item.name}-${item.displayName}`.toLowerCase();
       return arr.findIndex((candidate) => `${candidate.name}-${candidate.displayName}`.toLowerCase() === key) === index;
@@ -567,7 +530,7 @@ export default function RideView() {
     return (
       <div className="relative h-[100dvh] w-full overflow-hidden bg-background">
         <div className="absolute inset-0">
-          <MapGoogle pickup={pickupLocation} dropoff={dropoffLocation} routeGeometry={routeData?.geometry} defaultCenter={selectedTown.center} defaultZoom={14} className="w-full h-full" height="100%" stops={rideStops.filter(s => s.lat && s.lng)} />
+          <MapboxMap pickup={pickupLocation} dropoff={dropoffLocation} routeGeometry={routeData?.geometry} defaultCenter={selectedTown.center} defaultZoom={14} className="w-full h-full" height="100%" stops={rideStops.filter(s => s.lat && s.lng)} />
         </div>
 
         {/* Top gradient */}
@@ -659,7 +622,7 @@ export default function RideView() {
                 transition={{ delay: 0.7 + i * 0.1, type: 'spring', stiffness: 400, damping: 25 }}
                 onClick={action.label === 'Cancel' ? handleCancelRide : action.label === 'Navigate' ? () => {
                   if (dropoffLocation) {
-                    const url = `https://www.google.com/maps/dir/?api=1&destination=${dropoffLocation.lat},${dropoffLocation.lng}&travelmode=driving`;
+                    const url = `https://www.mapbox.com/directions?destination=${dropoffLocation.lng},${dropoffLocation.lat}`;
                     window.open(url, '_blank');
                   }
                 } : undefined}
@@ -705,7 +668,7 @@ export default function RideView() {
     <div className="relative h-[100dvh] w-full overflow-hidden bg-background">
       {/* ── MAP ── */}
       <div className="absolute inset-0">
-        <MapGoogle pickup={pickupLocation} dropoff={dropoffLocation} routeGeometry={routeData?.geometry} onMapClick={handleMapClick} defaultCenter={selectedTown.center} defaultZoom={14} className="w-full h-full" height="100%" drivers={nearbyDrivers} stops={rideStops.filter(s => s.lat && s.lng)} />
+        <MapboxMap pickup={pickupLocation} dropoff={dropoffLocation} routeGeometry={routeData?.geometry} onMapClick={handleMapClick} defaultCenter={selectedTown.center} defaultZoom={14} className="w-full h-full" height="100%" drivers={nearbyDrivers} stops={rideStops.filter(s => s.lat && s.lng)} />
 
         {/* Floating map buttons */}
         <div className="absolute right-3 z-20" style={{ bottom: sheetExpanded ? 'calc(70vh + 16px)' : 'calc(48vh + 16px)', transition: 'bottom 0.3s cubic-bezier(0.32,0.72,0,1)' }}>
@@ -1199,7 +1162,7 @@ export default function RideView() {
                   <p className="text-[11px] font-semibold text-foreground uppercase tracking-widest">Showing locations within {selectedTown.name}</p>
                 </div>
 
-                {(landmarksLoading || cachedPlacesLoading || googleLoading || nominatimLoading) && landmarks.length === 0 && unifiedPlaceResults.length === 0 &&
+                {(landmarksLoading || cachedPlacesLoading || nominatimLoading) && landmarks.length === 0 && unifiedPlaceResults.length === 0 &&
               <div className="flex items-center justify-center gap-2 py-8 text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin" /><span className="text-sm">Searching places…</span></div>
               }
 
@@ -1219,8 +1182,8 @@ export default function RideView() {
                     </button>
               )}
 
-                {/* Cached places — only when Google has no results */}
-                {googleSuggestions.length === 0 && cachedPlaceResults.map((result, index) =>
+                {/* Cached places */}
+                {cachedPlaceResults.map((result, index) =>
               <button key={`cache-${index}`} onClick={() => handleNominatimSelect(result)} className="w-full flex items-center gap-4 px-4 py-3.5 hover:bg-primary/5 transition-colors border-b border-border/15 text-left">
                       <div className="w-11 h-11 rounded-2xl glass-card flex items-center justify-center shrink-0">
                         <MapPin className="w-5 h-5 text-primary" />
@@ -1232,21 +1195,8 @@ export default function RideView() {
                     </button>
               )}
 
-                {/* Google/unified results — shown as primary */}
-                {googleSuggestions.map((suggestion) =>
-              <button key={suggestion.placeId} onClick={() => handleGooglePlaceSelect(suggestion)} className="w-full flex items-center gap-4 px-4 py-3.5 hover:bg-accent/5 transition-colors border-b border-border/15 text-left">
-                      <div className="w-11 h-11 rounded-2xl glass-card flex items-center justify-center shrink-0">
-                        <MapPin className="w-5 h-5 text-primary" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="font-medium text-foreground truncate">{suggestion.name}</p>
-                        <p className="text-sm text-muted-foreground truncate">{suggestion.description}</p>
-                      </div>
-                    </button>
-              )}
-
-                {/* Only show Nominatim results when Google returned nothing */}
-                {googleSuggestions.length === 0 && nominatimResults.map((result, index) =>
+                {/* OpenStreetMap results */}
+                {nominatimResults.map((result, index) =>
               <button key={`nom-${index}`} onClick={() => handleNominatimSelect(result)} className="w-full flex items-center gap-4 px-4 py-3.5 hover:bg-primary/5 transition-colors border-b border-border/15 text-left">
                       <div className="w-11 h-11 rounded-2xl glass-card flex items-center justify-center shrink-0">
                         <MapPin className="w-5 h-5 text-primary" />
@@ -1259,7 +1209,7 @@ export default function RideView() {
               )}
 
                 {/* Empty state */}
-                {!landmarksLoading && !cachedPlacesLoading && !googleLoading && !nominatimLoading && landmarks.length === 0 && cachedPlaceResults.length === 0 && googleSuggestions.length === 0 && nominatimResults.length === 0 && searchQuery.trim().length >= 3 &&
+                {!landmarksLoading && !cachedPlacesLoading && !nominatimLoading && landmarks.length === 0 && cachedPlaceResults.length === 0 && nominatimResults.length === 0 && searchQuery.trim().length >= 3 &&
               <div className="text-center py-12 text-muted-foreground">
                       <MapPin className="w-10 h-10 mx-auto mb-3 opacity-30" />
                       <p className="text-sm">No results for "{searchQuery}" in {selectedTown.name}</p>
@@ -1280,3 +1230,5 @@ export default function RideView() {
     </div>);
 
 }
+
+

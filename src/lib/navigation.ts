@@ -1,6 +1,6 @@
 /**
  * External Maps navigation helper for PickMe drivers.
- * Opens Google Maps (Android/desktop) or Apple Maps (iOS) with driving directions.
+ * Opens Mapbox Directions (Android/desktop) or Apple Maps (iOS) with driving directions.
  */
 
 const NAV_STORAGE_PREFIX = 'pickme_last_nav_';
@@ -10,7 +10,7 @@ export type NavTarget = 'pickup' | 'dropoff';
 export function openNavTo(lat: number, lng: number, tripId: string, target: NavTarget) {
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
   const dest = `${lat},${lng}`;
-  const gweb = `https://www.google.com/maps/dir/?api=1&origin=Current+Location&destination=${dest}&travelmode=driving`;
+  const mapboxWeb = `https://www.mapbox.com/directions?destination=${lng},${lat}`;
 
   // Persist navigation state for resume functionality
   localStorage.setItem(`${NAV_STORAGE_PREFIX}trip_id`, tripId);
@@ -22,11 +22,11 @@ export function openNavTo(lat: number, lng: number, tripId: string, target: NavT
   if (isIOS) {
     const apple = `maps://?saddr=Current%20Location&daddr=${dest}`;
     window.location.href = apple;
-    setTimeout(() => window.open(gweb, '_blank'), 400);
+    setTimeout(() => window.open(mapboxWeb, '_blank'), 400);
     return;
   }
 
-  window.open(gweb, '_blank');
+  window.open(mapboxWeb, '_blank');
 }
 
 export interface SavedNav {

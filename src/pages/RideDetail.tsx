@@ -4,7 +4,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { resolveAvatarUrl } from "@/lib/avatarUrl";
 import { joinRidePresence, countDriversViewing } from "@/lib/koloiRealtime";
 import { useAgoraCall } from "@/hooks/useAgoraCall";
-import TripGoogleMap from "@/components/TripGoogleMap";
+import TripMapboxMap from "@/components/TripMapboxMap";
 import { useDriverTracking } from "@/hooks/useDriverTracking";
 import IncomingCallModal from "@/components/ride/IncomingCallModal";
 import ActiveCallOverlay from "@/components/ride/ActiveCallOverlay";
@@ -541,7 +541,7 @@ export default function RideDetail() {
       {/* Map — takes top portion */}
       <div className="absolute inset-0 bottom-0">
         {ride.pickup_lat != null && ride.pickup_lon != null && ride.dropoff_lat != null && ride.dropoff_lon != null ? (
-          <TripGoogleMap
+          <TripMapboxMap
             pickup={{ lat: ride.pickup_lat, lng: ride.pickup_lon! }}
             dropoff={{ lat: ride.dropoff_lat, lng: ride.dropoff_lon! }}
             driverLocation={driverLocation}

@@ -413,7 +413,7 @@ export default function AdminSystemHealth() {
           severity: noRouteRides > 20 ? 'critical' : 'high',
           title: `🗺️ ${noRouteRides} rides missing route data`,
           description: `Maps failed to generate route polyline. Users may see blank maps or no route display.`,
-          suggestion: 'Check Google Maps API key quota and billing. Verify OSRM fallback is working. Review network connectivity.',
+          suggestion: 'Check Mapbox access token, domain restrictions, and network connectivity. Verify OSRM fallback is working.',
           timestamp: now.toISOString(),
           affectedUsers: noRouteRides,
           context: 'Rider requests ride → map tries to load route → API fails → no route shown',

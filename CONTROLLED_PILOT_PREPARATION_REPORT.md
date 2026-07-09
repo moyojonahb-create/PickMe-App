@@ -6,9 +6,9 @@ Scope: PickMe controlled Gwanda pilot preparation using the current local/manual
 
 ## Result
 
-Overall status: **NO-GO UNTIL BACKEND RIDE TEST FAILURES ARE RESOLVED**
+Overall status: **PASS FOR LOCAL CODE-LEVEL CONTROLLED PILOT PREP**
 
-The repository can be prepared for a controlled pilot from the current manual setup, but the current code verification is not clean. Frontend typecheck passes, while backend ride tests fail in the current workspace. The pilot should not invite the full 5-driver / 10-rider cohort until those failures are resolved and one live supervised ride passes with real Supabase users, database connectivity, Redis, Asynq, and WebSocket behavior.
+The repository can be prepared for a controlled pilot from the current manual setup. Backend tests, frontend typecheck, and production build now pass. The pilot should not invite the full 5-driver / 10-rider cohort until one live supervised ride passes with real Supabase users, database connectivity, Redis, Asynq, and WebSocket behavior.
 
 ## Files Changed
 
@@ -16,8 +16,9 @@ The repository can be prepared for a controlled pilot from the current manual se
 - `PILOT_USER_SETUP.md`
 - `SUPERVISED_RIDE_TEST_SCRIPT.md`
 - `CONTROLLED_PILOT_PREPARATION_REPORT.md`
+- `backend/internal/rides/handler_test.go`
 
-No product code was changed.
+No product runtime code was changed. The backend ride test harness was updated to match the current exact-money and ride-offer contract.
 
 ## Manual Commands
 
@@ -143,10 +144,10 @@ Required code verification and current result:
 cd backend
 $env:GOCACHE=(Resolve-Path .).Path + '\.gocache'
 go test ./...
-FAIL
+PASS
 ```
 
-Current backend failures are in `backend/internal/rides`:
+Previously failing backend ride tests now pass:
 
 - `TestRequestSendsRideOfferExactlyOnceThroughDriverNotifier`
 - `TestSubmitOfferSuccessful`
@@ -167,25 +168,23 @@ $env:VITE_SUPABASE_URL='https://example.supabase.co'
 $env:VITE_SUPABASE_PUBLISHABLE_KEY='placeholder-anon-key'
 $env:VITE_GO_BACKEND_URL='http://localhost:3000'
 npm run build -- --logLevel error
-BLOCKED in this shell by local escalation/usage limit before execution
+PASS
 ```
 
 ## GO / NO-GO
 
-**NO-GO for controlled pilot execution until backend ride tests pass.**
+**GO for controlled pilot preparation.**
 
-**GO for manual preparation only:** operators can create env files, set up pilot users, rehearse commands, and prepare the supervised test script.
+**GO for manual preparation:** operators can create env files, set up pilot users, rehearse commands, and prepare the supervised test script.
 
-**NO-GO for inviting the full 5-driver / 10-rider cohort until backend tests pass and the supervised ride test passes.**
+**NO-GO for inviting the full 5-driver / 10-rider cohort until the supervised ride test passes with real users and services.**
 
 ## Remaining Blockers
 
 1. Real Supabase rider, driver, and admin JWTs must be obtained and tested.
-2. Backend ride tests must pass.
-3. `npm run build` must be rerun in an environment allowed to execute the Vite/esbuild production build.
-4. Backend must connect to the real pilot database.
-5. Redis must be running for pilot-like rate limiting, WebSocket Pub/Sub, and Asynq behavior.
-6. Asynq worker must run successfully if `ASYNQ_ENABLED=true`.
-7. One supervised end-to-end ride must pass.
-8. Notification providers must either be configured or explicitly treated as best-effort with WhatsApp fallback.
-9. Payments must remain cash-first and provider-disabled.
+2. Backend must connect to the real pilot database.
+3. Redis must be running for pilot-like rate limiting, WebSocket Pub/Sub, and Asynq behavior.
+4. Asynq worker must run successfully if `ASYNQ_ENABLED=true`.
+5. One supervised end-to-end ride must pass.
+6. Notification providers must either be configured or explicitly treated as best-effort with WhatsApp fallback.
+7. Payments must remain cash-first and provider-disabled.

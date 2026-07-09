@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -93,13 +94,26 @@ func (r *fakeRow) Scan(dest ...any) error {
 			}
 			*d = v
 		case *float64:
-			v, ok := r.values[i].(float64)
+			switch v := r.values[i].(type) {
+			case float64:
+				*d = v
+			case string:
+				var parsed float64
+				if _, err := fmt.Sscanf(v, "%f", &parsed); err != nil {
+					return pgx.ErrNoRows
+				}
+				*d = parsed
+			default:
+				return pgx.ErrNoRows
+			}
+		case *int:
+			v, ok := r.values[i].(int)
 			if !ok {
 				return pgx.ErrNoRows
 			}
 			*d = v
-		case *int:
-			v, ok := r.values[i].(int)
+		case *int64:
+			v, ok := r.values[i].(int64)
 			if !ok {
 				return pgx.ErrNoRows
 			}
@@ -226,6 +240,21 @@ func makeAuthRideApp(method string, path string, handler fiber.Handler, authUser
 	return app
 }
 
+func moneyArgEquals(value any, expected float64) bool {
+	switch v := value.(type) {
+	case float64:
+		return v == expected
+	case string:
+		var parsed float64
+		if _, err := fmt.Sscanf(v, "%f", &parsed); err != nil {
+			return false
+		}
+		return parsed == expected
+	default:
+		return false
+	}
+}
+
 func readResponseBody(t *testing.T, resp *http.Response) []byte {
 	t.Helper()
 	body, err := io.ReadAll(resp.Body)
@@ -243,7 +272,7 @@ func TestRequestSendsRideOfferExactlyOnceThroughDriverNotifier(t *testing.T) {
 			if !strings.Contains(sql, "INSERT INTO public.rides") {
 				return &fakeRow{err: pgx.ErrNoRows}
 			}
-			if args[0] != "rider-1" || args[1] != "pickup" || args[2] != "dropoff" || args[3] != 10.5 || args[4] != "cash" {
+			if args[0] != "rider-1" || args[1] != "pickup" || args[2] != "dropoff" || !moneyArgEquals(args[3], 10.5) || args[4] != "cash" {
 				t.Fatalf("unexpected ride request insert args: %#v", args)
 			}
 			return &fakeRow{values: []any{"ride-1", now}}
@@ -286,6 +315,9 @@ func TestSubmitOfferSuccessful(t *testing.T) {
 	db := &fakeDB{
 		queryRowFn: func(ctx context.Context, sql string, args ...any) pgx.Row {
 			if strings.Contains(sql, "SELECT ride_status") {
+				if strings.Contains(sql, "payment_method") {
+					return &fakeRow{values: []any{"requested", "cash"}}
+				}
 				return &fakeRow{values: []any{"requested"}}
 			}
 			if strings.Contains(sql, "INSERT INTO public.ride_offers") {
@@ -350,7 +382,7 @@ func TestAcceptOfferSuccessful(t *testing.T) {
 			if strings.Contains(sql, "FROM public.ride_offers") {
 				return &fakeRow{values: []any{"offer-1", "ride-1", "driver-1", "pending", time.Now().Add(time.Minute)}}
 			}
-			return &fakeRow{values: []any{"rider-1", "requested"}, err: nil}
+			return &fakeRow{values: []any{"rider-1", "requested", "cash"}, err: nil}
 		},
 		execFn: func(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error) {
 			return pgconn.NewCommandTag("UPDATE 1"), nil
@@ -417,7 +449,7 @@ func TestAcceptOfferDuplicateAcceptanceAttempt(t *testing.T) {
 			if strings.Contains(sql, "FROM public.ride_offers") {
 				return &fakeRow{values: []any{"offer-1", "ride-1", "driver-1", "pending", time.Now().Add(time.Minute)}}
 			}
-			return &fakeRow{values: []any{"rider-1", "requested"}}
+			return &fakeRow{values: []any{"rider-1", "requested", "cash"}}
 		},
 		execFn: func(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error) {
 			if strings.Contains(sql, "UPDATE public.rides") {
@@ -446,7 +478,7 @@ func TestAcceptOfferRaceConditionReturnsConflict(t *testing.T) {
 			if strings.Contains(sql, "FROM public.ride_offers") {
 				return &fakeRow{values: []any{"offer-1", "ride-1", "driver-1", "pending", time.Now().Add(time.Minute)}}
 			}
-			return &fakeRow{values: []any{"rider-1", "requested"}}
+			return &fakeRow{values: []any{"rider-1", "requested", "cash"}}
 		},
 		execFn: func(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error) {
 			callCount++
@@ -524,7 +556,7 @@ func TestRiderCannotAcceptOfferForAnotherRidersRide(t *testing.T) {
 			if strings.Contains(sql, "FROM public.ride_offers") {
 				return &fakeRow{values: []any{"offer-1", "ride-1", "driver-1", "pending", time.Now().Add(time.Minute)}}
 			}
-			return &fakeRow{values: []any{"other-rider", "requested"}}
+			return &fakeRow{values: []any{"other-rider", "requested", "cash"}}
 		},
 		execFn: func(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error) {
 			return pgconn.NewCommandTag("UPDATE 0"), nil

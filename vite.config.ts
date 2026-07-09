@@ -52,10 +52,9 @@ export default defineConfig(({ mode }) => {
     'import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY': JSON.stringify(
       requiredEnv(env, 'VITE_SUPABASE_PUBLISHABLE_KEY')
     ),
-    // Google Maps key MUST come from env (with HTTP-referrer restrictions).
-    // Do NOT inline a fallback — that would leak the key into every public bundle.
-    'import.meta.env.VITE_GOOGLE_MAPS_API_KEY': JSON.stringify(
-      env.VITE_GOOGLE_MAPS_API_KEY || ''
+    // Mapbox uses a public browser token. Keep it in env so builds never carry stale keys.
+    'import.meta.env.VITE_MAPBOX_ACCESS_TOKEN': JSON.stringify(
+      env.VITE_MAPBOX_ACCESS_TOKEN || ''
     ),
   },
   resolve: {
@@ -84,3 +83,5 @@ export default defineConfig(({ mode }) => {
   },
   });
 });
+
+

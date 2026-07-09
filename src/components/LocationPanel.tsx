@@ -7,7 +7,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { SectionHeader } from '@/components/ui/section-header';
 import { useLandmarks, formatDistance, type Landmark } from '@/hooks/useLandmarks';
 import { cn } from '@/lib/utils';
-import MapGoogle from '@/components/MapGoogle';
+import MapboxMap from '@/components/MapboxMap';
 import { LandmarkChips } from '@/components/LandmarkChips';
 import ArrivalIndicator from '@/components/ArrivalIndicator';
 
@@ -191,7 +191,7 @@ const LocationPanel = ({
     <GlassCard className={cn("rounded-xl overflow-hidden flex flex-col", className)}>
       {/* Map Section */}
       <div className="relative flex-shrink-0">
-        <MapGoogle
+        <MapboxMap
           pickup={pickupLocation}
           dropoff={dropoffLocation}
           routeGeometry={routeGeometry}

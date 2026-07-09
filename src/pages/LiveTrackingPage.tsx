@@ -3,7 +3,7 @@ import { useParams } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { MapPin, Navigation, Clock, Car, Shield, Phone, MessageCircle, AlertCircle, Radio, ChevronRight } from "lucide-react";
 import { motion } from "framer-motion";
-import TripGoogleMap from "@/components/TripGoogleMap";
+import TripMapboxMap from "@/components/TripMapboxMap";
 
 interface RideInfo {
   id: string;
@@ -185,7 +185,7 @@ export default function LiveTrackingPage() {
     <div className="relative h-[100dvh] w-full overflow-hidden bg-background">
       {/* Map — takes most of screen */}
       <div className="absolute inset-0 bottom-0">
-        <TripGoogleMap
+        <TripMapboxMap
           pickup={{ lat: ride.pickup_lat, lng: ride.pickup_lon }}
           dropoff={{ lat: ride.dropoff_lat, lng: ride.dropoff_lon }}
           driverLocation={driverLoc ? { lat: driverLoc.latitude, lng: driverLoc.longitude } : null}

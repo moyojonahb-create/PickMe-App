@@ -9,7 +9,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 import { calculateRecommendedFare } from '@/hooks/useTownPricing';
 import { usePricingSettings } from '@/hooks/usePricingSettings';
-import { useGoogleRoute } from '@/hooks/useGoogleRoute';
+import { useRouteEstimate } from '@/hooks/useRouteEstimate';
 import { requestRide } from '@/lib/requestRide';
 
 interface HeroSectionProps {
@@ -31,8 +31,7 @@ const HeroSection = ({ onLoginClick }: HeroSectionProps) => {
   const [pickupCoords, setPickupCoords] = useState<{ lng: number; lat: number } | null>(null);
   const [dropoffCoords, setDropoffCoords] = useState<{ lng: number; lat: number } | null>(null);
 
-  // Google Routes calculation (traffic-aware)
-  const { route: googleRoute, loading: routeLoading, error: routeError } = useGoogleRoute(
+  const { route: routeEstimate, loading: routeLoading, error: routeError } = useRouteEstimate(
     pickupCoords ? { lat: pickupCoords.lat, lng: pickupCoords.lng } : null,
     dropoffCoords ? { lat: dropoffCoords.lat, lng: dropoffCoords.lng } : null
   );
@@ -78,14 +77,13 @@ const HeroSection = ({ onLoginClick }: HeroSectionProps) => {
     setDropoffCoords({ lng: location.lng, lat: location.lat });
   };
 
-  // Route info from Google Routes (or fallback)
-  const routeInfo = googleRoute ? {
-    distance: googleRoute.distanceKm,
-    duration: googleRoute.durationMinutes,
-    durationInTraffic: googleRoute.durationInTrafficMinutes,
-    geometry: googleRoute.geometry,
-    isEstimate: googleRoute.isEstimate,
-    isTrafficAware: googleRoute.isTrafficAware,
+  const routeInfo = routeEstimate ? {
+    distance: routeEstimate.distanceKm,
+    duration: routeEstimate.durationMinutes,
+    durationInTraffic: routeEstimate.durationInTrafficMinutes,
+    geometry: routeEstimate.geometry,
+    isEstimate: routeEstimate.isEstimate,
+    isTrafficAware: routeEstimate.isTrafficAware,
   } : null;
 
   // Calculate fare using USD town pricing
@@ -322,7 +320,7 @@ const HeroSection = ({ onLoginClick }: HeroSectionProps) => {
               {routeError && pickupCoords && dropoffCoords && !routeInfo?.isTrafficAware && (
                 <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-center gap-2 text-sm text-amber-700">
                   <AlertCircle className="w-4 h-4 shrink-0" />
-                  <span>Using estimated distance. Google routing unavailable.</span>
+                  <span>Using estimated distance. Live routing unavailable.</span>
                 </div>
               )}
 

@@ -82,7 +82,7 @@ export default function EmergencyButton({ rideId, pickupAddress, dropoffAddress,
         navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 5000 })
       );
       const { latitude, longitude } = pos.coords;
-      const mapsLink = `https://maps.google.com/maps?q=${latitude},${longitude}`;
+      const mapsLink = `https://www.mapbox.com/directions?destination=${longitude},${latitude}`;
       const text = [
         `🆘 EMERGENCY — I need help!`,
         driverName ? `Driver: ${driverName}` : '',

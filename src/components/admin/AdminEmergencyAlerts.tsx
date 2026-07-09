@@ -40,7 +40,7 @@ export default function AdminEmergencyAlerts() {
           const alert = payload.new as Record<string, unknown>;
           const lat = alert.latitude as number;
           const lng = alert.longitude as number;
-          const mapsLink = lat && lng ? `https://maps.google.com/maps?q=${lat},${lng}` : null;
+          const mapsLink = lat && lng ? `https://www.mapbox.com/directions?destination=${lng},${lat}` : null;
 
           // Urgent toast that stays visible
           toast.error('🆘 EMERGENCY ALERT', {

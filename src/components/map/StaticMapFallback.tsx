@@ -17,7 +17,7 @@ interface StaticMapFallbackProps {
 }
 
 /**
- * Graceful fallback shown when Google Maps fails to load.
+ * Graceful fallback shown when Mapbox fails to load.
  * Renders an OpenStreetMap static tile (no API key required) plus a
  * troubleshooting card with a retry button. Works on any device.
  */
@@ -55,7 +55,7 @@ export default function StaticMapFallback({
               <AlertTriangle className="w-5 h-5" />
             </div>
             <div className="min-w-0">
-              <p className="font-bold text-foreground text-sm">Google Maps unavailable</p>
+              <p className="font-bold text-foreground text-sm">Mapbox unavailable</p>
               <p className="text-xs text-muted-foreground mt-0.5">
                 Showing a basic OpenStreetMap view instead.
               </p>
@@ -71,9 +71,9 @@ export default function StaticMapFallback({
           <div className="text-[11px] text-muted-foreground space-y-1">
             <p className="font-semibold text-foreground">Common fixes:</p>
             <ul className="list-disc list-inside space-y-0.5">
-              <li>Enable billing in Google Cloud</li>
-              <li>Enable Maps JavaScript, Places &amp; Directions APIs</li>
-              <li>Allow this domain in API key referrer restrictions</li>
+              <li>Set VITE_MAPBOX_ACCESS_TOKEN</li>
+              <li>Restart the app after changing frontend env</li>
+              <li>Allow this domain in token URL restrictions</li>
             </ul>
           </div>
 
@@ -84,13 +84,13 @@ export default function StaticMapFallback({
               </Button>
             )}
             <a
-              href="https://console.cloud.google.com/google/maps-apis/overview"
+              href="https://account.mapbox.com/access-tokens/"
               target="_blank"
               rel="noreferrer"
               className="flex-1"
             >
               <Button size="sm" variant="default" className="w-full">
-                <ExternalLink className="w-3.5 h-3.5 mr-1.5" /> Cloud Console
+                <ExternalLink className="w-3.5 h-3.5 mr-1.5" /> Mapbox
               </Button>
             </a>
           </div>

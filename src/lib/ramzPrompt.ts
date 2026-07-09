@@ -62,7 +62,7 @@ function rootCauseFor(f: RamzFinding): string {
     case "stale-driver-locations":
       return "Driver app stopped emitting GPS pings (background-fetch killed, weak signal, or app crash) but is_online was never reset.";
     case "map-route-failures":
-      return "Google Maps Directions request failed (quota / billing / network) and the OSRM fallback either errored or wasn't invoked.";
+      return "Mapbox route display failed (token / network / domain restriction) and the OSRM fallback either errored or wasn't invoked.";
     case "call-failures":
       return "Agora token issuance failed or the WebRTC handshake never completed (likely AGORA_APP_ID/CERT misconfig or NAT traversal).";
     case "stuck-accepted-rides":

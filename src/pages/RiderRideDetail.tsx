@@ -23,8 +23,8 @@ import {
 } from "@/lib/offerHelpers";
 import { RideCommunication } from "@/components/ride/RideCommunication";
 import OffersModal from "@/components/OffersModal";
-import MapGoogle from "@/components/MapGoogle";
-import TripGoogleMap from "@/components/TripGoogleMap";
+import MapboxMap from "@/components/MapboxMap";
+import TripMapboxMap from "@/components/TripMapboxMap";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { ArrowLeft, MapPin, Users, Eye, Minus, Plus, MessageCircle, Phone, Clock, Star, Shield, Navigation, Car, ChevronUp, CheckCircle2 } from "lucide-react";
@@ -415,7 +415,7 @@ export default function RiderRideDetail() {
       {/* ═══ FULL-SCREEN MAP ═══ */}
       <div className="absolute inset-0">
         {pickupCoords && isAccepted ? (
-          <TripGoogleMap
+          <TripMapboxMap
             driverLocation={driverLocation}
             pickup={pickupCoords}
             dropoff={dropoffCoords!}
@@ -424,7 +424,7 @@ export default function RiderRideDetail() {
             className="w-full h-full"
           />
         ) : pickupCoords ? (
-          <MapGoogle
+          <MapboxMap
             pickup={pickupCoords}
             dropoff={dropoffCoords!}
             driverLocation={driverLocation}
@@ -434,7 +434,7 @@ export default function RiderRideDetail() {
             height="100%"
           />
         ) : (
-          <MapGoogle
+          <MapboxMap
             className="w-full h-full"
             height="100%"
             defaultCenter={{ lat: -20.9408, lng: 29.0147 }}

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/hibiken/asynq"
@@ -147,6 +148,12 @@ func (r *Runtime) Stats(ctx context.Context) (Stats, error) {
 	for _, queue := range Queues {
 		info, err := r.inspector.GetQueueInfo(queue)
 		if err != nil {
+			if strings.Contains(err.Error(), "queue") && strings.Contains(err.Error(), "does not exist") {
+				stat := QueueStats{Queue: queue}
+				recordQueueStats(stat)
+				stats.Queues = append(stats.Queues, stat)
+				continue
+			}
 			return stats, err
 		}
 		stat := QueueStats{

@@ -417,7 +417,7 @@ export const ZIMBABWE_NATIONAL: TownConfig = {
 };
 
 // Default town fallback
-export const DEFAULT_TOWN = TOWNS.find(t => t.id === 'harare') || TOWNS[0];
+export const DEFAULT_TOWN = TOWNS.find(t => t.id === 'gwanda') || TOWNS[0];
 
 // Haversine distance in km
 export const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
