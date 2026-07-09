@@ -100,8 +100,6 @@ export const useWallet = () => {
     transactions,
     loading,
     error,
-    deposit,
-    withdraw,
     refresh: fetchWallet,
     balance: wallet ? Number(wallet.balance) : 0,
   };
