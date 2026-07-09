@@ -50,7 +50,7 @@ const PAYMENT_PROVIDERS: { key: string; label: string; sub: string; bg: string; 
 export default function RiderWalletPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { balance, transactions, deposit, refresh: refreshWallet, loading: walletLoading } = useWallet();
+  const { balance, transactions, refresh: refreshWallet, loading: walletLoading } = useWallet();
   const { hasPin, loading: pinLoading, setPin, verifyPin, refresh: refreshPin } = useWalletPin();
   const { full_name, pickme_account } = usePickmeAccount();
 
@@ -447,7 +447,6 @@ export default function RiderWalletPage() {
       <DepositModal
         isOpen={showDeposit}
         onClose={() => { setShowDeposit(false); handleRefresh(); }}
-        onDeposit={deposit}
         currentBalance={balance}
       />
 

@@ -13,9 +13,9 @@ import cardLogo from '@/assets/payment-card.png';
 interface DepositModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onDeposit: (amount: number, description?: string) => Promise<{ error: string | null }>;
   currentBalance: number;
 }
+
 
 const PAYMENT_METHODS = [
   { id: 'ecocash', name: 'EcoCash', color: 'bg-green-500', merchant: '+263 778 553 169', logo: ecocashLogo, featured: true },

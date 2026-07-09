@@ -4,8 +4,6 @@ import {
   getAdminEarnings,
   getWalletMe,
   getWalletTransactions,
-  walletDeposit,
-  walletWithdraw,
 } from '@/lib/walletApi';
 
 interface Wallet {
@@ -67,31 +65,6 @@ export const useWallet = () => {
     }
   }, [user]);
 
-  const deposit = async (amount: number, description?: string) => {
-    if (!wallet || !user || amount <= 0) return { error: 'Invalid deposit' };
-
-    try {
-      await walletDeposit({ amount, payment_method: 'manual', reference: description });
-      await fetchWallet();
-      return { error: null };
-    } catch (e: unknown) {
-      return { error: (e as Error).message };
-    }
-  };
-
-  const withdraw = async (amount: number, description?: string) => {
-    if (!wallet || !user || amount <= 0) return { error: 'Invalid withdrawal' };
-    if (Number(wallet.balance) < amount) return { error: 'Insufficient balance' };
-
-    try {
-      await walletWithdraw({ amount, method: 'ecocash', destination: description || 'Wallet withdrawal' });
-      await fetchWallet();
-      return { error: null };
-    } catch (e: unknown) {
-      return { error: (e as Error).message };
-    }
-  };
-
   useEffect(() => {
     fetchWallet();
   }, [fetchWallet]);
@@ -101,8 +74,6 @@ export const useWallet = () => {
     transactions,
     loading,
     error,
-    deposit,
-    withdraw,
     refresh: fetchWallet,
     balance: wallet ? Number(wallet.balance) : 0,
   };
