@@ -13,10 +13,10 @@ interface CancellationPolicyProps {
   onCancelled: () => void;
 }
 
-const FREE_CANCEL_WINDOW_MS = 3 * 60 * 1000; // 3 minutes
-const CANCELLATION_FEE = 1.00; // $1.00
+const FREE_CANCEL_WINDOW_MS = 3 * 60 * 1000;
+const CANCELLATION_FEE = 1.00;
 
-export default function CancellationPolicy({ rideId, rideStatus, driverAcceptedAt, onCancelled }: CancellationPolicyProps) {
+export default function CancellationPolicy({ rideId, driverAcceptedAt, onCancelled }: CancellationPolicyProps) {
   const { user } = useAuth();
   const [showConfirm, setShowConfirm] = useState(false);
   const [cancelling, setCancelling] = useState(false);
@@ -28,7 +28,7 @@ export default function CancellationPolicy({ rideId, rideStatus, driverAcceptedA
       isFree: elapsed < FREE_CANCEL_WINDOW_MS,
       elapsedMinutes: Math.floor(elapsed / 60000),
     };
-  }, [driverAcceptedAt, showConfirm]); // recalc when modal opens
+  }, [driverAcceptedAt, showConfirm]);
 
   const handleCancel = async () => {
     if (!user || cancelling) return;
@@ -91,11 +91,10 @@ export default function CancellationPolicy({ rideId, rideStatus, driverAcceptedA
                 </div>
               </div>
 
-              {/* Fee info */}
               <div className={`rounded-2xl p-4 ${isFree ? "bg-accent/10 border border-accent/20" : "bg-destructive/5 border-2 border-destructive/20"}`}>
                 {isFree ? (
                   <div className="text-center">
-                    <p className="text-sm font-bold text-accent">✓ Cancel for free</p>
+                    <p className="text-sm font-bold text-accent">Cancel for free</p>
                     <p className="text-xs text-muted-foreground mt-1">
                       Free cancellation within 3 minutes of driver acceptance
                     </p>
@@ -118,7 +117,7 @@ export default function CancellationPolicy({ rideId, rideStatus, driverAcceptedA
                   onClick={handleCancel}
                   disabled={cancelling}
                 >
-                  {cancelling ? "Cancelling…" : isFree ? "Cancel Ride" : `Cancel & Pay $${CANCELLATION_FEE.toFixed(2)}`}
+                  {cancelling ? "Cancelling..." : isFree ? "Cancel Ride" : `Cancel & Pay $${CANCELLATION_FEE.toFixed(2)}`}
                 </Button>
                 <Button
                   variant="outline"

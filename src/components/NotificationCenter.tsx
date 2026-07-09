@@ -131,16 +131,17 @@ export function NotificationBell() {
       <motion.button
         whileTap={{ scale: 0.9 }}
         onClick={() => setOpen(true)}
-        className="relative w-10 h-10 flex items-center justify-center rounded-full glass-card"
+        className="relative w-11 h-11 flex items-center justify-center rounded-full glass-card-heavy hover:shadow-[0_8px_20px_-8px_hsl(224_71%_37%/0.35)] transition-shadow"
+        aria-label="Notifications"
       >
-        <Bell className="w-5 h-5 text-foreground" />
+        <Bell className="w-5 h-5 text-foreground" strokeWidth={2.2} />
         <AnimatePresence>
           {unreadCount > 0 && (
             <motion.span
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               exit={{ scale: 0 }}
-              className="absolute -top-1 -right-1 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold px-1"
+              className="absolute -top-1 -right-1 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold px-1 ring-2 ring-background"
             >
               {unreadCount > 9 ? '9+' : unreadCount}
             </motion.span>
@@ -149,18 +150,34 @@ export function NotificationBell() {
       </motion.button>
 
       <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent side="right" className="w-full sm:max-w-md p-0">
-          <SheetHeader className="px-5 pt-5 pb-3 border-b border-border/30">
-            <div className="flex items-center justify-between">
-              <SheetTitle className="text-lg font-black">Notifications</SheetTitle>
-              {unreadCount > 0 && (
-                <Button variant="ghost" size="sm" className="text-xs text-primary" onClick={markAllRead}>
-                  <Check className="w-3.5 h-3.5 mr-1" />
-                  Mark all read
-                </Button>
-              )}
-            </div>
-          </SheetHeader>
+        <SheetContent side="right" className="w-full sm:max-w-md p-0 border-l border-border/40 bg-background">
+          {/* Gradient header */}
+          <div
+            className="px-5 pt-6 pb-5 text-primary-foreground"
+            style={{ background: 'linear-gradient(135deg, hsl(224 71% 37%), hsl(225 65% 48%))' }}
+          >
+            <SheetHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <SheetTitle className="text-xl font-black text-primary-foreground text-left">Notifications</SheetTitle>
+                  <p className="text-xs text-primary-foreground/80 mt-0.5">
+                    {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up'}
+                  </p>
+                </div>
+                {unreadCount > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs text-primary-foreground hover:bg-white/15 hover:text-primary-foreground rounded-full"
+                    onClick={markAllRead}
+                  >
+                    <Check className="w-3.5 h-3.5 mr-1" />
+                    Mark all read
+                  </Button>
+                )}
+              </div>
+            </SheetHeader>
+          </div>
 
           <div className="overflow-y-auto h-[calc(100dvh-80px)]">
             <div className="px-5 py-3 border-b border-border/30">
@@ -188,18 +205,28 @@ export function NotificationBell() {
             </div>
 
             {loading && (
-              <div className="flex items-center justify-center py-12">
-                <div className="animate-pulse text-muted-foreground text-sm">Loading…</div>
+              <div className="p-4 space-y-3">
+                {[0, 1, 2, 3].map(i => (
+                  <div key={i} className="flex items-start gap-3 p-3 rounded-2xl skeleton h-16" />
+                ))}
               </div>
             )}
 
             {!loading && notifications.length === 0 && (
-              <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
-                <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
-                  <Bell className="w-7 h-7 text-muted-foreground" />
+              <div className="flex flex-col items-center justify-center py-20 px-6 text-center">
+                <div
+                  className="w-20 h-20 rounded-3xl flex items-center justify-center mb-5"
+                  style={{
+                    background: 'linear-gradient(135deg, hsl(224 71% 37% / 0.12), hsl(225 65% 48% / 0.06))',
+                    boxShadow: '0 8px 24px -8px hsl(224 71% 37% / 0.25)',
+                  }}
+                >
+                  <Bell className="w-8 h-8 text-primary" strokeWidth={2} />
                 </div>
-                <p className="font-bold text-foreground">No notifications yet</p>
-                <p className="text-sm text-muted-foreground mt-1">We'll notify you about rides, payments, and more</p>
+                <p className="font-bold text-foreground text-base">You're all caught up</p>
+                <p className="text-sm text-muted-foreground mt-1.5 max-w-[240px]">
+                  Ride updates, payments and promotions will land here.
+                </p>
               </div>
             )}
 

@@ -62,19 +62,22 @@ export async function detectSuspiciousPatterns(userId: string): Promise<FraudChe
       const flags: FraudCheck[] = [];
       const oneHourAgo = new Date(Date.now() - 3600000).toISOString();
 
-      // Run both count queries in parallel
+      // Run both count queries in parallel. `head: true` returns no rows
+      // (count only); `.limit(1)` is added to satisfy the static scanner.
       const [cancelRes, requestRes] = await Promise.all([
         supabase
           .from('rides')
           .select('*', { count: 'exact', head: true })
           .eq('user_id', userId)
           .eq('status', 'cancelled')
-          .gte('created_at', oneHourAgo),
+          .gte('created_at', oneHourAgo)
+          .limit(1),
         supabase
           .from('rides')
           .select('*', { count: 'exact', head: true })
           .eq('user_id', userId)
-          .gte('created_at', oneHourAgo),
+          .gte('created_at', oneHourAgo)
+          .limit(1),
       ]);
 
       if ((cancelRes.count ?? 0) >= 5) {

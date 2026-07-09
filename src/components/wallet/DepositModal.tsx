@@ -110,7 +110,7 @@ export default function DepositModal({ isOpen, onClose, currentBalance }: Deposi
         proofPath = path;
       }
 
-      await walletDeposit({
+      const res = await walletDeposit({
         amount,
         wallet_type: 'rider',
         payment_method: selectedMethod,
@@ -118,6 +118,7 @@ export default function DepositModal({ isOpen, onClose, currentBalance }: Deposi
         reference: paymentCode,
         proof_path: proofPath,
       });
+      if (!res?.ok) throw new Error(res?.reason || 'Failed to submit deposit');
 
       setStep('done');
     } catch (e: unknown) {

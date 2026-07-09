@@ -372,18 +372,25 @@ function QuickAction({ icon, label, sublabel, sublabelLoading, onClick, accent }
   return (
     <button
       onClick={() => { haptic('light'); onClick(); }}
-      className={`flex flex-col items-center justify-center gap-1 py-2.5 px-1.5 rounded-xl active:scale-95 transition-all shadow-sm ${
+      className={`relative flex flex-col items-center justify-center gap-1 py-3 px-1.5 rounded-2xl active:scale-95 transition-all overflow-hidden group ${
         accent
-          ? 'bg-yellow-500 text-white ring-2 ring-yellow-300'
-          : 'bg-yellow-400 text-white hover:bg-yellow-500'
+          ? 'text-primary-foreground shadow-[0_10px_28px_-8px_hsl(224_71%_37%/0.45)]'
+          : 'glass-card text-foreground border border-primary/10'
       }`}
+      style={accent ? { background: 'linear-gradient(135deg, hsl(var(--pickme-blue)) 0%, hsl(var(--pickme-blue-dark)) 100%)' } : undefined}
     >
-      <span className="text-white drop-shadow-sm">{icon}</span>
-      <span className="text-[11px] font-bold leading-tight text-white drop-shadow-sm">{label}</span>
+      {accent && (
+        <>
+          <div className="absolute -top-6 -right-6 w-16 h-16 rounded-full bg-white/15 blur-2xl" aria-hidden />
+          <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-destructive shadow-[0_0_6px_hsl(0_84%_60%/0.8)]" aria-hidden />
+        </>
+      )}
+      <span className={`relative ${accent ? 'text-primary-foreground' : 'text-primary'}`}>{icon}</span>
+      <span className={`relative text-[11px] font-bold leading-tight ${accent ? 'text-primary-foreground' : 'text-foreground'}`}>{label}</span>
       {sublabelLoading ? (
-        <Skeleton className="h-2.5 w-10 bg-white/40" />
+        <Skeleton className={`h-2.5 w-10 ${accent ? 'bg-white/30' : 'bg-primary/10'}`} />
       ) : sublabel ? (
-        <span className="text-[9px] leading-tight text-white/90 font-medium">
+        <span className={`relative text-[9px] leading-tight font-medium ${accent ? 'text-primary-foreground/85' : 'text-muted-foreground'}`}>
           {sublabel}
         </span>
       ) : null}

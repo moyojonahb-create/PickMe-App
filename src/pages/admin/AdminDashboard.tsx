@@ -231,31 +231,42 @@ const AdminDashboard = () => {
     <AdminGuard>
       <AdminLayout>
         <div className="space-y-6">
-          {/* Header */}
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-black text-foreground">Dashboard</h1>
-              <p className="text-sm text-muted-foreground">Live operations overview</p>
-            </div>
-            <div className="flex items-center gap-3">
-              <Button
-                variant="default"
-                size="sm"
-                className="font-bold"
-                onClick={() => setEarningsSheetOpen(true)}
-              >
-                <Wallet className="w-4 h-4 mr-2" />
-                ${totalPlatformFees.toFixed(2)}
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => { refreshAll(); refreshEarnings(); }} disabled={loading}>
-                <RefreshCw className={`w-4 h-4 mr-1 ${loading ? 'animate-spin' : ''}`} />
-                Refresh
-              </Button>
+          {/* Header — gradient hero */}
+          <div
+            className="relative overflow-hidden rounded-3xl px-6 py-5 text-primary-foreground"
+            style={{ background: 'linear-gradient(135deg, hsl(224 71% 37%), hsl(225 65% 48%))' }}
+          >
+            <div className="absolute -top-16 -right-10 w-56 h-56 rounded-full bg-white/10 blur-3xl pointer-events-none" />
+            <div className="relative flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-widest text-primary-foreground/80">Admin</p>
+                <h1 className="text-3xl font-black mt-0.5">Dashboard</h1>
+                <p className="text-sm text-primary-foreground/85 mt-1">Live operations overview</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  className="font-bold bg-white/15 hover:bg-white/25 text-primary-foreground border-0 backdrop-blur rounded-full h-10 px-4"
+                  onClick={() => setEarningsSheetOpen(true)}
+                >
+                  <Wallet className="w-4 h-4 mr-2" />
+                  ${totalPlatformFees.toFixed(2)}
+                </Button>
+                <Button
+                  size="sm"
+                  className="bg-white/15 hover:bg-white/25 text-primary-foreground border-0 backdrop-blur rounded-full h-10 px-4"
+                  onClick={() => { refreshAll(); refreshEarnings(); }}
+                  disabled={loading}
+                >
+                  <RefreshCw className={`w-4 h-4 mr-1 ${loading ? 'animate-spin' : ''}`} />
+                  Refresh
+                </Button>
+              </div>
             </div>
           </div>
 
           {error && (
-            <div className="bg-destructive/10 border border-destructive/20 text-destructive rounded-xl p-4 font-bold text-sm">
+            <div className="bg-destructive/10 border border-destructive/20 text-destructive rounded-2xl p-4 font-bold text-sm">
               {error}
             </div>
           )}
@@ -297,6 +308,7 @@ const AdminDashboard = () => {
             })}
           </div>
 
+
           {/* Commission Revenue Summary */}
           {(() => {
             const now = new Date();
@@ -334,6 +346,7 @@ const AdminDashboard = () => {
                       <p className="text-[10px] text-muted-foreground">{countTrips(monthEarnings)} trips</p>
                     </div>
                   </div>
+
                 </CardContent>
               </Card>
             );

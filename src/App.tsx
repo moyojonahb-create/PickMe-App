@@ -54,6 +54,7 @@ const AdminPromos = lazy(() => import("./pages/admin/AdminPromos"));
 const AdminRatePage = lazy(() => import("./pages/admin/AdminRatePage"));
 const AdminReports = lazy(() => import("./pages/admin/AdminReports"));
 const AdminTrips = lazy(() => import("./pages/admin/AdminTrips"));
+const AdminMapsQA = lazy(() => import("./pages/admin/AdminMapsQA"));
 const AdminDepositsPage = lazy(() => import("./pages/admin/AdminDepositsPage"));
 const AdminRiderDepositsPage = lazy(() => import("./pages/admin/AdminRiderDepositsPage"));
 const AdminSettings = lazy(() => import("./pages/admin/AdminSettings"));
@@ -67,9 +68,6 @@ const AdminWalletDashboard = lazy(() => import("./pages/admin/AdminWalletDashboa
 const AdminRlsViewer = lazy(() => import("./pages/admin/AdminRlsViewer"));
 const StudentVerificationPage = lazy(() => import("./pages/StudentVerificationPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
-const DriverRequestsScreen = lazy(() => import("./pages/negotiate/DriverRequestsScreen"));
-const RiderOffersScreen = lazy(() => import("./pages/negotiate/RiderOffersScreen"));
-const RiderRequestScreen = lazy(() => import("./pages/negotiate/RiderRequestScreen"));
 const LiveTrackingPage = lazy(() => import("./pages/LiveTrackingPage"));
 
 import PageSkeleton from "./components/PageSkeleton";
@@ -160,7 +158,7 @@ export default function App() {
           <Route path="/mapp/*" element={<Navigate to="/ride" replace />} />
 
           <Route path="/ride" element={<SuspenseWrap variant="ride"><AuthGuard><Ride /></AuthGuard></SuspenseWrap>} />
-          <Route path="/ride/:rideId" element={<SuspenseWrap><AuthGuard><RideDetail /></AuthGuard></SuspenseWrap>} />
+          <Route path="/ride/:rideId" element={<SuspenseWrap><AuthGuard><RiderRideDetail /></AuthGuard></SuspenseWrap>} />
           <Route path="/rider/ride/:rideId" element={<SuspenseWrap><AuthGuard><RiderRideDetail /></AuthGuard></SuspenseWrap>} />
           <Route path="/history" element={<SuspenseWrap><AuthGuard><RideHistory /></AuthGuard></SuspenseWrap>} />
           <Route path="/ride-history" element={<Navigate to="/history" replace />} />
@@ -177,10 +175,10 @@ export default function App() {
           <Route path="/driver/leaderboard" element={<SuspenseWrap><AuthGuard><DriverLeaderboard /></AuthGuard></SuspenseWrap>} />
           <Route path="/driver/wallet" element={<SuspenseWrap variant="wallet"><AuthGuard><DriverWalletPage /></AuthGuard></SuspenseWrap>} />
 
-          {/* Negotiation screens */}
-          <Route path="/negotiate/request" element={<SuspenseWrap><AuthGuard><RiderRequestScreen /></AuthGuard></SuspenseWrap>} />
-          <Route path="/negotiate/offers/:requestId" element={<SuspenseWrap><AuthGuard><RiderOffersScreen /></AuthGuard></SuspenseWrap>} />
-          <Route path="/negotiate/driver-requests" element={<SuspenseWrap><AuthGuard><DriverRequestsScreen /></AuthGuard></SuspenseWrap>} />
+          {/* Legacy negotiation screens are retired; Go Core V1 owns offers/lifecycle. */}
+          <Route path="/negotiate/request" element={<Navigate to="/ride" replace />} />
+          <Route path="/negotiate/offers/:requestId" element={<Navigate to="/ride" replace />} />
+          <Route path="/negotiate/driver-requests" element={<Navigate to="/driver/dashboard" replace />} />
 
           {/* Public live trip tracking */}
           <Route path="/track/:tripId" element={<SuspenseWrap><LiveTrackingPage /></SuspenseWrap>} />
@@ -215,6 +213,7 @@ export default function App() {
           <Route path="/admin/withdrawals" element={<SuspenseWrap variant="admin"><AdminGuard><AdminWithdrawalsPage /></AdminGuard></SuspenseWrap>} />
           <Route path="/admin/wallet" element={<SuspenseWrap variant="admin"><AdminGuard><AdminWalletDashboard /></AdminGuard></SuspenseWrap>} />
           <Route path="/admin/rls" element={<SuspenseWrap variant="admin"><AdminGuard><AdminRlsViewer /></AdminGuard></SuspenseWrap>} />
+          <Route path="/admin/maps-qa" element={<SuspenseWrap variant="admin"><AdminGuard><AdminMapsQA /></AdminGuard></SuspenseWrap>} />
           <Route path="/student-verification" element={<SuspenseWrap><AuthGuard><StudentVerificationPage /></AuthGuard></SuspenseWrap>} />
 
           <Route path="*" element={<MarketingShell><NotFound /></MarketingShell>} />

@@ -1,4 +1,4 @@
-import { MessageSquare, Users, Phone, Shield, Car, AlertTriangle, Lock, Send, Sparkles, PhoneCall, CircleAlert, ArrowRight } from 'lucide-react';
+import { MessageSquare, Users, Phone, Shield, Car, AlertTriangle, Lock, Send, Sparkles, PhoneCall, CircleAlert, ChevronRight } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import PickMeLogo from '@/components/PickMeLogo';
 import BottomNavBar from '@/components/BottomNavBar';
@@ -32,19 +32,38 @@ export default function SafetyPage() {
   };
 
   return (
-    <div className={`min-h-[100dvh] bg-background flex flex-col ${isMapp ? '' : ''}`}>
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-        {!isMapp && (
-          <button onClick={() => navigate(-1)} className="text-muted-foreground hover:text-foreground text-sm">
-            ← Back
-          </button>
-        )}
-        <div className={`flex items-center gap-2 ${isMapp ? 'mx-auto' : ''}`}>
-          <PickMeLogo size="sm" iconOnly />
-          <h1 className="font-bold text-lg text-foreground">Safety</h1>
+    <div className="min-h-[100dvh] bg-background flex flex-col">
+      {/* Gradient header */}
+      <div
+        className="px-5 pt-5 pb-16 text-primary-foreground relative overflow-hidden"
+        style={{ background: 'linear-gradient(135deg, hsl(224 71% 37%), hsl(225 65% 48%))' }}
+      >
+        <div className="absolute -top-16 -right-12 w-56 h-56 rounded-full bg-white/10 blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-20 -left-10 w-64 h-64 rounded-full bg-accent/20 blur-3xl pointer-events-none" />
+
+        <div className="relative flex items-center justify-between">
+          {!isMapp ? (
+            <button
+              onClick={() => navigate(-1)}
+              className="w-10 h-10 rounded-full bg-white/15 backdrop-blur flex items-center justify-center hover:bg-white/25 transition-colors"
+              aria-label="Back"
+            >
+              <ChevronRight className="w-5 h-5 rotate-180" />
+            </button>
+          ) : <div className="w-10" />}
+          <div className="flex items-center gap-2">
+            <PickMeLogo size="sm" iconOnly />
+            <span className="font-black text-sm tracking-wide">SAFETY CENTER</span>
+          </div>
+          <div className="w-10" />
         </div>
-        {!isMapp && <div className="w-12" />}
+
+        <div className="relative mt-6">
+          <h1 className="text-3xl font-black leading-tight">Your safety,<br />our priority.</h1>
+          <p className="text-sm text-primary-foreground/85 mt-2 max-w-[280px]">
+            Tools and guidance to keep every trip secure — before, during and after.
+          </p>
+        </div>
       </div>
 
       <div className="flex-1 px-5 py-6 pb-24 space-y-5">

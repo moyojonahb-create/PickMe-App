@@ -97,7 +97,7 @@ export default function RiderOffersScreen() {
   }, [requestId]);
 
   async function handleAccept(offer: RideOffer) {
-    if (!user || !request) return;
+    if (!user || !request || !requestId) return;
     setAccepting(offer.id);
 
     try {

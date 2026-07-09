@@ -645,6 +645,57 @@ export type Database = {
           },
         ]
       }
+      fare_adjustments: {
+        Row: {
+          created_at: string
+          driver_id: string
+          id: string
+          new_price: number
+          old_price: number
+          reason: string | null
+          ride_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          driver_id: string
+          id?: string
+          new_price: number
+          old_price: number
+          reason?: string | null
+          ride_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          driver_id?: string
+          id?: string
+          new_price?: number
+          old_price?: number
+          reason?: string | null
+          ride_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fare_adjustments_ride_id_fkey"
+            columns: ["ride_id"]
+            isOneToOne: false
+            referencedRelation: "pending_rides_safe"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fare_adjustments_ride_id_fkey"
+            columns: ["ride_id"]
+            isOneToOne: false
+            referencedRelation: "rides"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       favorite_locations: {
         Row: {
           address: string
@@ -870,6 +921,57 @@ export type Database = {
         }
         Relationships: []
       }
+      luggage_requests: {
+        Row: {
+          created_at: string
+          description: string | null
+          estimated_weight: string | null
+          id: string
+          image_paths: string[]
+          item_count: number | null
+          ride_id: string | null
+          rider_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          estimated_weight?: string | null
+          id?: string
+          image_paths?: string[]
+          item_count?: number | null
+          ride_id?: string | null
+          rider_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          estimated_weight?: string | null
+          id?: string
+          image_paths?: string[]
+          item_count?: number | null
+          ride_id?: string | null
+          rider_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "luggage_requests_ride_id_fkey"
+            columns: ["ride_id"]
+            isOneToOne: false
+            referencedRelation: "pending_rides_safe"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "luggage_requests_ride_id_fkey"
+            columns: ["ride_id"]
+            isOneToOne: false
+            referencedRelation: "rides"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       messages: {
         Row: {
           created_at: string
@@ -908,6 +1010,48 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      mirror_outbox: {
+        Row: {
+          created_at: string
+          id: number
+          last_error: string | null
+          next_retry_at: string
+          op: string
+          payload: Json
+          retry_count: number
+          row_pk: string
+          status: string
+          table_name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: number
+          last_error?: string | null
+          next_retry_at?: string
+          op: string
+          payload: Json
+          retry_count?: number
+          row_pk: string
+          status?: string
+          table_name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: number
+          last_error?: string | null
+          next_retry_at?: string
+          op?: string
+          payload?: Json
+          retry_count?: number
+          row_pk?: string
+          status?: string
+          table_name?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       notifications: {
         Row: {
@@ -2544,6 +2688,37 @@ export type Database = {
       admin_flag_user: {
         Args: { p_reason: string; p_severity?: string; p_user_id: string }
         Returns: Json
+      }
+      admin_list_student_profiles: {
+        Args: { p_status?: string }
+        Returns: {
+          approved_at: string | null
+          approved_by: string | null
+          attempt_count: number
+          created_at: string
+          device_id: string | null
+          face_match_score: number | null
+          fraud_score: number
+          id: string
+          id_photo_path: string | null
+          id_photo_quality: Json | null
+          institution_id: string
+          national_id_number: string
+          registration_number: string
+          rejection_reason: string | null
+          selfie_photo_path: string | null
+          selfie_photo_quality: Json | null
+          student_mode_active: boolean
+          updated_at: string
+          user_id: string
+          verification_status: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "student_profiles"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       admin_lock_wallet: {
         Args: { p_reason: string; p_user_id: string }

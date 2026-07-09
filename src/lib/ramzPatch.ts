@@ -52,7 +52,16 @@ export async function generatePatchForFinding(finding: CodeFinding): Promise<Pat
     body: { file: { path: finding.file, content: original }, finding },
   });
   if (error) throw new Error(error.message || 'Patch generation failed');
-  if (!data || data.error) throw new Error(data?.error || 'Patch generation failed');
+  if (!data) throw new Error('Patch generation failed — no response');
+  if (data.error || data.fallback) {
+    // 402/429/gateway error surfaced as a structured fallback — give a friendly message.
+    const msg = data.code === 'CREDITS_EXHAUSTED'
+      ? 'AI credits exhausted — add credits in Workspace → Usage to generate patches.'
+      : data.code === 'RATE_LIMIT'
+        ? 'AI rate limit hit — wait a moment and try again.'
+        : (data.error || 'Patch generation failed');
+    throw new Error(msg);
+  }
 
   return {
     path: data.path ?? finding.file,

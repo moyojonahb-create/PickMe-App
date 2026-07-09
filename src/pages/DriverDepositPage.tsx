@@ -35,13 +35,14 @@ export default function DriverDepositPage() {
       const up = await supabase.storage.from("deposit-proofs").upload(path, file, { upsert: false });
       if (up.error) throw up.error;
 
-      await walletDeposit({
+      const res = await walletDeposit({
         amount: amt,
         wallet_type: "driver",
         ecocash_phone: phone.trim(),
         ecocash_reference: ref.trim(),
         proof_path: path,
       });
+      if (!res?.ok) throw new Error(res?.reason || "Failed to submit deposit");
 
       toast.success("Deposit request submitted! Admin will verify and credit your wallet.");
       setRef("");

@@ -1,14 +1,18 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import { useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabaseClient';
-import { connectGoRideSocket } from '@/lib/goRideSocket';
-import { isRequestedRideStatus } from '@/lib/rideContract';
+import {
+  backendSocketClient,
+  eventRideId,
+  type BackendSocketEvent,
+} from '@/lib/backendSocketClient';
 
 export function useRideRealtime(
   rideId: string | null,
   callbacks: {
-    onRideChange?: () => void;
-    onOfferChange?: () => void;
+    onRideChange?: (event?: BackendSocketEvent) => void;
+    onOfferChange?: (event?: BackendSocketEvent) => void;
+    onDriverLocation?: (event: BackendSocketEvent) => void;
     onMessageChange?: () => void;
   }
 ) {
@@ -18,17 +22,28 @@ export function useRideRealtime(
   useEffect(() => {
     if (!rideId) return;
 
-    let disconnectGo: (() => void) | null = null;
-    connectGoRideSocket(rideId, (message) => {
-      if (message.type === "ride_offer") callbacksRef.current.onOfferChange?.();
-      if (message.type === "ride_accepted" || message.type === "ride_started" || message.type === "ride_completed") {
-        callbacksRef.current.onRideChange?.();
-      }
-      if (message.type === "driver_location") {
-        callbacksRef.current.onRideChange?.();
-      }
-    }).then((disconnect) => { disconnectGo = disconnect; });
+    backendSocketClient.joinRide(rideId);
 
+    const unsubs = [
+      backendSocketClient.on("ride_offer", (event) => {
+        if (eventRideId(event) === rideId) callbacksRef.current.onOfferChange?.(event);
+      }),
+      backendSocketClient.on("ride_accepted", (event) => {
+        if (eventRideId(event) === rideId) callbacksRef.current.onRideChange?.(event);
+      }),
+      backendSocketClient.on("driver_location", (event) => {
+        const eventId = eventRideId(event);
+        if (eventId === rideId || !eventId) callbacksRef.current.onDriverLocation?.(event);
+      }),
+      backendSocketClient.on("ride_started", (event) => {
+        if (eventRideId(event) === rideId) callbacksRef.current.onRideChange?.(event);
+      }),
+      backendSocketClient.on("ride_completed", (event) => {
+        if (eventRideId(event) === rideId) callbacksRef.current.onRideChange?.(event);
+      }),
+    ];
+
+    // Chat remains Supabase-backed; ride lifecycle and offers use Go websocket events.
     const channel = supabase
       .channel(`ride-messages-${rideId}`)
       .on(
@@ -39,108 +54,79 @@ export function useRideRealtime(
       .subscribe();
 
     return () => {
-      disconnectGo?.();
+      unsubs.forEach((unsub) => unsub());
+      backendSocketClient.leaveRide(rideId);
       supabase.removeChannel(channel);
     };
   }, [rideId]);
 }
 
-/**
- * Still Supabase-backed because the current Go websocket contract is ride-room
- * scoped and does not define a global driver marketplace room yet.
- */
-export function useOpenRidesRealtime(onUpdate: () => void) {
+export function useOpenRidesRealtime(onUpdate: (event?: BackendSocketEvent) => void) {
   const onUpdateRef = useRef(onUpdate);
   onUpdateRef.current = onUpdate;
 
   useEffect(() => {
-    const channel = supabase
-      .channel('open-rides')
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "rides" },
-        () => onUpdateRef.current()
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "ride_offers" },
-        () => onUpdateRef.current()
-      )
-      .subscribe();
+    const unsubs = [
+      backendSocketClient.on("ride_offer", (event) => onUpdateRef.current(event)),
+      backendSocketClient.on("ride_accepted", (event) => onUpdateRef.current(event)),
+      backendSocketClient.on("ride_started", (event) => onUpdateRef.current(event)),
+      backendSocketClient.on("ride_completed", (event) => onUpdateRef.current(event)),
+    ];
 
     return () => {
-      supabase.removeChannel(channel);
+      unsubs.forEach((unsub) => unsub());
     };
   }, []);
 }
 
-/**
- * Deprecated for business events. Use the Go ride websocket when a ride id is
- * known; this remains for legacy notification UI until a Go marketplace room
- * exists.
- */
-export function useRealtimeRideRequests(onNewRide: (ride: unknown) => void) {
+export function useRealtimeRideRequests(onNewRide: (ride: BackendSocketEvent) => void) {
   const onNewRideRef = useRef(onNewRide);
   onNewRideRef.current = onNewRide;
 
   useEffect(() => {
-    const channel = supabase
-      .channel('driver-ride-requests')
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "rides" },
-        (payload) => {
-          const ride = payload.new;
-          if (isRequestedRideStatus(ride.status, ride.ride_status)) {
-            const expiresAt = ride.expires_at ? new Date(ride.expires_at).getTime() : null;
-            if (!expiresAt || expiresAt > Date.now()) {
-              onNewRideRef.current(ride);
-            }
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return backendSocketClient.on("ride_offer", (event) => onNewRideRef.current(event));
   }, []);
 }
 
-export function useRealtimeOffers(rideId: string | null, onOffer: (offer: unknown) => void) {
+export function useRealtimeOffers(rideId: string | null, onOffer: (offer: BackendSocketEvent) => void) {
   const onOfferRef = useRef(onOffer);
   onOfferRef.current = onOffer;
 
   useEffect(() => {
     if (!rideId) return;
-
-    let disconnectGo: (() => void) | null = null;
-    connectGoRideSocket(rideId, (message) => {
-      if (message.type === "ride_offer") onOfferRef.current(message.payload);
-    }).then((disconnect) => { disconnectGo = disconnect; });
-
+    backendSocketClient.joinRide(rideId);
+    const unsub = backendSocketClient.on("ride_offer", (event) => {
+      if (eventRideId(event) === rideId) onOfferRef.current(event);
+    });
     return () => {
-      disconnectGo?.();
+      unsub();
+      backendSocketClient.leaveRide(rideId);
     };
   }, [rideId]);
 }
 
-export function useRealtimeRideStatus(rideId: string | null, onUpdate: (ride: unknown) => void) {
+export function useRealtimeRideStatus(rideId: string | null, onUpdate: (ride: BackendSocketEvent) => void) {
   const onUpdateRef = useRef(onUpdate);
   onUpdateRef.current = onUpdate;
 
   useEffect(() => {
     if (!rideId) return;
-
-    let disconnectGo: (() => void) | null = null;
-    connectGoRideSocket(rideId, (message) => {
-      if (message.type === "ride_accepted" || message.type === "ride_started" || message.type === "ride_completed") {
-        onUpdateRef.current(message.payload);
-      }
-    }).then((disconnect) => { disconnectGo = disconnect; });
+    backendSocketClient.joinRide(rideId);
+    const unsubs = [
+      backendSocketClient.on("ride_accepted", (event) => {
+        if (eventRideId(event) === rideId) onUpdateRef.current(event);
+      }),
+      backendSocketClient.on("ride_started", (event) => {
+        if (eventRideId(event) === rideId) onUpdateRef.current(event);
+      }),
+      backendSocketClient.on("ride_completed", (event) => {
+        if (eventRideId(event) === rideId) onUpdateRef.current(event);
+      }),
+    ];
 
     return () => {
-      disconnectGo?.();
+      unsubs.forEach((unsub) => unsub());
+      backendSocketClient.leaveRide(rideId);
     };
   }, [rideId]);
 }

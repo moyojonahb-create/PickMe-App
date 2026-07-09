@@ -51,7 +51,7 @@ export async function lookupUserByPhone(phone: string) {
   } | null>;
 }
 
-/** Look up a user by their PickMe Account number (PMR######R) for wallet-to-wallet transfers. */
+/** Look up a user by PickMe Account — routed through Go for rate-limiting/audit. */
 export async function lookupUserByPickmeAccount(account: string) {
   const cleaned = account.trim().toUpperCase();
   return lookupWalletUser({ account: cleaned }) as Promise<{

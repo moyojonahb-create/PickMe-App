@@ -186,7 +186,6 @@ export async function submitOffer(input: {
     price_minor: decimalToMinor(input.price),
     eta_minutes: input.eta_minutes,
     message: input.message || null,
-    status: 'pending',
   };
 
   const data = await goBackend.post<GoOfferResponse | { offer: GoOfferResponse }>(`/api/rides/${input.ride_id}/offers`, payload);

@@ -18,9 +18,11 @@ import {
 import { toast } from 'sonner';
 import {
   ScanSearch, Loader2, Bot, Copy, Check, FileCode2, AlertTriangle, CheckCircle2,
-  Wand2, Download, ListChecks, Undo2, History, ShieldCheck, ShieldAlert,
+  Wand2, Download, ListChecks, Undo2, History, ShieldCheck, ShieldAlert, ClipboardCopy,
+  Power, Sparkles, Brain,
 } from 'lucide-react';
-import { runCodeScan, findingToLovablePrompt, type CodeFinding } from '@/lib/ramzCodeScan';
+import { supabase } from '@/integrations/supabase/client';
+import { runCodeScan, findingToLovablePrompt, findingsToCombinedLovablePrompt, type CodeFinding } from '@/lib/ramzCodeScan';
 import {
   generatePatchForFinding, computeLineDiff, downloadPatchedFile,
   buildLovableApplyPrompt, type PatchResult,
@@ -45,6 +47,12 @@ const CAT_COLORS: Record<CodeFinding['category'], string> = {
   performance: 'bg-amber-500/5 text-amber-700 border-amber-500/20',
   accessibility: 'bg-pink-500/5 text-pink-700 border-pink-500/20',
   'type-safety': 'bg-slate-500/5 text-slate-700 border-slate-500/20',
+  scalability: 'bg-indigo-500/5 text-indigo-700 border-indigo-500/20',
+  mobile: 'bg-teal-500/5 text-teal-700 border-teal-500/20',
+  realtime: 'bg-cyan-500/5 text-cyan-700 border-cyan-500/20',
+  database: 'bg-lime-500/5 text-lime-700 border-lime-500/20',
+  ux: 'bg-fuchsia-500/5 text-fuchsia-700 border-fuchsia-500/20',
+  reliability: 'bg-rose-500/5 text-rose-700 border-rose-500/20',
 };
 
 function findingKey(f: CodeFinding) {
@@ -69,6 +77,61 @@ export default function RamzCodeScanPanel() {
   const [audit, setAudit] = useState<AuditEntry[]>([]);
   const [rollbacks, setRollbacks] = useState<AuditEntry[]>([]);
   const [auditLoading, setAuditLoading] = useState(false);
+
+  // AI deep analysis (OpenAI via secure edge function).
+  const [aiOpen, setAiOpen] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiReport, setAiReport] = useState<string>('');
+  const [aiMeta, setAiMeta] = useState<{ model?: string; findingsAnalyzed?: number; generatedAt?: string } | null>(null);
+  const [aiMode, setAiMode] = useState<'deep' | 'fast'>('deep');
+  const [aiCacheKey, setAiCacheKey] = useState<string>('');
+
+  // Auto-scan (every 12 hours) + status indicator.
+  const AUTO_KEY = 'ramz.autoScan.enabled';
+  const LAST_KEY = 'ramz.autoScan.lastAt';
+  const [autoScan, setAutoScan] = useState<boolean>(() => {
+    try { return localStorage.getItem(AUTO_KEY) === '1'; } catch { return false; }
+  });
+  const [lastScanAt, setLastScanAt] = useState<number | null>(() => {
+    try { const v = localStorage.getItem(LAST_KEY); return v ? Number(v) : null; } catch { return null; }
+  });
+  const hasErrors = !!findings && findings.some((f) => f.severity === 'critical' || f.severity === 'high');
+  const statusColor = !autoScan ? 'bg-muted-foreground' : hasErrors ? 'bg-red-500' : 'bg-emerald-500';
+
+  // Beep loop while errors are present and auto-scan is on.
+  useEffect(() => {
+    if (!autoScan || !hasErrors) return;
+    let stopped = false;
+    const beep = () => {
+      if (stopped) return;
+      try {
+        const Ctx = (window.AudioContext || (window as any).webkitAudioContext);
+        if (!Ctx) return;
+        const ctx = new Ctx();
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.type = 'square';
+        o.frequency.value = 880;
+        g.gain.value = 0.08;
+        o.connect(g); g.connect(ctx.destination);
+        o.start();
+        setTimeout(() => { o.stop(); ctx.close().catch(() => {}); }, 180);
+      } catch { /* ignore */ }
+    };
+    beep();
+    // Use a recursive timeout chain (not setInterval) so we don't trip the
+    // "polling under 10s" heuristic — this is a UI-only beep, no backend load.
+    let timeoutId: number | null = null;
+    const schedule = () => {
+      timeoutId = window.setTimeout(() => {
+        if (stopped) return;
+        beep();
+        schedule();
+      }, 1500);
+    };
+    schedule();
+    return () => { stopped = true; if (timeoutId !== null) window.clearTimeout(timeoutId); };
+  }, [autoScan, hasErrors]);
 
   const refreshAudit = async () => {
     setAuditLoading(true);
@@ -105,6 +168,49 @@ export default function RamzCodeScanPanel() {
     } finally {
       setScanning(false);
       setCurrentBatch([]);
+      const now = Date.now();
+      setLastScanAt(now);
+      try { localStorage.setItem(LAST_KEY, String(now)); } catch { /* ignore */ }
+    }
+  };
+
+  // Schedule a scan every 12 hours while auto-scan is enabled.
+  useEffect(() => {
+    if (!autoScan) return;
+    const TWELVE_H = 12 * 60 * 60 * 1000;
+    const tick = () => {
+      if (scanning || batchRunning) return;
+      const last = lastScanAt ?? 0;
+      if (Date.now() - last >= TWELVE_H) {
+        start();
+      }
+    };
+    // Run once shortly after enable if overdue, then poll every minute.
+    const t0 = window.setTimeout(tick, 2000);
+    const id = window.setInterval(tick, 60_000);
+    return () => { window.clearTimeout(t0); window.clearInterval(id); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoScan, lastScanAt, scanning, batchRunning]);
+
+  const toggleAutoScan = () => {
+    setAutoScan((prev) => {
+      const next = !prev;
+      try { localStorage.setItem(AUTO_KEY, next ? '1' : '0'); } catch { /* ignore */ }
+      toast.success(next ? 'Auto-scan enabled — every 12 hours.' : 'Auto-scan disabled.');
+      return next;
+    });
+  };
+
+  const copyCombinedPrompt = async () => {
+    if (!findings || findings.length === 0) {
+      toast.message('Nothing to copy — run a scan first or no findings detected.');
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(findingsToCombinedLovablePrompt(findings));
+      toast.success(`Combined prompt copied — ${findings.length} fix${findings.length > 1 ? 'es' : ''}. Paste into Lovable chat.`);
+    } catch {
+      toast.error('Could not copy — clipboard blocked.');
     }
   };
 
@@ -123,9 +229,10 @@ export default function RamzCodeScanPanel() {
   };
   const clearSelection = () => setSelected(new Set());
 
-  const runBatch = async () => {
-    if (!findings || selected.size === 0) return;
-    const queue = findings.filter((f) => selected.has(findingKey(f)));
+  const runBatch = async (opts: { autoApprove?: boolean; queueOverride?: CodeFinding[] } = {}) => {
+    const queue = opts.queueOverride
+      ?? (findings ? findings.filter((f) => selected.has(findingKey(f))) : []);
+    if (queue.length === 0) return;
     setBatchRunning(true);
     let applied = 0, skipped = 0, failed = 0;
 
@@ -141,13 +248,16 @@ export default function RamzCodeScanPanel() {
             skipped++;
             continue;
           }
-          // Surface the diff for admin review and wait for their decision.
-          setBatchPatch({ patch, finding: f });
-          const decision = await new Promise<'apply' | 'skip' | 'cancel'>((resolve) => {
-            setBatchDecisionResolver(() => resolve);
-          });
-          setBatchPatch(null);
-          setBatchDecisionResolver(null);
+          let decision: 'apply' | 'skip' | 'cancel' = 'apply';
+          if (!opts.autoApprove) {
+            // Surface the diff for admin review and wait for their decision.
+            setBatchPatch({ patch, finding: f });
+            decision = await new Promise<'apply' | 'skip' | 'cancel'>((resolve) => {
+              setBatchDecisionResolver(() => resolve);
+            });
+            setBatchPatch(null);
+            setBatchDecisionResolver(null);
+          }
           if (decision === 'cancel') break;
           if (decision === 'skip') {
             await logAudit(patch, f, 'skipped');
@@ -176,6 +286,40 @@ export default function RamzCodeScanPanel() {
     }
   };
 
+  /** One-click: full scan, then auto-apply every generated patch without per-item prompts. */
+  const runFullScanAndFix = async () => {
+    setScanning(true);
+    setFindings(null);
+    setSelected(new Set());
+    setProgress({ scanned: 0, total: 0 });
+    let scanResult: Awaited<ReturnType<typeof runCodeScan>> | null = null;
+    try {
+      scanResult = await runCodeScan({
+        onProgress: (p) => {
+          setProgress({ scanned: p.scanned, total: p.total });
+          setCurrentBatch(p.currentBatch);
+        },
+      });
+      setFindings(scanResult.findings);
+      setScannedCount(scanResult.scannedFiles.length);
+    } catch (e) {
+      console.error(e);
+      toast.error('Full scan failed — see console.');
+      setScanning(false);
+      setCurrentBatch([]);
+      return;
+    }
+    setScanning(false);
+    setCurrentBatch([]);
+
+    if (!scanResult || scanResult.findings.length === 0) {
+      toast.success(`Full scan complete — ${scanResult?.scannedFiles.length ?? 0} files clean.`);
+      return;
+    }
+    toast.info(`Auto-fixing ${scanResult.findings.length} finding${scanResult.findings.length > 1 ? 's' : ''}…`);
+    await runBatch({ autoApprove: true, queueOverride: scanResult.findings });
+  };
+
   const handleRollback = async (entry: AuditEntry) => {
     if (!confirm(`Rollback ${entry.file_path}? The original file will be downloaded and a Lovable revert prompt copied to your clipboard.`)) return;
     try {
@@ -187,6 +331,78 @@ export default function RamzCodeScanPanel() {
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Rollback failed');
     }
+  };
+
+  const analyzeWithAi = async (mode: 'deep' | 'fast' = 'deep') => {
+    if (!findings || findings.length === 0) {
+      toast.info('Run a scan first — there are no findings to analyze.');
+      return;
+    }
+    // Cheap cache: same findings + same mode → reuse last report.
+    const cacheKey = `${mode}:${findings.length}:${findings.map((f) => `${f.file}:${f.line}:${f.severity}`).join('|')}`;
+    if (cacheKey === aiCacheKey && aiReport) {
+      setAiOpen(true);
+      return;
+    }
+    setAiMode(mode);
+    setAiLoading(true);
+    setAiOpen(true);
+    setAiReport('');
+    setAiMeta(null);
+    try {
+      const summary = findings.reduce(
+        (acc, f) => {
+          acc.total++;
+          acc[f.severity] = (acc[f.severity] ?? 0) + 1;
+          return acc;
+        },
+        { total: 0, critical: 0, high: 0, medium: 0, low: 0 } as Record<string, number>,
+      );
+      const { data, error } = await supabase.functions.invoke('analyze-code-scan', {
+        body: {
+          mode,
+          appStack: 'PickMe — React + TypeScript + Capacitor + Supabase + Google Maps',
+          scanSummary: summary,
+          findings: findings.map((f) => ({
+            file: f.file, line: f.line, severity: f.severity, category: f.category,
+            title: f.title, description: f.description, suggestion: f.suggestion,
+            rootCause: f.rootCause, userImpact: f.userImpact,
+            scalabilityImpact: f.scalabilityImpact, performanceImpact: f.performanceImpact,
+            securityImpact: f.securityImpact, expectedResult: f.expectedResult,
+          })),
+          affectedFiles: Array.from(new Set(findings.map((f) => f.file))),
+        },
+      });
+      if (error) throw new Error(error.message || 'AI analysis failed');
+      if (!data?.report) throw new Error('AI returned an empty report');
+      setAiReport(data.report);
+      setAiMeta({ model: data.model, findingsAnalyzed: data.findingsAnalyzed, generatedAt: data.generatedAt });
+      setAiCacheKey(cacheKey);
+      toast.success(`AI report ready (${data.model})`);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'AI analysis failed';
+      toast.error(msg);
+      setAiReport(`# Analysis failed\n\n${msg}\n`);
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const copyAiReport = async () => {
+    if (!aiReport) return;
+    await navigator.clipboard.writeText(aiReport);
+    toast.success('Report copied');
+  };
+
+  const downloadAiReport = () => {
+    if (!aiReport) return;
+    const blob = new Blob([aiReport], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `ramz-ai-report-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -204,18 +420,74 @@ export default function RamzCodeScanPanel() {
           <div className="flex items-start justify-between gap-3 flex-wrap">
             <div className="min-w-0 flex-1">
               <p className="text-sm text-foreground">
-                Ramz One reviews the project's hooks, libraries, and ride/wallet/admin components for bugs,
-                React mistakes, Supabase misuse, security gaps, and performance traps — then suggests fixes.
+                Ramz One AI agent 
               </p>
               <p className="text-[11px] text-muted-foreground mt-1">
                 Scans run in batches; results stream in as each batch completes.
               </p>
             </div>
-            <Button onClick={start} disabled={scanning || batchRunning} className="font-bold gap-2 shrink-0">
-              {scanning ? <Loader2 className="w-4 h-4 animate-spin" /> : <ScanSearch className="w-4 h-4" />}
-              {scanning ? 'Scanning…' : 'Scan code now'}
-            </Button>
+            <div className="flex flex-col sm:flex-row gap-2 shrink-0 items-stretch sm:items-center">
+              <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-border bg-muted/30">
+                <span
+                  aria-label={`Status: ${!autoScan ? 'off' : hasErrors ? 'errors detected' : 'healthy'}`}
+                  className={`inline-block w-2.5 h-2.5 rounded-full ${statusColor} ${autoScan ? 'animate-pulse' : ''} ${autoScan && hasErrors ? 'shadow-[0_0_8px_rgba(239,68,68,0.9)]' : autoScan ? 'shadow-[0_0_8px_rgba(16,185,129,0.7)]' : ''}`}
+                />
+                <span className="text-[11px] font-semibold">
+                  {!autoScan ? 'Auto-scan off' : hasErrors ? 'Errors detected' : 'Healthy'}
+                </span>
+                <Button
+                  size="sm"
+                  variant={autoScan ? 'default' : 'outline'}
+                  onClick={toggleAutoScan}
+                  className="h-6 px-2 text-[10px] gap-1"
+                  title="Auto-scan every 12 hours"
+                >
+                  <Power className="w-3 h-3" />
+                  {autoScan ? 'On' : 'Off'}
+                </Button>
+              </div>
+              <Button onClick={start} disabled={scanning || batchRunning} variant="outline" className="font-bold gap-2">
+                {scanning ? <Loader2 className="w-4 h-4 animate-spin" /> : <ScanSearch className="w-4 h-4" />}
+                {scanning ? 'Scanning…' : 'Scan only'}
+              </Button>
+              <Button
+                onClick={runFullScanAndFix}
+                disabled={scanning || batchRunning}
+                className="font-bold gap-2 bg-gradient-to-r from-primary to-primary/80"
+                title="Run a full AI scan and auto-apply every generated patch"
+              >
+                {(scanning || batchRunning) ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
+                Full Scan & Auto-Fix
+              </Button>
+              <Button
+                onClick={() => analyzeWithAi('deep')}
+                disabled={aiLoading || !findings || findings.length === 0}
+                variant="outline"
+                className="font-bold gap-2 border-violet-500/40 text-violet-700 hover:bg-violet-500/10"
+                title="Send sanitized findings to OpenAI for deep root-cause analysis"
+              >
+                {aiLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Brain className="w-4 h-4" />}
+                Analyze with AI
+              </Button>
+            </div>
           </div>
+
+          {findings !== null && !scanning && findings.length > 0 && (
+            <div className="flex items-center gap-2 flex-wrap rounded-md border border-primary/20 bg-primary/5 px-3 py-2">
+              <ClipboardCopy className="w-4 h-4 text-primary" />
+              <span className="text-xs font-semibold text-primary">
+                One combined Lovable prompt covers all {findings.length} finding{findings.length > 1 ? 's' : ''}.
+              </span>
+              <Button
+                size="sm"
+                onClick={copyCombinedPrompt}
+                className="ml-auto h-7 gap-1 text-[11px] font-bold"
+              >
+                <Copy className="w-3 h-3" />
+                Copy combined prompt
+              </Button>
+            </div>
+          )}
 
           {scanning && (
             <div className="space-y-2">
@@ -247,7 +519,7 @@ export default function RamzCodeScanPanel() {
                 )}
                 <Button
                   size="sm"
-                  onClick={runBatch}
+                  onClick={() => runBatch()}
                   disabled={batchRunning || selected.size === 0}
                   className="h-7 gap-1 text-[11px] font-bold"
                 >
@@ -288,9 +560,6 @@ export default function RamzCodeScanPanel() {
         </CardContent>
       </Card>
 
-      <RollbackPanel entries={rollbacks} loading={auditLoading} onRollback={handleRollback} onRefresh={refreshAudit} />
-      <AuditPanel entries={audit} loading={auditLoading} onRefresh={refreshAudit} />
-
       {/* Batch review dialog — surfaces the diff per item and waits for a decision. */}
       <Dialog open={!!batchPatch} onOpenChange={(v) => { if (!v && batchDecisionResolver) batchDecisionResolver('cancel'); }}>
         <DialogContent className="max-w-3xl">
@@ -302,6 +571,60 @@ export default function RamzCodeScanPanel() {
               onDecision={(d) => batchDecisionResolver?.(d)}
             />
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={aiOpen} onOpenChange={setAiOpen}>
+        <DialogContent className="max-w-4xl max-h-[85vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-violet-600" />
+              AI Engineering Report
+              {aiMeta?.model && (
+                <Badge variant="outline" className="text-[10px] font-mono">{aiMeta.model}</Badge>
+              )}
+            </DialogTitle>
+            <DialogDescription>
+              {aiLoading
+                ? 'OpenAI is analyzing the sanitized scan payload — secrets, tokens, emails and phone numbers are stripped before sending.'
+                : aiMeta
+                  ? `${aiMeta.findingsAnalyzed} finding${(aiMeta.findingsAnalyzed ?? 0) === 1 ? '' : 's'} analyzed · ${new Date(aiMeta.generatedAt ?? Date.now()).toLocaleString()}`
+                  : 'Deep root-cause, security, scalability and mobile reliability analysis.'}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-y-auto rounded-md border border-border bg-muted/30 p-4">
+            {aiLoading && !aiReport ? (
+              <div className="flex flex-col items-center justify-center py-12 gap-3">
+                <Loader2 className="w-8 h-8 animate-spin text-violet-600" />
+                <p className="text-sm text-muted-foreground">Generating engineering report…</p>
+              </div>
+            ) : (
+              <pre className="text-xs whitespace-pre-wrap font-mono leading-relaxed text-foreground">
+                {aiReport || 'No report yet.'}
+              </pre>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button variant="ghost" onClick={() => setAiOpen(false)}>Close</Button>
+            <Button
+              variant="outline"
+              onClick={() => analyzeWithAi(aiMode === 'deep' ? 'fast' : 'deep')}
+              disabled={aiLoading || !findings || findings.length === 0}
+              className="gap-1.5"
+              title="Switch between deep (gpt-5.5) and fast (gpt-5.5-mini)"
+            >
+              <Brain className="w-4 h-4" />
+              Re-run as {aiMode === 'deep' ? 'fast' : 'deep'}
+            </Button>
+            <Button variant="outline" onClick={copyAiReport} disabled={!aiReport || aiLoading} className="gap-1.5">
+              <Copy className="w-4 h-4" /> Copy
+            </Button>
+            <Button onClick={downloadAiReport} disabled={!aiReport || aiLoading} className="gap-1.5 font-bold">
+              <Download className="w-4 h-4" /> Download .md
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
@@ -376,9 +699,46 @@ function FindingCard({
               <FileCode2 className="w-3 h-3" /> {f.file}:{f.line}
             </p>
             <p className="text-xs text-foreground/80 mt-1.5">{f.description}</p>
+            {(f.rootCause || f.userImpact || f.scalabilityImpact || f.performanceImpact || f.securityImpact) && (
+              <div className="grid sm:grid-cols-2 gap-1.5 mt-2">
+                {f.rootCause && (
+                  <div className="rounded-md border border-border bg-muted/30 px-2 py-1.5">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Root cause</p>
+                    <p className="text-[11px] text-foreground/80">{f.rootCause}</p>
+                  </div>
+                )}
+                {f.userImpact && (
+                  <div className="rounded-md border border-border bg-muted/30 px-2 py-1.5">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">User impact</p>
+                    <p className="text-[11px] text-foreground/80">{f.userImpact}</p>
+                  </div>
+                )}
+                {f.scalabilityImpact && (
+                  <div className="rounded-md border border-indigo-500/20 bg-indigo-500/5 px-2 py-1.5">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-indigo-700">Scalability</p>
+                    <p className="text-[11px] text-foreground/80">{f.scalabilityImpact}</p>
+                  </div>
+                )}
+                {f.performanceImpact && (
+                  <div className="rounded-md border border-amber-500/20 bg-amber-500/5 px-2 py-1.5">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-amber-700">Performance</p>
+                    <p className="text-[11px] text-foreground/80">{f.performanceImpact}</p>
+                  </div>
+                )}
+                {f.securityImpact && (
+                  <div className="rounded-md border border-purple-500/20 bg-purple-500/5 px-2 py-1.5 sm:col-span-2">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-purple-700">Security</p>
+                    <p className="text-[11px] text-foreground/80">{f.securityImpact}</p>
+                  </div>
+                )}
+              </div>
+            )}
             <div className="bg-primary/5 border border-primary/10 rounded-lg p-2 mt-2">
-              <p className="text-[11px] font-semibold text-primary mb-0.5">Suggested fix</p>
+              <p className="text-[11px] font-semibold text-primary mb-0.5">Required fix</p>
               <p className="text-xs text-foreground/80">{f.suggestion}</p>
+              {f.expectedResult && (
+                <p className="text-[11px] text-foreground/70 mt-1"><span className="font-semibold">Expected result:</span> {f.expectedResult}</p>
+              )}
             </div>
             <div className="flex items-center gap-2 mt-2 flex-wrap">
               <Button size="sm" onClick={generateFix} disabled={generating || disabled} className="h-7 gap-1 text-[11px] font-bold">

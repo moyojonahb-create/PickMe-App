@@ -123,6 +123,7 @@ const HeroSection = ({ onLoginClick }: HeroSectionProps) => {
         fare: currentFare,
         vehicle_type: selectedVehicle.id,
         route_polyline: null, // No polyline without map API
+        payment_method: 'cash',
       });
 
       if (!result.ok) throw new Error(result.error);
