@@ -11,11 +11,15 @@ export type BackendSocketEventType =
   | "ride_offer"
   | "ride_accepted"
   | "driver_location"
+  | "ride_status_updated"
+  | "ride_cancelled"
   | "ride_started"
   | "ride_completed";
 
 export type BackendSocketEvent = {
   type: BackendSocketEventType;
+  event?: BackendSocketEventType;
+  room?: string;
   ride?: Record<string, unknown>;
   offer?: Record<string, unknown>;
   ride_id?: string;
@@ -42,6 +46,8 @@ const canonicalEvents = new Set<BackendSocketEventType>([
   "ride_offer",
   "ride_accepted",
   "driver_location",
+  "ride_status_updated",
+  "ride_cancelled",
   "ride_started",
   "ride_completed",
 ]);
@@ -58,6 +64,16 @@ function asNumber(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   if (typeof value === "string" && value.trim() && Number.isFinite(Number(value))) return Number(value);
   return null;
+}
+
+function roomIdForRide(rideId: string): string {
+  return rideId.startsWith("ride_") ? rideId : `ride_${rideId}`;
+}
+
+function rideIdFromRoom(roomId: unknown): string | null {
+  if (typeof roomId !== "string" || !roomId.startsWith("ride_")) return null;
+  const rideId = roomId.slice("ride_".length);
+  return rideId || null;
 }
 
 class BackendSocketClient {
@@ -142,21 +158,23 @@ class BackendSocketClient {
 
   joinRide(rideId: string) {
     if (!rideId) return;
-    this.roomRefs.set(rideId, (this.roomRefs.get(rideId) ?? 0) + 1);
-    this.rooms.add(rideId);
-    this.send({ type: "join_ride", ride_id: rideId });
+    const roomId = roomIdForRide(rideId);
+    this.roomRefs.set(roomId, (this.roomRefs.get(roomId) ?? 0) + 1);
+    this.rooms.add(roomId);
+    this.send({ event: "join_room", room_id: roomId });
   }
 
   leaveRide(rideId: string) {
     if (!rideId) return;
-    const next = (this.roomRefs.get(rideId) ?? 1) - 1;
+    const roomId = roomIdForRide(rideId);
+    const next = (this.roomRefs.get(roomId) ?? 1) - 1;
     if (next > 0) {
-      this.roomRefs.set(rideId, next);
+      this.roomRefs.set(roomId, next);
       return;
     }
-    this.roomRefs.delete(rideId);
-    this.rooms.delete(rideId);
-    this.send({ type: "leave_ride", ride_id: rideId });
+    this.roomRefs.delete(roomId);
+    this.rooms.delete(roomId);
+    this.send({ event: "leave_room", room_id: roomId });
   }
 
   on(type: BackendSocketEventType, listener: Listener) {
@@ -225,14 +243,18 @@ class BackendSocketClient {
 
     if (!data || typeof data !== "object") return;
     const record = data as Record<string, unknown>;
-    const messageType = record.type;
+    const messageType = record.event ?? record.type;
     if (messageType === "pong") {
       this.clearPongTimer();
       return;
     }
     if (typeof messageType !== "string" || !canonicalEvents.has(messageType as BackendSocketEventType)) return;
 
-    const typed = record as BackendSocketEvent;
+    const typed = {
+      ...record,
+      type: messageType,
+      event: messageType,
+    } as BackendSocketEvent;
     this.listeners.get(typed.type)?.forEach((listener) => listener(typed));
     this.anyListeners.forEach((listener) => listener(typed));
   }
@@ -241,7 +263,7 @@ class BackendSocketClient {
     this.clearHeartbeat();
     this.heartbeatTimer = setInterval(() => {
       if (this.ws?.readyState !== WebSocket.OPEN) return;
-      this.ws.send(JSON.stringify({ type: "ping", timestamp: Date.now() }));
+      this.ws.send(JSON.stringify({ event: "ping", timestamp: Date.now() }));
       this.clearPongTimer();
       this.pongTimer = setTimeout(() => {
         this.ws?.close();
@@ -250,8 +272,8 @@ class BackendSocketClient {
   }
 
   private rejoinRooms() {
-    this.rooms.forEach((rideId) => {
-      this.ws?.send(JSON.stringify({ type: "join_ride", ride_id: rideId }));
+    this.rooms.forEach((roomId) => {
+      this.ws?.send(JSON.stringify({ event: "join_room", room_id: roomId }));
     });
   }
 
@@ -303,7 +325,7 @@ export const backendSocketClient = new BackendSocketClient();
 
 export function eventRideId(event: BackendSocketEvent): string | null {
   const ride = nestedRecord(event.ride);
-  return normalizeRideId(event.ride_id) ?? normalizeRideId(event.rideId) ?? normalizeRideId(ride?.id) ?? normalizeRideId(ride?.ride_id);
+  return normalizeRideId(event.ride_id) ?? normalizeRideId(event.rideId) ?? normalizeRideId(ride?.id) ?? normalizeRideId(ride?.ride_id) ?? rideIdFromRoom(event.room);
 }
 
 export function eventDriverId(event: BackendSocketEvent): string | null {

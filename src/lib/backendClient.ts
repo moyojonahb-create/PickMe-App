@@ -1,7 +1,14 @@
 import { supabase } from "@/integrations/supabase/client";
 
-const API_URL = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
+const API_URL = (
+  import.meta.env.VITE_GO_BACKEND_URL ||
+  import.meta.env.VITE_API_BASE_URL ||
+  import.meta.env.VITE_BACKEND_URL ||
+  import.meta.env.VITE_API_URL ||
+  ""
+).replace(/\/+$/, "");
 const WS_URL = import.meta.env.VITE_WS_URL || "";
+const API_URL_ENV_NAMES = "VITE_GO_BACKEND_URL, VITE_API_BASE_URL, VITE_BACKEND_URL, or VITE_API_URL";
 
 export class BackendError extends Error {
   status?: number;
@@ -35,7 +42,7 @@ export async function getFreshAuthToken(): Promise<string> {
 
 function getApiUrl(path: string): string {
   if (!API_URL) {
-    throw new BackendError("Missing required environment variable: VITE_API_URL", "config_error");
+    throw new BackendError(`Missing required environment variable: ${API_URL_ENV_NAMES}`, "config_error");
   }
   if (/^https?:\/\//i.test(path)) return path;
   return `${API_URL}${path.startsWith("/") ? path : `/${path}`}`;

@@ -35,6 +35,12 @@ export function useRideRealtime(
         const eventId = eventRideId(event);
         if (eventId === rideId || !eventId) callbacksRef.current.onDriverLocation?.(event);
       }),
+      backendSocketClient.on("ride_status_updated", (event) => {
+        if (eventRideId(event) === rideId) callbacksRef.current.onRideChange?.(event);
+      }),
+      backendSocketClient.on("ride_cancelled", (event) => {
+        if (eventRideId(event) === rideId) callbacksRef.current.onRideChange?.(event);
+      }),
       backendSocketClient.on("ride_started", (event) => {
         if (eventRideId(event) === rideId) callbacksRef.current.onRideChange?.(event);
       }),
@@ -69,6 +75,8 @@ export function useOpenRidesRealtime(onUpdate: (event?: BackendSocketEvent) => v
     const unsubs = [
       backendSocketClient.on("ride_offer", (event) => onUpdateRef.current(event)),
       backendSocketClient.on("ride_accepted", (event) => onUpdateRef.current(event)),
+      backendSocketClient.on("ride_status_updated", (event) => onUpdateRef.current(event)),
+      backendSocketClient.on("ride_cancelled", (event) => onUpdateRef.current(event)),
       backendSocketClient.on("ride_started", (event) => onUpdateRef.current(event)),
       backendSocketClient.on("ride_completed", (event) => onUpdateRef.current(event)),
     ];
@@ -114,6 +122,12 @@ export function useRealtimeRideStatus(rideId: string | null, onUpdate: (ride: Ba
     backendSocketClient.joinRide(rideId);
     const unsubs = [
       backendSocketClient.on("ride_accepted", (event) => {
+        if (eventRideId(event) === rideId) onUpdateRef.current(event);
+      }),
+      backendSocketClient.on("ride_status_updated", (event) => {
+        if (eventRideId(event) === rideId) onUpdateRef.current(event);
+      }),
+      backendSocketClient.on("ride_cancelled", (event) => {
         if (eventRideId(event) === rideId) onUpdateRef.current(event);
       }),
       backendSocketClient.on("ride_started", (event) => {
