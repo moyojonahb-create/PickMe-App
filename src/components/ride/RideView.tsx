@@ -58,6 +58,9 @@ import EmergencyButton from './EmergencyButton';
 import { NotificationBell } from '@/components/NotificationCenter';
 
 import RecentDestinations from './RecentDestinations';
+import RideHomeGreeting from './RideHomeGreeting';
+import QuickShortcutsRow from './QuickShortcutsRow';
+import NearbyDriversSummary from './NearbyDriversSummary';
 import MultiStopInput, { type RideStop } from './MultiStopInput';
 import ScheduleRide from './ScheduleRide';
 import { useLandmarks as useLandmarksSearch, type Landmark } from '@/hooks/useLandmarks';
