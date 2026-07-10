@@ -1,4 +1,4 @@
-# PickMe Monorepo
+# PickMe Monorepo by Jonah B Moyo
 
 # Monorepo Structure
 
