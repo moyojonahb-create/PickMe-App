@@ -42,7 +42,11 @@ declare global {
 let cachedPromise: Promise<MapboxGL> | null = null;
 
 export function getMapboxToken(): string | null {
-  const token = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN;
+  const token =
+    import.meta.env.VITE_MAPBOX_ACCESS_TOKEN ||
+    import.meta.env.VITE_MAPBOX_TOKEN ||
+    import.meta.env.VITE_MAPBOX_PUBLIC_TOKEN ||
+    "";
   return token && token.trim() ? token.trim() : null;
 }
 
@@ -76,7 +80,7 @@ function injectScript(): Promise<MapboxGL> {
 
 export function loadMapbox(): Promise<MapboxGL> {
   const token = getMapboxToken();
-  if (!token) return Promise.reject(new Error("VITE_MAPBOX_ACCESS_TOKEN is not configured"));
+  if (!token) return Promise.reject(new Error("Mapbox token is not configured (set VITE_MAPBOX_ACCESS_TOKEN or VITE_MAPBOX_TOKEN)"));
   if (!cachedPromise) {
     ensureCss();
     cachedPromise = injectScript().then((mapboxgl) => {
