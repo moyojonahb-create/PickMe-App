@@ -633,6 +633,9 @@ export default function RideView() {
     handleNominatimSearch(value);
   };
   const canRequestRide = pickupLocation && dropoffLocation && fareEstimate && !isRequesting;
+  const firstName = (user?.user_metadata?.full_name as string | undefined)?.split(' ')[0] || user?.email?.split('@')[0] || '';
+  const estimatedWaitMinutes = Math.max(2, Math.min(8, Math.round(8 - nearbyDrivers.length * 0.6)));
+  const showHomeContent = rideStatus === 'idle' && !pickupLocation && !dropoffLocation;
   const unifiedPlaceResults = [...cachedPlaceResults, ...nominatimResults.map((item) => ({ ...item, source: 'nominatim' as const }))]
     .filter((item, index, arr) => {
       const key = `${item.name}-${item.displayName}`.toLowerCase();
