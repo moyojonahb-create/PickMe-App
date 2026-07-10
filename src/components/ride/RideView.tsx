@@ -58,6 +58,9 @@ import EmergencyButton from './EmergencyButton';
 import { NotificationBell } from '@/components/NotificationCenter';
 
 import RecentDestinations from './RecentDestinations';
+import RideHomeGreeting from './RideHomeGreeting';
+import QuickShortcutsRow from './QuickShortcutsRow';
+import NearbyDriversSummary from './NearbyDriversSummary';
 import MultiStopInput, { type RideStop } from './MultiStopInput';
 import ScheduleRide from './ScheduleRide';
 import { useLandmarks as useLandmarksSearch, type Landmark } from '@/hooks/useLandmarks';
@@ -630,6 +633,9 @@ export default function RideView() {
     handleNominatimSearch(value);
   };
   const canRequestRide = pickupLocation && dropoffLocation && fareEstimate && !isRequesting;
+  const firstName = (user?.user_metadata?.full_name as string | undefined)?.split(' ')[0] || user?.email?.split('@')[0] || '';
+  const estimatedWaitMinutes = Math.max(2, Math.min(8, Math.round(8 - nearbyDrivers.length * 0.6)));
+  const showHomeContent = rideStatus === 'idle' && !pickupLocation && !dropoffLocation;
   const unifiedPlaceResults = [...cachedPlaceResults, ...nominatimResults.map((item) => ({ ...item, source: 'nominatim' as const }))]
     .filter((item, index, arr) => {
       const key = `${item.name}-${item.displayName}`.toLowerCase();
@@ -919,6 +925,19 @@ export default function RideView() {
 
           {/* GPS state banner — explains denied/loading/unavailable with a one-tap retry. */}
           <GpsPermissionBanner status={gpsState.status} error={gpsState.error} onRetry={handleUseMyLocation} />
+
+          {/* ── HOME CONTENT (idle state, before booking starts) ── */}
+          {showHomeContent && (
+            <div className="space-y-3">
+              <RideHomeGreeting
+                name={firstName}
+                onSearchClick={() => { setActiveField('dropoff'); setSearchQuery(''); }}
+              />
+              <QuickShortcutsRow onSelect={(loc) => setDropoffLocation(loc)} />
+              <NearbyDriversSummary driverCount={nearbyDrivers.length} avgWaitMinutes={estimatedWaitMinutes} />
+              <RecentDestinations field="dropoff" onSelect={(loc) => setDropoffLocation(loc)} />
+            </div>
+          )}
 
           {/* Service type indicator */}
           {serviceType !== 'ride' &&
