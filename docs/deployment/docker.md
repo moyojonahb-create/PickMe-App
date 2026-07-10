@@ -1,5 +1,14 @@
 # Docker Deployment
 
+## Port Binding
+
+`backend` and `frontend` publish their ports bound to `127.0.0.1` only
+(`127.0.0.1:${BACKEND_PORT:-3000}:3000`, `127.0.0.1:${FRONTEND_PORT:-8080}:8080`).
+They are not reachable from outside the host. Put NGINX (see
+[reverse-proxy-tls-cloudflare.md](reverse-proxy-tls-cloudflare.md)) in front for public
+traffic, and use SSH tunneling or run `curl` from the host itself for local
+verification.
+
 ## Build
 
 ```bash

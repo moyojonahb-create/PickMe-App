@@ -37,6 +37,15 @@ groups:
           summary: PickMe Redis dependency is failing
           description: Redis failure counters increased over 5 minutes.
 
+      - alert: PickMeRateLimiterRedisFallback
+        expr: sum(increase(rate_limiter_redis_fallback_total[5m])) > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: PickMe HTTP rate limiter is repeatedly falling back to in-memory
+          description: The Redis-backed HTTP rate limiter fell back to the per-instance in-memory limiter more than 5 times over 5 minutes. Rate limiting is degraded to per-process during this window; check Redis health (PickMeRedisDownOrFailing) even if that alert has not fired yet.
+
       - alert: PickMeWebSocketConnectionDrop
         expr: websocket_connections offset 10m - websocket_connections > 20
         for: 5m

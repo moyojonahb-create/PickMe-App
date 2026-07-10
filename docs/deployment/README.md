@@ -9,3 +9,4 @@
 - [Monitoring](monitoring.md)
 - [Performance tuning](performance.md)
 - [Security](security.md)
+- [WebSocket / driver registry scaling constraint](websocket-scaling.md)

@@ -84,6 +84,11 @@ var (
 		[]string{"operation"},
 	)
 
+	rateLimiterRedisFallbackTotal = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "rate_limiter_redis_fallback_total",
+		Help: "Total times the HTTP rate limiter fell back from Redis to the in-memory limiter (Redis enabled but IncrWithTTL errored or returned an unusable count).",
+	})
+
 	tracer = otel.Tracer("pickme-backend")
 )
 
@@ -111,6 +116,7 @@ func init() {
 		redisFailuresTotal,
 		postgresQueriesTotal,
 		postgresFailuresTotal,
+		rateLimiterRedisFallbackTotal,
 	)
 }
 
@@ -321,3 +327,5 @@ func RecordPostgresFailure(operation string) {
 	}
 	postgresFailuresTotal.WithLabelValues(operation).Inc()
 }
+
+func RecordRateLimiterRedisFallback() { rateLimiterRedisFallbackTotal.Inc() }

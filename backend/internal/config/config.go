@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/joho/godotenv"
 )
@@ -23,6 +24,7 @@ type Config struct {
 	Observability    ObservabilityConfig
 	Jobs             JobsConfig
 	Notification     NotificationConfig
+	Deployment       DeploymentConfig
 }
 
 type CORSConfig struct {
@@ -131,12 +133,27 @@ type NotificationConfig struct {
 	EmailToken         string
 }
 
+// DeploymentConfig carries operator-declared facts about how this process is
+// being run. It does not enable or configure clustering — it exists only so
+// the backend can warn loudly when it is told it's one of several replicas,
+// since the in-memory WebSocket driver/rider registries and the in-memory
+// rate-limit fallback are per-process only. See
+// docs/deployment/websocket-scaling.md for the full constraint.
+type DeploymentConfig struct {
+	InstanceCount int
+}
+
 func Load() (Config, error) {
 	_ = godotenv.Load()
+
+	appEnv := envOrDefault("APP_ENV", "production")
 
 	databaseURL := os.Getenv("DATABASE_URL")
 	if databaseURL == "" {
 		return Config{}, errors.New("DATABASE_URL is missing in .env")
+	}
+	if !isExplicitDevelopmentAppEnv(appEnv) && !hasRequiredDatabaseSSLMode(databaseURL) {
+		return Config{}, errors.New("DATABASE_URL must include sslmode=require, sslmode=verify-full, or sslmode=verify-ca when APP_ENV is not development, dev, or local")
 	}
 
 	port := os.Getenv("PORT")
@@ -144,12 +161,25 @@ func Load() (Config, error) {
 		port = "3000"
 	}
 
+	corsAllowOrigins := os.Getenv("CORS_ALLOW_ORIGINS")
+	if corsAllowOrigins == "" {
+		if isExplicitDevelopmentAppEnv(appEnv) {
+			corsAllowOrigins = "http://localhost:8080,http://localhost:5173"
+		} else {
+			return Config{}, errors.New("CORS_ALLOW_ORIGINS is required when APP_ENV is not development, dev, or local")
+		}
+	}
+
 	supabaseURL := os.Getenv("SUPABASE_URL")
+	jwtIssuer := os.Getenv("SUPABASE_JWT_ISSUER")
+	if supabaseURL == "" && jwtIssuer == "" && !isExplicitDevelopmentAppEnv(appEnv) {
+		return Config{}, errors.New("SUPABASE_URL or SUPABASE_JWT_ISSUER is required when APP_ENV is not development, dev, or local")
+	}
 	auth := AuthConfig{
 		SupabaseURL:       supabaseURL,
 		SupabaseJWTSecret: os.Getenv("SUPABASE_JWT_SECRET"),
 		Audience:          envOrDefault("SUPABASE_JWT_AUDIENCE", "authenticated"),
-		Issuer:            os.Getenv("SUPABASE_JWT_ISSUER"),
+		Issuer:            jwtIssuer,
 	}
 	if auth.Issuer == "" && supabaseURL != "" {
 		auth.Issuer = supabaseURL + "/auth/v1"
@@ -235,14 +265,17 @@ func Load() (Config, error) {
 		EmailEndpoint:      os.Getenv("NOTIFICATION_EMAIL_ENDPOINT"),
 		EmailToken:         os.Getenv("NOTIFICATION_EMAIL_TOKEN"),
 	}
+	deployment := DeploymentConfig{
+		InstanceCount: envInt("BACKEND_INSTANCE_COUNT", 1),
+	}
 
 	return Config{
 		DatabaseURL:      databaseURL,
 		Port:             port,
-		AppEnv:           envOrDefault("APP_ENV", "production"),
-		ReadinessProfile: envOrDefault("READINESS_PROFILE", envOrDefault("APP_PROFILE", envOrDefault("APP_ENV", "production"))),
+		AppEnv:           appEnv,
+		ReadinessProfile: envOrDefault("READINESS_PROFILE", envOrDefault("APP_PROFILE", appEnv)),
 		CORS: CORSConfig{
-			AllowOrigins: envOrDefault("CORS_ALLOW_ORIGINS", "https://www.voyex.site,https://pickme-co-zw.lovable.app"),
+			AllowOrigins: corsAllowOrigins,
 			AllowMethods: "GET,POST,PUT,DELETE,OPTIONS",
 			AllowHeaders: "Origin, Content-Type, Accept, Authorization",
 		},
@@ -259,7 +292,38 @@ func Load() (Config, error) {
 		Observability: observability,
 		Jobs:          jobs,
 		Notification:  notification,
+		Deployment:    deployment,
 	}, nil
+}
+
+// isExplicitDevelopmentAppEnv mirrors the explicit-development-mode convention
+// used elsewhere in this backend (e.g. mock card processor, payment status
+// verifier fallbacks): only these values are treated as safe to relax
+// production-grade requirements for.
+func isExplicitDevelopmentAppEnv(appEnv string) bool {
+	switch strings.ToLower(strings.TrimSpace(appEnv)) {
+	case "development", "dev", "local":
+		return true
+	default:
+		return false
+	}
+}
+
+// hasRequiredDatabaseSSLMode reports whether databaseURL declares one of the
+// sslmode values that actually enforces a TLS connection to Postgres.
+// sslmode=prefer/allow silently fall back to plaintext if TLS negotiation
+// fails, so they are deliberately not accepted here. This works against
+// both URL-style (postgres://...?sslmode=require) and keyword/value
+// (host=... sslmode=require) connection strings, since both spell the
+// keyword as a literal "sslmode=" substring.
+func hasRequiredDatabaseSSLMode(databaseURL string) bool {
+	lower := strings.ToLower(databaseURL)
+	for _, mode := range []string{"sslmode=require", "sslmode=verify-full", "sslmode=verify-ca"} {
+		if strings.Contains(lower, mode) {
+			return true
+		}
+	}
+	return false
 }
 
 func envOrDefault(key, fallback string) string {

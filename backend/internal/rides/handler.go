@@ -130,8 +130,11 @@ func rideAPIResponse(ride rideAPIRecord) fiber.Map {
 }
 
 type Handler struct {
-	db                DB
-	ws                *websocket.Manager
+	db DB
+	ws *websocket.Manager
+	// riders/drivers are per-process ConnectionRegistry lookups (direct
+	// send, not room broadcast) — see websocket.ConnectionRegistry and
+	// docs/deployment/websocket-scaling.md. Single backend replica only.
 	riders            *websocket.ConnectionRegistry
 	drivers           *websocket.ConnectionRegistry
 	offerNotifier     rideOfferNotifier

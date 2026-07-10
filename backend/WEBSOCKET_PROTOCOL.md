@@ -44,6 +44,16 @@ Legacy `rider_id` and `driver_id` query parameters are no longer trusted as iden
 
 Room membership is authorized before the websocket upgrade completes. Only the ride's assigned rider or assigned driver can join `ride_{ride_id}`.
 
+## Inbound Message Rate Limiting
+
+Each connection allows up to 30 inbound client messages (any type — `ping`,
+`join_room`, `leave_room`, or unrecognized) per rolling 10-second window.
+Exceeding it closes the connection with close code `1008` (policy
+violation) and reason `rate limit exceeded`. This has no effect on normal
+heartbeat, room join/leave traffic, or `driver_location` delivery, since
+driver location updates are submitted over HTTP and only ever sent to
+clients, never read from them.
+
 ## Server Echo Behavior
 
 For compatibility with the previous backend, arbitrary websocket messages sent by the client are logged and echoed twice:

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -39,6 +40,9 @@ func main() {
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatal(err)
+	}
+	if warning := singleInstanceWarningMessage(cfg); warning != "" {
+		log.Println(warning)
 	}
 	obsShutdown, err := observability.Init(context.Background(), observability.Config{
 		ServiceName:  "pickme-backend",
@@ -227,6 +231,12 @@ func main() {
 
 	wsManager := websocket.NewManager().WithPubSub(redisClient)
 	wsManager.StartPubSub(context.Background())
+	// driverRegistry/riderRegistry are per-process only (see
+	// websocket.ConnectionRegistry doc comment). The direct offer notifier
+	// below looks drivers up by ID rather than broadcasting through
+	// wsManager's Redis pub/sub, so it only reaches a driver connected to
+	// this exact instance. Single backend replica only; see
+	// docs/deployment/websocket-scaling.md.
 	driverRegistry := websocket.NewConnectionRegistry()
 	riderRegistry := websocket.NewConnectionRegistry()
 	dispatchService.WithOfferNotifier(dispatch.OfferNotifierFunc(func(ctx context.Context, offer dispatch.DriverOffer, ride dispatch.RideContext, expiresAt time.Time) {
@@ -338,6 +348,27 @@ func main() {
 	if err := app.Listen(":" + cfg.Port); err != nil {
 		log.Fatal(err)
 	}
+}
+
+// singleInstanceWarningMessage returns a non-empty, greppable log line when
+// BACKEND_INSTANCE_COUNT declares more than one replica. This backend's
+// WebSocket driver/rider registries (internal/websocket.ConnectionRegistry,
+// wired into internal/rides.Handler and the dispatch offer notifier below)
+// and the in-memory rate-limit fallback (internal/middleware.GlobalRateLimit)
+// are per-process state with no cross-instance sync. Setting the env var
+// does not enable clustering; it only surfaces this known limitation loudly
+// at startup instead of silently dropping driver offers under a load
+// balancer. See docs/deployment/websocket-scaling.md.
+func singleInstanceWarningMessage(cfg config.Config) string {
+	if cfg.Deployment.InstanceCount <= 1 {
+		return ""
+	}
+	return fmt.Sprintf(
+		"DEPLOYMENT_SINGLE_INSTANCE_CONSTRAINT_VIOLATION instance_count=%d reason=%q doc=docs/deployment/websocket-scaling.md timestamp=%s",
+		cfg.Deployment.InstanceCount,
+		"websocket driver/rider registries and the in-memory rate-limit fallback are per-process only; direct-to-driver dispatch offers and non-Redis rate limiting will not work correctly across replicas",
+		time.Now().UTC().Format(time.RFC3339),
+	)
 }
 
 func cardProcessorForConfig(cfg config.Config) (payments.CardProcessor, error) {

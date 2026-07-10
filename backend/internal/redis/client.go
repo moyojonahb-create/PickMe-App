@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/url"
 	"strconv"
@@ -93,7 +94,6 @@ func (c *Client) Close() error {
 			return err
 		}
 	}
-	return nil
 }
 
 func (c *Client) Ping(ctx context.Context) error {
@@ -494,7 +494,7 @@ func readRESP(reader *bufio.Reader) (any, error) {
 			return "", err
 		}
 		buf := make([]byte, size+2)
-		if _, err := reader.Read(buf); err != nil {
+		if _, err := io.ReadFull(reader, buf); err != nil {
 			return nil, err
 		}
 		return string(buf[:size]), nil

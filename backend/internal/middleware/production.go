@@ -116,6 +116,7 @@ func GlobalRateLimit(cfg RateLimitConfig) fiber.Handler {
 		window: cfg.Window,
 		hits:   map[string]rateLimitEntry{},
 	}
+	go limiter.startCleanup(cfg.Window)
 
 	return func(c *fiber.Ctx) error {
 		key := cfg.KeyFunc(c)
@@ -160,6 +161,7 @@ func allowRequest(cfg RateLimitConfig, limiter *fixedWindowLimiter, key string, 
 			err,
 			now.UTC().Format(time.RFC3339),
 		)
+		observability.RecordRateLimiterRedisFallback()
 	}
 	return limiter.allow(key, now)
 }
@@ -209,6 +211,31 @@ func (l *fixedWindowLimiter) allow(key string, now time.Time) (bool, int, time.T
 		return false, 0, entry.resetAt
 	}
 	return true, l.max - entry.count, entry.resetAt
+}
+
+// startCleanup periodically evicts expired entries so this in-process
+// fallback map does not grow without bound for the lifetime of the server.
+// It is only ever exercised when the Redis-backed store is disabled or
+// transiently unavailable; entries are otherwise never removed.
+func (l *fixedWindowLimiter) startCleanup(interval time.Duration) {
+	if interval <= 0 {
+		interval = time.Minute
+	}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for now := range ticker.C {
+		l.sweepExpired(now)
+	}
+}
+
+func (l *fixedWindowLimiter) sweepExpired(now time.Time) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for key, entry := range l.hits {
+		if !entry.resetAt.IsZero() && now.After(entry.resetAt) {
+			delete(l.hits, key)
+		}
+	}
 }
 
 func newRequestID() string {

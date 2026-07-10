@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strings"
 	"testing"
 
 	"pickme-backend/internal/config"
@@ -73,5 +74,31 @@ func TestProviderStatusVerifierAllowsDevelopmentFallback(t *testing.T) {
 	}
 	if verifier == nil {
 		t.Fatal("expected development fallback verifier")
+	}
+}
+
+func TestSingleInstanceWarningMessageEmptyForSingleInstance(t *testing.T) {
+	for _, count := range []int{0, 1} {
+		msg := singleInstanceWarningMessage(config.Config{
+			Deployment: config.DeploymentConfig{InstanceCount: count},
+		})
+		if msg != "" {
+			t.Fatalf("expected no warning for instance count %d, got %q", count, msg)
+		}
+	}
+}
+
+func TestSingleInstanceWarningMessageNonEmptyForMultipleInstances(t *testing.T) {
+	msg := singleInstanceWarningMessage(config.Config{
+		Deployment: config.DeploymentConfig{InstanceCount: 3},
+	})
+	if msg == "" {
+		t.Fatal("expected a warning for multi-instance config")
+	}
+	if !strings.Contains(msg, "DEPLOYMENT_SINGLE_INSTANCE_CONSTRAINT_VIOLATION") {
+		t.Fatalf("expected structured event name in warning, got %q", msg)
+	}
+	if !strings.Contains(msg, "instance_count=3") {
+		t.Fatalf("expected instance_count=3 in warning, got %q", msg)
 	}
 }

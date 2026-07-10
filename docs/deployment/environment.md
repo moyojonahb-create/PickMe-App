@@ -29,12 +29,18 @@ Never put Supabase service-role keys, provider tokens, webhook secrets, or Sentr
 
 ## Backend Required Variables
 
-- `DATABASE_URL`: Supabase PostgreSQL connection string.
+- `DATABASE_URL`: Supabase PostgreSQL connection string. Must include
+  `sslmode=require`, `sslmode=verify-full`, or `sslmode=verify-ca` whenever
+  `APP_ENV` is not `development`, `dev`, or `local` — the backend fails to
+  start otherwise. `sslmode=prefer`/`allow`/`disable` are rejected in that
+  case because they silently allow a plaintext fallback.
 - `SUPABASE_URL`: Supabase project URL.
 - `SUPABASE_JWT_SECRET`: JWT validation secret.
 - `APP_ENV`: `development`, `staging`, or `production`.
 - `READINESS_PROFILE`: `development`, `staging`, `pilot`, or `production`.
-- `CORS_ALLOW_ORIGINS`: Comma-separated frontend origins.
+- `CORS_ALLOW_ORIGINS`: Comma-separated frontend origins. Required and enforced at
+  startup whenever `APP_ENV` is not `development`, `dev`, or `local` — the backend
+  fails to start rather than falling back to a default origin list.
 
 ## Backend Infrastructure Variables
 
@@ -69,6 +75,16 @@ Process-specific defaults:
 - `backend` / `pickme-server`: runs HTTP, WebSockets, health, metrics, and enqueues jobs.
 - `asynq-worker` / `pickme-worker`: runs job handlers only and should use `ASYNQ_CONCURRENCY` or `ASYNQ_WORKER_CONCURRENCY`.
 - `asynq-scheduler` / `pickme-scheduler`: runs scheduled job registration only. It is idle when no recurring jobs are registered.
+
+## Scaling
+
+- `BACKEND_INSTANCE_COUNT`: optional, defaults to `1`. Declares how many
+  `backend`/`pickme-server` replicas you intend to run. This backend
+  supports exactly one replica today — the WebSocket driver/rider registries
+  and the in-memory rate-limit fallback are per-process only. Setting this
+  above `1` does not enable clustering; it only makes the process log a
+  `DEPLOYMENT_SINGLE_INSTANCE_CONSTRAINT_VIOLATION` warning at startup. See
+  [websocket-scaling.md](websocket-scaling.md) before scaling horizontally.
 
 ## Dispatch
 

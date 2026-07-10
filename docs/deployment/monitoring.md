@@ -82,6 +82,7 @@ Set:
 - API p95 > 500 ms for 5 minutes.
 - Postgres dependency failures for 2 minutes.
 - Redis dependency failures for 2 minutes.
+- HTTP rate limiter falls back from Redis to in-memory more than 5 times over 5 minutes (`rate_limiter_redis_fallback_total`, `PickMeRateLimiterRedisFallback`). This is a leading indicator of Redis degradation — it can fire before `PickMeRedisDownOrFailing` does, since a slow/flaky Redis produces fallbacks without necessarily tripping the failure counter threshold yet.
 - Asynq pending or retry queue depth > 1000 for 10 minutes.
 - Dispatch, wallet, notification, or risk failures for 5 minutes.
 - WebSocket active connections drop by more than 20 compared with 10 minutes ago.

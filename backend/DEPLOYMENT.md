@@ -122,7 +122,12 @@ Only the assigned rider or assigned driver can join a ride room.
 - Store `.env` values in the deployment platform secret manager.
 - Do not commit database credentials, Supabase secrets, or built binaries.
 - Configure the load balancer to support websocket upgrades.
-- Keep websocket connections sticky if running more than one backend instance.
+- Run exactly one backend instance. Sticky load-balancer sessions alone do
+  not make horizontal scaling safe: the in-memory driver/rider WebSocket
+  registries and rate-limit fallback are per-process, and dispatch offer
+  delivery looks drivers up directly rather than broadcasting through Redis
+  pub/sub. See `docs/deployment/websocket-scaling.md` before adding a second
+  replica.
 - Add database migrations before schema changes are introduced.
 - Add request logging, panic recovery, and rate limiting once client compatibility is confirmed.
 - Keep client mutation calls sending Supabase bearer tokens.

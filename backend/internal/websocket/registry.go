@@ -6,6 +6,14 @@ import (
 	"github.com/gofiber/contrib/socketio"
 )
 
+// ConnectionRegistry maps a user ID to their live WebSocket connection on
+// this process. It is in-memory, per-instance state with no cross-node sync:
+// looking up a driver or rider here only finds them if they are connected to
+// this same backend replica. Direct sends via a registry lookup (as opposed
+// to room broadcasts, which go through Manager's Redis pub/sub) will
+// silently miss a user connected to a different instance. This backend
+// currently supports exactly one replica; see
+// docs/deployment/websocket-scaling.md before scaling horizontally.
 type ConnectionRegistry struct {
 	mu          sync.RWMutex
 	connections map[string]*socketio.Websocket

@@ -6,6 +6,7 @@ import (
 	"log"
 	"time"
 
+	fasthttpws "github.com/fasthttp/websocket"
 	"github.com/gofiber/contrib/socketio"
 	"github.com/gofiber/fiber/v2"
 
@@ -79,6 +80,8 @@ func NewHandler(manager *Manager, riders *ConnectionRegistry, drivers *Connectio
 			log.Println("WebSocket client disconnected")
 		}()
 
+		messageLimiter := newConnectionMessageLimiter(defaultMessageRateLimit, defaultMessageRateWindow)
+
 		for {
 			_, msg, err := kws.Conn.ReadMessage()
 			if err != nil {
@@ -89,6 +92,15 @@ func NewHandler(manager *Manager, riders *ConnectionRegistry, drivers *Connectio
 
 			observability.RecordWebSocketMessageReceived()
 			log.Printf("WEBSOCKET_MESSAGE_RECEIVED user_id=%s bytes=%d", userID, len(msg))
+
+			if !messageLimiter.Allow(time.Now()) {
+				log.Printf("WEBSOCKET_RATE_LIMIT_EXCEEDED user_id=%s limit=%d window=%s timestamp=%s",
+					userID, defaultMessageRateLimit, defaultMessageRateWindow, time.Now().UTC().Format(time.RFC3339))
+				closePayload := fasthttpws.FormatCloseMessage(fasthttpws.ClosePolicyViolation, "rate limit exceeded")
+				_ = kws.Conn.WriteControl(fasthttpws.CloseMessage, closePayload, time.Now().Add(defaultWriteTimeout))
+				break
+			}
+
 			if handleControlMessage(kws, manager, authorizer, userID, msg) {
 				continue
 			}
