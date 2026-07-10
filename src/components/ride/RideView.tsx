@@ -926,6 +926,19 @@ export default function RideView() {
           {/* GPS state banner — explains denied/loading/unavailable with a one-tap retry. */}
           <GpsPermissionBanner status={gpsState.status} error={gpsState.error} onRetry={handleUseMyLocation} />
 
+          {/* ── HOME CONTENT (idle state, before booking starts) ── */}
+          {showHomeContent && (
+            <div className="space-y-3">
+              <RideHomeGreeting
+                name={firstName}
+                onSearchClick={() => { setActiveField('dropoff'); setSearchQuery(''); }}
+              />
+              <QuickShortcutsRow onSelect={(loc) => setDropoffLocation(loc)} />
+              <NearbyDriversSummary driverCount={nearbyDrivers.length} avgWaitMinutes={estimatedWaitMinutes} />
+              <RecentDestinations field="dropoff" onSelect={(loc) => setDropoffLocation(loc)} />
+            </div>
+          )}
+
           {/* Service type indicator */}
           {serviceType !== 'ride' &&
           <div className="flex items-center justify-between px-1">
