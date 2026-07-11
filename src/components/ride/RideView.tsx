@@ -932,8 +932,9 @@ export default function RideView() {
               if (pickupLocation) return;
               if (gpsState.coords) {
                 setPickupLocation({ name: 'My location', lat: gpsState.coords.lat, lng: gpsState.coords.lng });
-              } else if (gpsState.status === 'idle' || gpsState.status === 'denied') {
-                handleUseMyLocation();
+              } else {
+                if (gpsState.status === 'idle') handleUseMyLocation();
+                setPickupLocation({ name: `${selectedTown.name} centre`, lat: selectedTown.center.lat, lng: selectedTown.center.lng });
               }
             };
             const pickDropoff = (loc: { name: string; lat: number; lng: number }) => {
