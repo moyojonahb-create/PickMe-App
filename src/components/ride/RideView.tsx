@@ -927,17 +927,35 @@ export default function RideView() {
           <GpsPermissionBanner status={gpsState.status} error={gpsState.error} onRetry={handleUseMyLocation} />
 
           {/* ── HOME CONTENT (idle state, before booking starts) ── */}
-          {showHomeContent && (
-            <div className="space-y-3">
-              <RideHomeGreeting
-                name={firstName}
-                onSearchClick={() => { setActiveField('dropoff'); setSearchQuery(''); }}
-              />
-              <QuickShortcutsRow onSelect={(loc) => setDropoffLocation(loc)} />
-              <NearbyDriversSummary driverCount={nearbyDrivers.length} avgWaitMinutes={estimatedWaitMinutes} />
-              <RecentDestinations field="dropoff" onSelect={(loc) => setDropoffLocation(loc)} />
-            </div>
-          )}
+          {showHomeContent && (() => {
+            const ensurePickup = () => {
+              if (pickupLocation) return;
+              if (gpsState.coords) {
+                setPickupLocation({ name: 'My location', lat: gpsState.coords.lat, lng: gpsState.coords.lng });
+              } else if (gpsState.status === 'idle' || gpsState.status === 'denied') {
+                handleUseMyLocation();
+              }
+            };
+            const pickDropoff = (loc: { name: string; lat: number; lng: number }) => {
+              ensurePickup();
+              setDropoffLocation(loc);
+              setActiveField(null);
+              setSearchQuery('');
+              haptic('light');
+              setSheetExpanded(true);
+            };
+            return (
+              <div className="space-y-3">
+                <RideHomeGreeting
+                  name={firstName}
+                  onSearchClick={() => { ensurePickup(); setActiveField('dropoff'); setSearchQuery(''); setSheetExpanded(true); }}
+                />
+                <QuickShortcutsRow onSelect={pickDropoff} />
+                <NearbyDriversSummary driverCount={nearbyDrivers.length} avgWaitMinutes={estimatedWaitMinutes} />
+                <RecentDestinations field="dropoff" onSelect={pickDropoff} />
+              </div>
+            );
+          })()}
 
           {/* Service type indicator */}
           {serviceType !== 'ride' &&
