@@ -975,27 +975,7 @@ export default function RideView() {
 
 
           {/* Pickup & Dropoff — premium cards with swap */}
-          <PilotReadinessCard
-            title="Pilot booking checklist"
-            subtitle="A quick check before requesting your ride."
-            items={[
-              {
-                label: pickupLocation ? "Pickup set" : "Set pickup",
-                detail: pickupLocation ? "Use a precise landmark or GPS pickup." : "Choose your exact pickup point before requesting.",
-                done: !!pickupLocation,
-              },
-              {
-                label: dropoffLocation ? "Drop-off set" : "Set drop-off",
-                detail: dropoffLocation ? "Fare preview can now be calculated." : "Pick a destination to see the fare preview.",
-                done: !!dropoffLocation,
-              },
-              {
-                label: paymentMethod === "cash" ? "Cash fallback selected" : "Wallet selected",
-                detail: paymentMethod === "cash" ? "Recommended for the controlled pilot." : "Keep cash ready if provider payments are unavailable.",
-                done: true,
-              },
-            ]}
-          />
+
 
           <div className="space-y-2 relative">
             <button
