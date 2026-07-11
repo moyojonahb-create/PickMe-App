@@ -7,13 +7,7 @@ import { sentryVitePlugin } from "@sentry/vite-plugin";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const requiredEnv = (env, key) => {
-  const value = env[key];
-  if (!value) {
-    throw new Error(`${key} is required for Vite builds`);
-  }
-  return value;
-};
+const publicEnv = (env, key) => env[key] || process.env[key] || "";
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
@@ -46,8 +40,8 @@ export default defineConfig(({ mode }) => {
       }),
     ].filter(Boolean),
     define: {
-      "import.meta.env.VITE_SUPABASE_URL": JSON.stringify(requiredEnv(env, "VITE_SUPABASE_URL")),
-      "import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY": JSON.stringify(requiredEnv(env, "VITE_SUPABASE_PUBLISHABLE_KEY")),
+      "import.meta.env.VITE_SUPABASE_URL": JSON.stringify(publicEnv(env, "VITE_SUPABASE_URL")),
+      "import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY": JSON.stringify(publicEnv(env, "VITE_SUPABASE_PUBLISHABLE_KEY")),
       "import.meta.env.VITE_MAPBOX_ACCESS_TOKEN": JSON.stringify(env.VITE_MAPBOX_ACCESS_TOKEN || ""),
     },
     resolve: {
