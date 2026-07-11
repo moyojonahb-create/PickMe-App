@@ -4,13 +4,7 @@ import path from "path";
 import { componentTagger } from "lovable-tagger";
 import { sentryVitePlugin } from "@sentry/vite-plugin";
 
-const requiredEnv = (env: Record<string, string>, key: string) => {
-  const value = env[key];
-  if (!value) {
-    throw new Error(`${key} is required for Vite builds`);
-  }
-  return value;
-};
+const publicEnv = (env: Record<string, string>, key: string) => env[key] || process.env[key] || '';
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
@@ -47,10 +41,10 @@ export default defineConfig(({ mode }) => {
   ].filter(Boolean),
   define: {
     'import.meta.env.VITE_SUPABASE_URL': JSON.stringify(
-      requiredEnv(env, 'VITE_SUPABASE_URL')
+      publicEnv(env, 'VITE_SUPABASE_URL')
     ),
     'import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY': JSON.stringify(
-      requiredEnv(env, 'VITE_SUPABASE_PUBLISHABLE_KEY')
+      publicEnv(env, 'VITE_SUPABASE_PUBLISHABLE_KEY')
     ),
     // Mapbox uses a public browser token. Keep it in env so builds never carry stale keys.
     'import.meta.env.VITE_MAPBOX_ACCESS_TOKEN': JSON.stringify(
