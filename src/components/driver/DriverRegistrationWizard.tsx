@@ -188,20 +188,32 @@ export default function DriverRegistrationWizard({ onSuccess, onClose }: DriverR
         });
       };
 
-      uploads.push(uploadDoc(licenseFront, 'drivers_license'));
-      uploads.push(uploadDoc(licenseBack, 'drivers_license_back'));
-      uploads.push(uploadDoc(idCard, 'police_clearance')); // maps to existing doc type
-      uploads.push(uploadDoc(selfieWithId, 'insurance')); // maps to existing doc type
-      uploads.push(uploadDoc(vehiclePhoto, 'vehicle_registration'));
-      uploads.push(uploadDoc(insuranceDoc, 'vehicle_insurance'));
+      uploads.push(uploadDoc(licenseFront, 'license'));
+      uploads.push(uploadDoc(licenseBack, 'license_back'));
+      uploads.push(uploadDoc(idCard, 'id_card'));
+      uploads.push(uploadDoc(selfieWithId, 'selfie_with_id'));
+      uploads.push(uploadDoc(vehiclePhoto, 'vehicle_photo'));
+      uploads.push(uploadDoc(insuranceDoc, 'insurance'));
       uploads.push(uploadDoc(personalPhoto, 'personal_photo'));
 
-      await Promise.allSettled(uploads);
+      const results = await Promise.allSettled(uploads);
+      const failedCount = results.filter(r => r.status === 'rejected').length;
+      results.forEach(r => {
+        if (r.status === 'rejected') console.error('Driver document upload failed:', r.reason);
+      });
 
       // Brief processing animation
       await new Promise(r => setTimeout(r, 2500));
 
-      toast({ title: 'Application submitted!', description: 'Your documents are being reviewed.' });
+      if (failedCount > 0) {
+        toast({
+          title: 'Application submitted with warnings',
+          description: `${failedCount} document(s) failed to upload. You can re-upload them from your driver dashboard.`,
+          variant: 'destructive',
+        });
+      } else {
+        toast({ title: 'Application submitted!', description: 'Your documents are being reviewed.' });
+      }
       onSuccess();
     } catch (error: unknown) {
       let errorMessage = 'Failed to submit application.';

@@ -78,9 +78,14 @@ const statusColors: Record<string, string> = {
 
 const documentLabels: Record<string, string> = {
   license: "Driver's License",
+  license_back: "Driver's License (back)",
   registration: 'Vehicle Registration',
   insurance: 'Insurance Certificate',
   id_card: 'National ID Card',
+  selfie_with_id: 'Selfie with ID',
+  vehicle_photo: 'Vehicle Photo',
+  personal_photo: 'Personal Photo',
+  police_clearance: 'Police Clearance',
 };
 
 const AdminDriverDetail = () => {

@@ -19,8 +19,8 @@ interface Document {
 }
 
 const requiredDocuments = [
-  { type: 'drivers_license', label: "Driver's License", description: 'Valid driver license (front and back)' },
-  { type: 'vehicle_registration', label: 'Vehicle Registration', description: 'Vehicle registration certificate' },
+  { type: 'license', label: "Driver's License", description: 'Valid driver license (front and back)' },
+  { type: 'registration', label: 'Vehicle Registration', description: 'Vehicle registration certificate' },
   { type: 'insurance', label: 'Insurance', description: 'Valid vehicle insurance document' },
   { type: 'police_clearance', label: 'Police Clearance', description: 'Police clearance certificate' },
 ];
