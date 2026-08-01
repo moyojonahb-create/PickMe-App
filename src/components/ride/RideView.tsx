@@ -59,6 +59,8 @@ import { NotificationBell } from '@/components/NotificationCenter';
 
 import RecentDestinations from './RecentDestinations';
 import RideHomeGreeting from './RideHomeGreeting';
+import DropoffAutocomplete from './DropoffAutocomplete';
+
 import QuickShortcutsRow from './QuickShortcutsRow';
 import NearbyDriversSummary from './NearbyDriversSummary';
 import MultiStopInput, { type RideStop } from './MultiStopInput';
