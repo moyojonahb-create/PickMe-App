@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { adminVerify } from '@/lib/businessApi';
+import { supabase } from '@/integrations/supabase/client';
 
 interface AdminAuthState {
   isAdmin: boolean;
