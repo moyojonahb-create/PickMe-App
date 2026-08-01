@@ -48,12 +48,36 @@ export const useAdminAuth = () => {
         return;
       }
 
+      // Fallback: check the roles table directly (used when the Go backend is unreachable)
+      const checkRolesTable = async () => {
+        const { data, error } = await supabase
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', user.id)
+          .eq('role', 'admin')
+          .maybeSingle();
+        if (error) throw error;
+        return !!data;
+      };
+
       try {
         if (cancelled) return;
 
-        const data = await adminVerify();
+        let isAdmin = false;
+        try {
+          const data = await adminVerify();
+          isAdmin = data?.isAdmin === true && !data?.error;
+        } catch {
+          isAdmin = false;
+        }
 
-        if (data?.error || data?.isAdmin !== true) {
+        if (!isAdmin) {
+          isAdmin = await checkRolesTable();
+        }
+
+        if (cancelled) return;
+
+        if (!isAdmin) {
           cachedAdmin = { userId: user.id, isAdmin: false, ts: Date.now() };
           setState({ isAdmin: false, isLoading: false, error: 'Access denied' });
           navigateRef.current('/');
