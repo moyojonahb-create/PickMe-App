@@ -1,3 +1,4 @@
+import { forwardRef } from 'react';
 import { Facebook, Twitter, Instagram, Linkedin, Globe, Mail, Phone, MapPin } from 'lucide-react';
 import PickMeLogo from '@/components/PickMeLogo';
 
@@ -35,9 +36,9 @@ const socialLinks = [
   { icon: Linkedin, href: '#', label: 'LinkedIn' },
 ];
 
-const Footer = () => {
+const Footer = forwardRef<HTMLElement>((_props, ref) => {
   return (
-    <footer className="bg-primary text-primary-foreground">
+    <footer ref={ref} className="bg-primary text-primary-foreground">
       <div className="pickme-container py-14 lg:py-20">
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-10 mb-14">
           <div className="col-span-2 md:col-span-4 lg:col-span-1 mb-4 lg:mb-0">
@@ -128,6 +129,8 @@ const Footer = () => {
       </div>
     </footer>
   );
-};
+});
+
+Footer.displayName = 'Footer';
 
 export default Footer;

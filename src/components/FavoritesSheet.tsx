@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { forwardRef, useState, useEffect } from 'react';
 import { Star, MapPin, Trash2, Plus, Loader2, Home, Briefcase, AlertCircle } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
@@ -65,7 +65,7 @@ const geocodeAddress = async (address: string): Promise<{ latitude: number; long
   }
 };
 
-const FavoritesSheet = ({ isOpen, onClose, onSelectLocation }: FavoritesSheetProps) => {
+const FavoritesSheet = forwardRef<HTMLDivElement, FavoritesSheetProps>(({ isOpen, onClose, onSelectLocation }, ref) => {
   const { user } = useAuth();
   const [favorites, setFavorites] = useState<FavoriteLocation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -152,7 +152,7 @@ const FavoritesSheet = ({ isOpen, onClose, onSelectLocation }: FavoritesSheetPro
 
   return (
     <Sheet open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent side="right" className="w-full sm:max-w-md">
+      <SheetContent ref={ref} side="right" className="w-full sm:max-w-md">
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">
             <Star className="w-5 h-5" />
@@ -271,6 +271,8 @@ const FavoritesSheet = ({ isOpen, onClose, onSelectLocation }: FavoritesSheetPro
       </SheetContent>
     </Sheet>
   );
-};
+});
+
+FavoritesSheet.displayName = 'FavoritesSheet';
 
 export default FavoritesSheet;
