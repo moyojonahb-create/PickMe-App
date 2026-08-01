@@ -1,3 +1,4 @@
+import { forwardRef } from 'react';
 import pickmeLogo from '@/assets/pickme-logo.png';
 
 interface PickMeLogoProps {
@@ -16,16 +17,16 @@ const sizeClasses = {
   xl: 'h-16 sm:h-20 md:h-24 lg:h-28',
 };
 
-const PickMeLogo = ({ 
+const PickMeLogo = forwardRef<HTMLDivElement, PickMeLogoProps>(({ 
   className = '', 
   variant = 'default', 
   showTagline = false,
   size = 'md',
-}: PickMeLogoProps) => {
+}, ref) => {
   const isLight = variant === 'inverted' || variant === 'light';
 
   return (
-    <div className={`flex items-center gap-2 ${className}`}>
+    <div ref={ref} className={`flex items-center gap-2 ${className}`}>
       <img 
         src={pickmeLogo} 
         alt="PickMe" 
@@ -39,6 +40,8 @@ const PickMeLogo = ({
       )}
     </div>
   );
-};
+});
+
+PickMeLogo.displayName = 'PickMeLogo';
 
 export default PickMeLogo;

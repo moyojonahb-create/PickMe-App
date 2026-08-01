@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { forwardRef, useState, useEffect } from 'react';
 import { Clock, MapPin, ArrowRight, Loader2, ReceiptText, RotateCcw } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
@@ -44,7 +44,7 @@ const statusColors: Record<string, string> = {
   in_progress: 'bg-primary/10 text-primary',
 };
 
-const RideHistorySheet = ({ isOpen, onClose }: RideHistorySheetProps) => {
+const RideHistorySheet = forwardRef<HTMLDivElement, RideHistorySheetProps>(({ isOpen, onClose }, ref) => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [rides, setRides] = useState<Ride[]>([]);
@@ -96,7 +96,7 @@ const RideHistorySheet = ({ isOpen, onClose }: RideHistorySheetProps) => {
 
   return (
     <Sheet open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent side="right" className="w-full sm:max-w-md">
+      <SheetContent ref={ref} side="right" className="w-full sm:max-w-md">
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">
             <Clock className="w-5 h-5" />
@@ -224,6 +224,8 @@ const RideHistorySheet = ({ isOpen, onClose }: RideHistorySheetProps) => {
       </SheetContent>
     </Sheet>
   );
-};
+});
+
+RideHistorySheet.displayName = 'RideHistorySheet';
 
 export default RideHistorySheet;

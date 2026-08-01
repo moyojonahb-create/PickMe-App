@@ -89,11 +89,11 @@
           setTimeout(function () { s.remove(); }, 400);
         }
 
-        // Minimum 5s display for branding
+        // Minimum branding display
         setTimeout(function () {
           window.__splashMinDone = true;
           tryHide();
-        }, 5000);
+        }, 1200);
 
         // React calls window.__dismissSplash() when the app is mounted
         window.__dismissSplash = function () {
@@ -101,12 +101,18 @@
           tryHide();
         };
 
-        // Hard fallback: never leave splash stuck beyond 6s
+        // Safety: dismiss once the page has fully loaded
+        window.addEventListener('load', function () {
+          setTimeout(function () { window.__dismissSplash(); }, 300);
+        });
+
+        // Hard fallback: never leave splash stuck
         setTimeout(function () {
           window.__splashMinDone = true;
           window.__splashReady = true;
           tryHide();
-        }, 6000);
+        }, 2500);
+
       })();
     </script>
   </body>
