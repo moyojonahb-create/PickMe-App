@@ -354,6 +354,13 @@ export default function RideView() {
     haptic('light');
   };
 
+  const rankContext = useMemo(() => ({
+    townName: selectedTown.name,
+    townCenter: selectedTown.center,
+    userCoords: gpsState.coords,
+    maxDistanceKm: selectedTown.maxDistanceKm,
+  }), [selectedTown, gpsState.coords]);
+
   const handleNominatimSearch = useCallback((query: string) => {
     if (nominatimDebounceRef.current) clearTimeout(nominatimDebounceRef.current);
     if (query.trim().length < 3) {setNominatimResults([]);setNominatimLoading(false);return;}
@@ -362,25 +369,24 @@ export default function RideView() {
       try {
         // Strict town-bounded search: only show results within the selected town
         const results = await searchZW(query.trim(), 20, selectedTown.nominatimViewbox, true);
-        const mapped = results.map((r) => ({ name: r.name || r.display_name.split(',')[0], lat: Number(r.lat), lng: Number(r.lon), displayName: r.display_name, category: '' }));
-        
-        // If bounded search returned nothing, try unbounded as fallback (but still with viewbox bias)
+        const mapped = results.map((r) => ({ name: r.name || r.display_name.split(',')[0], lat: Number(r.lat), lng: Number(r.lon), displayName: r.display_name, category: '', class: r.class, type: r.type }));
+
+        // If bounded search returned nothing, try unbounded as fallback biased to the town by name
         if (mapped.length === 0) {
-          const fallback = await searchZW(query.trim(), 10, selectedTown.nominatimViewbox, false);
-          // Filter results to only include those within the town's max distance
+          const fallback = await searchZW(`${query.trim()}, ${selectedTown.name}`, 10, selectedTown.nominatimViewbox, false);
           const { getDistance } = await import('@/lib/towns');
           const filtered = fallback
-            .map((r) => ({ name: r.name || r.display_name.split(',')[0], lat: Number(r.lat), lng: Number(r.lon), displayName: r.display_name, category: '' }))
+            .map((r) => ({ name: r.name || r.display_name.split(',')[0], lat: Number(r.lat), lng: Number(r.lon), displayName: r.display_name, category: '', class: r.class, type: r.type }))
             .filter((r) => getDistance(selectedTown.center.lat, selectedTown.center.lng, r.lat, r.lng) <= selectedTown.maxDistanceKm);
-          setNominatimResults(filtered);
+          setNominatimResults(rankTownStreets(filtered, rankContext));
           for (const r of fallback) cachePlaceFromNominatim(r).catch(() => {});
         } else {
-          setNominatimResults(mapped);
+          setNominatimResults(rankTownStreets(mapped, rankContext));
           for (const r of results) cachePlaceFromNominatim(r).catch(() => {});
         }
       } catch {setNominatimResults([]);} finally {setNominatimLoading(false);}
     }, 150);
-  }, [selectedTown]);
+  }, [selectedTown, rankContext]);
 
   const handleCachedPlacesSearch = useCallback((query: string) => {
     const trimmed = query.trim();
@@ -391,18 +397,21 @@ export default function RideView() {
     }
 
     setCachedPlacesLoading(true);
-    searchCachedPlacesPrefix(trimmed, 12)
+    searchCachedPlacesPrefix(trimmed, 12, selectedTown.nominatimViewbox)
       .then((results) => {
-        setCachedPlaceResults(results.map((row) => ({
+        const mapped = results.map((row) => ({
           name: row.name || row.display_name.split(',')[0],
           lat: Number(row.lat),
           lng: Number(row.lon),
           displayName: row.display_name,
-        })));
+          class: (row as { class?: string }).class,
+          type: (row as { type?: string }).type,
+        }));
+        setCachedPlaceResults(rankTownStreets(mapped, rankContext));
       })
       .catch(() => setCachedPlaceResults([]))
       .finally(() => setCachedPlacesLoading(false));
-  }, []);
+  }, [selectedTown, rankContext]);
 
   const handleMapClick = useCallback(async (coords: {lat: number;lng: number;}) => {
     if (!activeField) return;
