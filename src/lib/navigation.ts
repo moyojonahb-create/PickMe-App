@@ -3,6 +3,8 @@
  * Opens Mapbox Directions (Android/desktop) or Apple Maps (iOS) with driving directions.
  */
 
+import { SafeStorage } from './safeStorage';
+
 const NAV_STORAGE_PREFIX = 'pickme_last_nav_';
 
 export type NavTarget = 'pickup' | 'dropoff';
@@ -13,11 +15,11 @@ export function openNavTo(lat: number, lng: number, tripId: string, target: NavT
   const mapboxWeb = `https://www.mapbox.com/directions?destination=${lng},${lat}`;
 
   // Persist navigation state for resume functionality
-  localStorage.setItem(`${NAV_STORAGE_PREFIX}trip_id`, tripId);
-  localStorage.setItem(`${NAV_STORAGE_PREFIX}target`, target);
-  localStorage.setItem(`${NAV_STORAGE_PREFIX}time`, String(Date.now()));
-  localStorage.setItem(`${NAV_STORAGE_PREFIX}lat`, String(lat));
-  localStorage.setItem(`${NAV_STORAGE_PREFIX}lng`, String(lng));
+  SafeStorage.set(`${NAV_STORAGE_PREFIX}trip_id`, tripId);
+  SafeStorage.set(`${NAV_STORAGE_PREFIX}target`, target);
+  SafeStorage.set(`${NAV_STORAGE_PREFIX}time`, String(Date.now()));
+  SafeStorage.set(`${NAV_STORAGE_PREFIX}lat`, String(lat));
+  SafeStorage.set(`${NAV_STORAGE_PREFIX}lng`, String(lng));
 
   if (isIOS) {
     const apple = `maps://?saddr=Current%20Location&daddr=${dest}`;
@@ -40,11 +42,11 @@ export interface SavedNav {
 const THIRTY_MINUTES = 30 * 60 * 1000;
 
 export function getSavedNav(): SavedNav | null {
-  const tripId = localStorage.getItem(`${NAV_STORAGE_PREFIX}trip_id`);
-  const target = localStorage.getItem(`${NAV_STORAGE_PREFIX}target`) as NavTarget | null;
-  const timeStr = localStorage.getItem(`${NAV_STORAGE_PREFIX}time`);
-  const lat = localStorage.getItem(`${NAV_STORAGE_PREFIX}lat`);
-  const lng = localStorage.getItem(`${NAV_STORAGE_PREFIX}lng`);
+  const tripId = SafeStorage.get(`${NAV_STORAGE_PREFIX}trip_id`);
+  const target = SafeStorage.get(`${NAV_STORAGE_PREFIX}target`) as NavTarget | null;
+  const timeStr = SafeStorage.get(`${NAV_STORAGE_PREFIX}time`);
+  const lat = SafeStorage.get(`${NAV_STORAGE_PREFIX}lat`);
+  const lng = SafeStorage.get(`${NAV_STORAGE_PREFIX}lng`);
 
   if (!tripId || !target || !timeStr || !lat || !lng) return null;
 
@@ -55,20 +57,20 @@ export function getSavedNav(): SavedNav | null {
 }
 
 export function dismissNavBanner() {
-  localStorage.setItem(`${NAV_STORAGE_PREFIX}dismissed`, String(Date.now()));
+  SafeStorage.set(`${NAV_STORAGE_PREFIX}dismissed`, String(Date.now()));
 }
 
 export function isNavBannerDismissed(): boolean {
-  const dismissed = localStorage.getItem(`${NAV_STORAGE_PREFIX}dismissed`);
+  const dismissed = SafeStorage.get(`${NAV_STORAGE_PREFIX}dismissed`);
   if (!dismissed) return false;
   return Date.now() - Number(dismissed) < THIRTY_MINUTES;
 }
 
 export function clearNavState() {
-  localStorage.removeItem(`${NAV_STORAGE_PREFIX}trip_id`);
-  localStorage.removeItem(`${NAV_STORAGE_PREFIX}target`);
-  localStorage.removeItem(`${NAV_STORAGE_PREFIX}time`);
-  localStorage.removeItem(`${NAV_STORAGE_PREFIX}lat`);
-  localStorage.removeItem(`${NAV_STORAGE_PREFIX}lng`);
-  localStorage.removeItem(`${NAV_STORAGE_PREFIX}dismissed`);
+  SafeStorage.remove(`${NAV_STORAGE_PREFIX}trip_id`);
+  SafeStorage.remove(`${NAV_STORAGE_PREFIX}target`);
+  SafeStorage.remove(`${NAV_STORAGE_PREFIX}time`);
+  SafeStorage.remove(`${NAV_STORAGE_PREFIX}lat`);
+  SafeStorage.remove(`${NAV_STORAGE_PREFIX}lng`);
+  SafeStorage.remove(`${NAV_STORAGE_PREFIX}dismissed`);
 }

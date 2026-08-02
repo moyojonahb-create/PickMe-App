@@ -1,5 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import { SafeStorage } from './safeStorage';
 
 export type Locale = 'en' | 'sn' | 'nd';
 
@@ -207,13 +208,13 @@ const I18nContext = createContext<I18nContextType | null>(null);
 
 export function I18nProvider({ children }: { children: ReactNode }) {
   const [locale, setLocaleState] = useState<Locale>(() => {
-    const saved = localStorage.getItem('pickme-locale');
+    const saved = SafeStorage.get('pickme-locale');
     return (saved as Locale) || 'en';
   });
 
   const setLocale = useCallback((l: Locale) => {
     setLocaleState(l);
-    localStorage.setItem('pickme-locale', l);
+    SafeStorage.set('pickme-locale', l);
   }, []);
 
   const t = useCallback(
