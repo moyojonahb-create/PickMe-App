@@ -113,7 +113,7 @@ export async function reportFraudFlag(userId: string, check: FraudCheck) {
     user_id: userId,
     flag_type: check.type,
     severity: check.severity,
-    details: JSON.parse(JSON.stringify(check.details)),
+    details: safeClone(check.details),
   });
 }
 

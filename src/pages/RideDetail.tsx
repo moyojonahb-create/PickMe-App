@@ -258,7 +258,7 @@ export default function RideDetail() {
         setPremiumOffers([]);
       }
 
-      const { data: m } = await supabase.from("messages").select("*").eq("ride_id", rideId).order("created_at", { ascending: true });
+      const { data: m } = await supabase.from("messages").select("id, ride_id, sender_id, text, created_at").eq("ride_id", rideId).order("created_at", { ascending: true });
       setMessages(m as MessageRow[] || []);
     } catch (e: unknown) { setToast((e as Error)?.message || "Failed to load ride."); } finally { setLoading(false); }
   }, [rideId]);
