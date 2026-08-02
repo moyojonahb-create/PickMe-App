@@ -185,16 +185,13 @@ serve(async (req: Request) => {
       })
       .join("\n\n");
 
-    const aiUrl = useOpenAI
-      ? "https://api.openai.com/v1/chat/completions"
-      : "https://ai.gateway.lovable.dev/v1/chat/completions";
-    const aiKey = useOpenAI ? OPENAI_API_KEY! : LOVABLE_API_KEY!;
-    const aiModel = useOpenAI ? "gpt-4o" : "google/gemini-2.5-flash";
+    const aiUrl = "https://ai.gateway.lovable.dev/v1/chat/completions";
+    const aiModel = "google/gemini-3.6-flash";
 
     const aiResp = await fetch(aiUrl, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${aiKey}`,
+        "Lovable-API-Key": LOVABLE_API_KEY,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
