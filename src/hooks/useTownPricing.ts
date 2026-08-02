@@ -61,12 +61,12 @@ export function useTownPricing(townId: string | null) {
     setLoading(true);
     supabase
       .from('town_pricing')
-      .select('town_id, base_fare, per_km, per_minute, minimum_fare, surge_multiplier, currency_code, currency_symbol')
+      .select('*')
       .eq('town_id', townId)
       .maybeSingle()
       .then(({ data }) => {
         if (data) {
-          const config = data as unknown as TownPricingConfig;
+          const config = { ...DEFAULT_PRICING, ...(data as Partial<TownPricingConfig>) } as TownPricingConfig;
           pricingCache[townId] = config;
           setPricing(config);
         } else {
