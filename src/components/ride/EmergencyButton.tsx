@@ -20,6 +20,11 @@ export default function EmergencyButton({ rideId, pickupAddress, dropoffAddress,
   const [sosCountdown, setSosCountdown] = useState<number | null>(null);
   const [locationShared, setLocationShared] = useState(false);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Always-fresh location + ride context, immune to stale closures inside the
+  // countdown interval. An SOS must never report a stale/zeroed position.
+  const lastPosRef = useRef<{ lat: number; lng: number; at: number } | null>(null);
+  const rideIdRef = useRef(rideId);
+  rideIdRef.current = rideId;
 
   const emergencyContacts = [
     { label: "Police (ZRP)", number: "995", color: "bg-destructive/10 border-destructive/20" },
@@ -31,7 +36,7 @@ export default function EmergencyButton({ rideId, pickupAddress, dropoffAddress,
     if (!user) return;
     try {
       await createEmergencyEvent({
-        ride_id: rideId || null,
+        ride_id: rideIdRef.current || null,
         latitude,
         longitude,
       });
@@ -49,12 +54,14 @@ export default function EmergencyButton({ rideId, pickupAddress, dropoffAddress,
           // Get location, write alert, then dial
           navigator.geolocation.getCurrentPosition(
             (pos) => {
-              writeEmergencyAlert(pos.coords.latitude, pos.coords.longitude);
-              shareEmergencyLocation();
+              lastPosRef.current = { lat: pos.coords.latitude, lng: pos.coords.longitude, at: Date.now() };
+              void writeEmergencyAlert(pos.coords.latitude, pos.coords.longitude);
+              void shareEmergencyLocation();
             },
             () => {
-              // Even if GPS fails, still dial
-              writeEmergencyAlert(0, 0);
+              // GPS failed — fall back to the most recent tracked fix, not 0,0
+              const last = lastPosRef.current;
+              void writeEmergencyAlert(last?.lat ?? 0, last?.lng ?? 0);
             },
             { enableHighAccuracy: true, timeout: 3000 }
           );
@@ -65,16 +72,33 @@ export default function EmergencyButton({ rideId, pickupAddress, dropoffAddress,
         return prev - 1;
       });
     }, 1000);
-  }, [rideId, user]);
+  }, [user]);
 
   const cancelSOS = useCallback(() => {
     if (countdownRef.current) clearInterval(countdownRef.current);
     setSosCountdown(null);
   }, []);
 
+  // Keep a warm, continuously-updated GPS fix while the safety UI is mounted.
+  useEffect(() => {
+    if (!navigator.geolocation?.watchPosition) return;
+    let watchId: number | null = null;
+    try {
+      watchId = navigator.geolocation.watchPosition(
+        (pos) => {
+          lastPosRef.current = { lat: pos.coords.latitude, lng: pos.coords.longitude, at: Date.now() };
+        },
+        () => { /* non-fatal: SOS still dials */ },
+        { enableHighAccuracy: true, maximumAge: 15000, timeout: 20000 }
+      );
+    } catch { /* unsupported environment */ }
+    return () => { if (watchId !== null) navigator.geolocation.clearWatch(watchId); };
+  }, []);
+
   useEffect(() => {
     return () => { if (countdownRef.current) clearInterval(countdownRef.current); };
   }, []);
+
 
   const shareEmergencyLocation = async () => {
     try {
