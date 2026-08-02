@@ -168,13 +168,11 @@ serve(async (req: Request) => {
       }))
       .filter((f) => f.path && f.content);
 
-    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    // Prefer OpenAI (workspace is out of Lovable AI credits); fall back to Lovable AI Gateway.
-    const useOpenAI = !!OPENAI_API_KEY;
-    if (!OPENAI_API_KEY && !LOVABLE_API_KEY) {
-      return json({ error: "No AI provider configured (set OPENAI_API_KEY or LOVABLE_API_KEY)" }, 500);
+    if (!LOVABLE_API_KEY) {
+      return json({ error: "Lovable AI is not configured (LOVABLE_API_KEY missing)" }, 500);
     }
+
 
     // Build a single review prompt with all files annotated by line numbers.
     const reviewPayload = trimmed
@@ -187,16 +185,13 @@ serve(async (req: Request) => {
       })
       .join("\n\n");
 
-    const aiUrl = useOpenAI
-      ? "https://api.openai.com/v1/chat/completions"
-      : "https://ai.gateway.lovable.dev/v1/chat/completions";
-    const aiKey = useOpenAI ? OPENAI_API_KEY! : LOVABLE_API_KEY!;
-    const aiModel = useOpenAI ? "gpt-4o" : "google/gemini-2.5-flash";
+    const aiUrl = "https://ai.gateway.lovable.dev/v1/chat/completions";
+    const aiModel = "google/gemini-3.6-flash";
 
     const aiResp = await fetch(aiUrl, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${aiKey}`,
+        "Lovable-API-Key": LOVABLE_API_KEY,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -217,10 +212,10 @@ serve(async (req: Request) => {
     });
 
     if (aiResp.status === 429) {
-      return json({ error: `${useOpenAI ? "OpenAI" : "AI"} rate limit — try again shortly.`, fallback: true, findings: [], scannedFiles: [] }, 200);
+      return json({ error: "Lovable AI rate limit — try again shortly.", fallback: true, findings: [], scannedFiles: [] }, 200);
     }
     if (aiResp.status === 402) {
-      return json({ error: `${useOpenAI ? "OpenAI quota exhausted" : "AI credits exhausted"} — top up your account.`, fallback: true, findings: [], scannedFiles: [] }, 200);
+      return json({ error: "Lovable AI credits exhausted — add credits in Settings → Plans & credits.", fallback: true, findings: [], scannedFiles: [] }, 200);
     }
     if (!aiResp.ok) {
       const text = await aiResp.text();

@@ -1,5 +1,6 @@
 /* eslint-disable react-hooks/exhaustive-deps */
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
+import { rankTownStreets } from '@/lib/streetSearchRank';
 import { motion } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { haptic } from '@/lib/haptics';
@@ -143,6 +144,7 @@ export default function RideView() {
   const [sheetExpanded, setSheetExpanded] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [selectedTown, setSelectedTown] = useState<TownConfig>(DEFAULT_TOWN);
+  const [profileName, setProfileName] = useState<string>('');
   const [rideStops, setRideStops] = useState<RideStop[]>([]);
   const [scheduledAt, setScheduledAt] = useState<Date | null>(null);
   const [activeStopId, setActiveStopId] = useState<string | null>(null);
@@ -174,6 +176,21 @@ export default function RideView() {
   useEffect(() => {
     if (gpsState.status === 'idle' && navigator.geolocation) handleUseMyLocation();
   }, []);
+
+  // Prefer the rider's saved profile name (nickname) for the greeting
+  useEffect(() => {
+    if (!user?.id) { setProfileName(''); return; }
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      if (!cancelled && data?.full_name) setProfileName(data.full_name);
+    })();
+    return () => { cancelled = true; };
+  }, [user?.id]);
 
   // ── route / fare ──
   const { route: routeData, loading: routeLoading } = useOSRMRoute(
@@ -366,6 +383,13 @@ export default function RideView() {
     haptic('light');
   };
 
+  const rankContext = useMemo(() => ({
+    townName: selectedTown.name,
+    townCenter: selectedTown.center,
+    userCoords: gpsState.coords,
+    maxDistanceKm: selectedTown.maxDistanceKm,
+  }), [selectedTown, gpsState.coords]);
+
   const handleNominatimSearch = useCallback((query: string) => {
     if (nominatimDebounceRef.current) clearTimeout(nominatimDebounceRef.current);
     if (query.trim().length < 3) {setNominatimResults([]);setNominatimLoading(false);return;}
@@ -422,18 +446,21 @@ export default function RideView() {
     }
 
     setCachedPlacesLoading(true);
-    searchCachedPlacesPrefix(trimmed, 12)
+    searchCachedPlacesPrefix(trimmed, 12, selectedTown.nominatimViewbox)
       .then((results) => {
-        setCachedPlaceResults(results.map((row) => ({
+        const mapped = results.map((row) => ({
           name: row.name || row.display_name.split(',')[0],
           lat: Number(row.lat),
           lng: Number(row.lon),
           displayName: row.display_name,
-        })));
+          class: (row as { class?: string }).class,
+          type: (row as { type?: string }).type,
+        }));
+        setCachedPlaceResults(rankTownStreets(mapped, rankContext));
       })
       .catch(() => setCachedPlaceResults([]))
       .finally(() => setCachedPlacesLoading(false));
-  }, []);
+  }, [selectedTown, rankContext]);
 
   const handleMapClick = useCallback(async (coords: {lat: number;lng: number;}) => {
     if (!activeField) return;
@@ -682,7 +709,9 @@ export default function RideView() {
     handleNominatimSearch(value);
   };
   const canRequestRide = pickupLocation && dropoffLocation && fareEstimate && !isRequesting;
-  const firstName = (user?.user_metadata?.full_name as string | undefined)?.split(' ')[0] || user?.email?.split('@')[0] || '';
+  const firstName = (profileName || (user?.user_metadata?.full_name as string | undefined) || user?.email?.split('@')[0] || '').split(' ')[0];
+  const mapCenter = gpsState.coords ?? pickupLocation ?? selectedTown.center;
+  const mapZoom = gpsState.coords ? 16 : 14;
   const estimatedWaitMinutes = Math.max(2, Math.min(8, Math.round(8 - nearbyDrivers.length * 0.6)));
   const showHomeContent = rideStatus === 'idle' && !pickupLocation && !dropoffLocation;
   const unifiedPlaceResults = [...cachedPlaceResults, ...nominatimResults.map((item) => ({ ...item, source: 'nominatim' as const }))]
@@ -698,7 +727,7 @@ export default function RideView() {
     return (
       <div className="relative h-[100dvh] w-full overflow-hidden bg-background">
         <div className="absolute inset-0">
-          <MapboxMap pickup={pickupLocation} dropoff={dropoffLocation} routeGeometry={routeData?.geometry} defaultCenter={selectedTown.center} defaultZoom={14} className="w-full h-full" height="100%" stops={rideStops.filter(s => s.lat && s.lng)} />
+          <MapboxMap pickup={pickupLocation} dropoff={dropoffLocation} routeGeometry={routeData?.geometry} defaultCenter={mapCenter} defaultZoom={mapZoom} className="w-full h-full" height="100%" stops={rideStops.filter(s => s.lat && s.lng)} />
         </div>
 
         {/* Top gradient */}
@@ -836,7 +865,7 @@ export default function RideView() {
     <div className="relative h-[100dvh] w-full overflow-hidden bg-background">
       {/* ── MAP ── */}
       <div className="absolute inset-0">
-        <MapboxMap pickup={pickupLocation} dropoff={dropoffLocation} routeGeometry={routeData?.geometry} onMapClick={handleMapClick} defaultCenter={selectedTown.center} defaultZoom={14} className="w-full h-full" height="100%" drivers={nearbyDrivers} stops={rideStops.filter(s => s.lat && s.lng)} />
+        <MapboxMap pickup={pickupLocation} dropoff={dropoffLocation} routeGeometry={routeData?.geometry} onMapClick={handleMapClick} defaultCenter={mapCenter} defaultZoom={mapZoom} className="w-full h-full" height="100%" drivers={nearbyDrivers} stops={rideStops.filter(s => s.lat && s.lng)} />
 
         {/* Floating map buttons */}
         <div className="absolute right-3 z-20" style={{ bottom: sheetExpanded ? 'calc(70vh + 16px)' : 'calc(48vh + 16px)', transition: 'bottom 0.3s cubic-bezier(0.32,0.72,0,1)' }}>
@@ -1024,19 +1053,35 @@ export default function RideView() {
           </div>
 
 
-          {/* Pickup & Dropoff — premium cards with swap */}
+          {/* Pickup & Dropoff — unified premium journey card */}
 
+          <div className="relative glass-card rounded-[20px] border border-border/60">
+            {/* Vertical journey rail */}
+            <div className="absolute left-6 top-0 bottom-0 w-4 flex flex-col items-center justify-between py-7 pointer-events-none">
+              <div className="w-2.5 h-2.5 rounded-full bg-accent ring-[3px] ring-accent/15" />
+              <div className="flex-1 flex flex-col items-center my-1.5 w-px">
+                <div className="flex-1 w-px border-l border-dashed border-accent/25" />
+                <div className="flex-1 w-px border-l border-dashed border-primary/25" />
+              </div>
+              <div className="w-3 h-3 rounded-[5px] bg-primary ring-[3px] ring-primary/15" />
+            </div>
 
-          <div className="space-y-2 relative">
+            {/* Swap control */}
+            <button
+              onClick={handleSwapPickupDropoff}
+              className="absolute right-2 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full bg-primary/95 text-primary-foreground shadow-lg shadow-primary/25 flex items-center justify-center active:scale-90 transition-all"
+              title="Swap pickup and drop-off"
+              aria-label="Swap pickup and drop-off">
+              <Route className="w-4 h-4" />
+            </button>
+
+            {/* Pickup row */}
             <button
               onClick={() => {setActiveField('pickup');setSearchQuery('');}}
-              className="w-full min-h-[62px] flex items-center gap-3 px-3 py-3 rounded-2xl active:scale-[0.98] transition-all text-left glass-card">
-              <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-accent">
-                <MapPin className="w-4 h-4 text-accent-foreground" />
-              </div>
+              className="w-full min-h-[64px] flex items-center gap-3 pl-12 pr-3 py-3.5 active:scale-[0.98] transition-all text-left rounded-t-[20px] border-b border-border/40 hover:bg-foreground/[0.02]">
               <div className="flex-1 min-w-0">
                 <p className="text-[10px] font-semibold text-primary uppercase tracking-widest">Pickup</p>
-                <p className={cn("text-[14px] font-medium truncate", pickupLocation ? 'text-foreground' : 'text-muted-foreground')}>
+                <p className={cn("text-[15px] font-medium truncate", pickupLocation ? 'text-foreground' : 'text-muted-foreground')}>
                   {pickupLocation?.name || 'Where from?'}
                 </p>
               </div>
@@ -1046,23 +1091,16 @@ export default function RideView() {
               }
             </button>
 
-            <DropoffAutocomplete
-              value={dropoffLocation}
-              center={selectedTown.center}
-              townName={selectedTown.name}
-              onSelect={(loc) => setDropoffLocation(loc as SelectedLocation)}
-              onClear={() => setDropoffLocation(null)}
-              onBrowseAll={() => {setActiveField('dropoff');setSearchQuery('');}} />
-
-
-            <button
-              onClick={handleSwapPickupDropoff}
-              className="absolute right-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-xl glass-card flex items-center justify-center text-primary active:scale-90 transition-all"
-              title="Swap pickup and drop-off"
-              aria-label="Swap pickup and drop-off">
-              
-              <Route className="w-4 h-4" />
-            </button>
+            {/* Dropoff row */}
+            <div className="relative [&>div>div]:!bg-transparent [&>div>div]:!border-0 [&>div>div]:!shadow-none [&>div>div]:!pl-12 [&>div>div>div:first-child]:!hidden [&_input]:!text-[15px]">
+              <DropoffAutocomplete
+                value={dropoffLocation}
+                center={selectedTown.center}
+                townName={selectedTown.name}
+                onSelect={(loc) => setDropoffLocation(loc as SelectedLocation)}
+                onClear={() => setDropoffLocation(null)}
+                onBrowseAll={() => {setActiveField('dropoff');setSearchQuery('');}} />
+            </div>
           </div>
 
 
@@ -1232,7 +1270,7 @@ export default function RideView() {
                   />
                 </div>
                 <PrimaryButton
-                  onClick={() => sheetExpanded ? handleSendOffer(totalFare) : setSheetExpanded(true)}
+                  onClick={() => handleSendOffer(totalFare)}
                   disabled={isRequesting}
                   className="w-full h-[48px] text-[15px] font-semibold rounded-2xl gap-2 inline-flex items-center justify-center active:scale-[0.97] transition-transform">
 
@@ -1244,7 +1282,7 @@ export default function RideView() {
                   ) : (
                     <>
                       <Car className="w-4 h-4" />
-                      {sheetExpanded ? `Send Offer • ${fmt(totalFare)}` : `Find Drivers • ${fmt(totalFare)}`}
+                      {`Find Drivers • ${fmt(totalFare)}`}
                     </>
                   )}
                 </PrimaryButton>

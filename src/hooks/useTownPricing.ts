@@ -61,12 +61,12 @@ export function useTownPricing(townId: string | null) {
     setLoading(true);
     supabase
       .from('town_pricing')
-      .select('town_id, base_fare, per_km, per_minute, minimum_fare, surge_multiplier, currency_code, currency_symbol')
+      .select('*')
       .eq('town_id', townId)
       .maybeSingle()
       .then(({ data }) => {
         if (data) {
-          const config = data as unknown as TownPricingConfig;
+          const config = { ...DEFAULT_PRICING, ...(data as Partial<TownPricingConfig>) } as TownPricingConfig;
           pricingCache[townId] = config;
           setPricing(config);
         } else {
@@ -139,11 +139,11 @@ export async function preloadAllTownPricing(): Promise<Record<string, TownPricin
   if (Object.keys(pricingCache).length > 0) return pricingCache;
   const { data } = await supabase
     .from('town_pricing')
-    .select('town_id, base_fare, per_km, per_minute, minimum_fare, surge_multiplier, currency_code, currency_symbol')
+    .select('*')
     .limit(500);
   if (data) {
     for (const row of data) {
-      const config = row as unknown as TownPricingConfig;
+      const config = { ...DEFAULT_PRICING, ...(row as Partial<TownPricingConfig>) } as TownPricingConfig;
       pricingCache[config.town_id] = config;
     }
   }
