@@ -201,7 +201,7 @@ export default function DriverSelfieCheck({ open, onVerified, onSkip }: DriverSe
                 className="flex flex-col items-center gap-4 py-10"
               >
                 <Loader2 className="w-10 h-10 animate-spin text-primary" />
-                <p className="text-sm font-semibold text-foreground">Verifying identity…</p>
+                <p className="text-sm font-semibold text-foreground">Uploading your photo…</p>
               </motion.div>
             )}
 
@@ -221,7 +221,32 @@ export default function DriverSelfieCheck({ open, onVerified, onSkip }: DriverSe
                 >
                   <ShieldCheck className="w-8 h-8 text-primary" />
                 </motion.div>
-                <p className="text-sm font-bold text-foreground">Verified ✓</p>
+                <p className="text-sm font-bold text-foreground">Submitted for review</p>
+                <p className="text-xs text-muted-foreground text-center">
+                  An admin will review your photo shortly.
+                </p>
+              </motion.div>
+            )}
+
+            {step === 'error' && (
+              <motion.div
+                key="error"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="flex flex-col items-center gap-3 py-10"
+              >
+                <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center">
+                  <AlertTriangle className="w-8 h-8 text-destructive" />
+                </div>
+                <p className="text-sm font-bold text-foreground">Upload failed</p>
+                <p className="text-xs text-muted-foreground text-center">
+                  Please check your connection and try again.
+                </p>
+                <Button onClick={verify} className="w-full font-bold gap-1.5">
+                  <RotateCcw className="w-4 h-4" />
+                  Retry
+                </Button>
               </motion.div>
             )}
           </AnimatePresence>
