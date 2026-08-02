@@ -1,8 +1,9 @@
-import { useState, useRef, useCallback } from 'react';
-import { Camera, ShieldCheck, Loader2, X, RotateCcw } from 'lucide-react';
+import { useState, useRef, useCallback, useEffect } from 'react';
+import { Camera, ShieldCheck, Loader2, X, RotateCcw, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { motion, AnimatePresence } from 'framer-motion';
+import { supabase } from '@/lib/supabaseClient';
 
 interface DriverSelfieCheckProps {
   open: boolean;
@@ -14,8 +15,17 @@ export default function DriverSelfieCheck({ open, onVerified, onSkip }: DriverSe
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const [step, setStep] = useState<'prompt' | 'camera' | 'preview' | 'verifying' | 'done'>('prompt');
+  const [step, setStep] = useState<'prompt' | 'camera' | 'preview' | 'verifying' | 'done' | 'error'>('prompt');
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) {
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+    }
+    return () => {
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+    };
+  }, [open]);
 
   const startCamera = useCallback(async () => {
     try {
@@ -53,14 +63,41 @@ export default function DriverSelfieCheck({ open, onVerified, onSkip }: DriverSe
     startCamera();
   }, [startCamera]);
 
-  const verify = useCallback(() => {
+  const verify = useCallback(async () => {
+    if (!capturedImage) return;
     setStep('verifying');
-    // Simulate a brief verification (face detection would go here)
-    setTimeout(() => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setStep('error');
+        return;
+      }
+
+      const blob = await (await fetch(capturedImage)).blob();
+      const path = `${user.id}/selfie-${Date.now()}.jpg`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('driver-documents')
+        .upload(path, blob, { contentType: 'image/jpeg', upsert: true });
+      if (uploadError) throw uploadError;
+
+      const { data: urlData } = supabase.storage.from('driver-documents').getPublicUrl(path);
+
+      const { error: insertError } = await supabase.from('driver_documents').insert({
+        driver_id: user.id,
+        document_type: 'selfie',
+        file_url: urlData.publicUrl,
+        status: 'pending',
+      });
+      if (insertError) throw insertError;
+
       setStep('done');
-      setTimeout(() => onVerified(), 1200);
-    }, 1500);
-  }, [onVerified]);
+      setTimeout(() => onVerified(), 1500);
+    } catch (err) {
+      console.error('Selfie submission failed:', err);
+      setStep('error');
+    }
+  }, [capturedImage, onVerified]);
 
   const handleClose = () => {
     streamRef.current?.getTracks().forEach((t) => t.stop());
@@ -164,7 +201,7 @@ export default function DriverSelfieCheck({ open, onVerified, onSkip }: DriverSe
                 className="flex flex-col items-center gap-4 py-10"
               >
                 <Loader2 className="w-10 h-10 animate-spin text-primary" />
-                <p className="text-sm font-semibold text-foreground">Verifying identity…</p>
+                <p className="text-sm font-semibold text-foreground">Uploading your photo…</p>
               </motion.div>
             )}
 
@@ -184,7 +221,32 @@ export default function DriverSelfieCheck({ open, onVerified, onSkip }: DriverSe
                 >
                   <ShieldCheck className="w-8 h-8 text-primary" />
                 </motion.div>
-                <p className="text-sm font-bold text-foreground">Verified ✓</p>
+                <p className="text-sm font-bold text-foreground">Submitted for review</p>
+                <p className="text-xs text-muted-foreground text-center">
+                  An admin will review your photo shortly.
+                </p>
+              </motion.div>
+            )}
+
+            {step === 'error' && (
+              <motion.div
+                key="error"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="flex flex-col items-center gap-3 py-10"
+              >
+                <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center">
+                  <AlertTriangle className="w-8 h-8 text-destructive" />
+                </div>
+                <p className="text-sm font-bold text-foreground">Upload failed</p>
+                <p className="text-xs text-muted-foreground text-center">
+                  Please check your connection and try again.
+                </p>
+                <Button onClick={verify} className="w-full font-bold gap-1.5">
+                  <RotateCcw className="w-4 h-4" />
+                  Retry
+                </Button>
               </motion.div>
             )}
           </AnimatePresence>
