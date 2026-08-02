@@ -1206,7 +1206,7 @@ export default function RideView() {
                   ) : (
                     <>
                       <Car className="w-4 h-4" />
-                      {sheetExpanded ? `Send Offer • ${fmt(totalFare)}` : `Find Drivers • ${fmt(totalFare)}`}
+                      {`Find Drivers • ${fmt(totalFare)}`}
                     </>
                   )}
                 </PrimaryButton>
