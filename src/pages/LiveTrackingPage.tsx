@@ -120,6 +120,16 @@ export default function LiveTrackingPage() {
     return () => { supabase.removeChannel(channel); };
   }, [tripId]);
 
+  const timelineSteps = useMemo(() => {
+    const status = ride?.status;
+    return [
+      { label: 'Request placed', active: true },
+      { label: 'Driver assigned', active: ['accepted', 'driver_arriving', 'driver_arrived', 'in_progress', 'completed'].includes(status ?? '') },
+      { label: 'Driver en route', active: ['driver_arriving', 'driver_arrived', 'in_progress', 'completed'].includes(status ?? '') },
+      { label: 'Trip complete', active: status === 'completed' },
+    ];
+  }, [ride?.status]);
+
   if (loading) {
     return (
       <div className="min-h-[100dvh] bg-background flex items-center justify-center px-6">
@@ -174,12 +184,6 @@ export default function LiveTrackingPage() {
     cancelled: { label: "Trip cancelled", color: "text-destructive", bg: "bg-destructive" },
   };
   const status = statusLabels[ride.status] || statusLabels.pending;
-  const timelineSteps = useMemo(() => [
-    { label: 'Request placed', active: true },
-    { label: 'Driver assigned', active: ['accepted', 'driver_arriving', 'driver_arrived', 'in_progress', 'completed'].includes(ride.status) },
-    { label: 'Driver en route', active: ['driver_arriving', 'driver_arrived', 'in_progress', 'completed'].includes(ride.status) },
-    { label: 'Trip complete', active: isCompleted },
-  ], [isCompleted, ride.status]);
 
   return (
     <div className="relative h-[100dvh] w-full overflow-hidden bg-background">

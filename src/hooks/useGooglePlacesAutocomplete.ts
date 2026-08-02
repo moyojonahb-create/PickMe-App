@@ -43,9 +43,10 @@ export function useGooglePlacesAutocomplete() {
       if (abortRef.current) abortRef.current.abort();
       const controller = new AbortController();
       abortRef.current = controller;
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
 
       try {
-        const base = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/mapbox-search`;
+        const base = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/google-places-search`;
         const url = new URL(base);
         url.searchParams.set('q', query.trim());
 
@@ -83,6 +84,7 @@ export function useGooglePlacesAutocomplete() {
         }
       } finally {
         setLoading(false);
+        clearTimeout(timeoutId);
       }
     }, 300); // 300ms debounce for smooth UX
   }, []);
@@ -95,7 +97,7 @@ export function useGooglePlacesAutocomplete() {
       }
 
       try {
-        const base = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/mapbox-search`;
+        const base = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/google-places-search`;
         const url = new URL(base);
         url.searchParams.set('placeId', placeId);
 

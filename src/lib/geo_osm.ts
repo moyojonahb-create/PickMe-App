@@ -21,11 +21,14 @@ export interface NominatimResult {
  * In dev: uses Vite proxy `/api/nominatim/search`.
  * In production: routes through Supabase Edge Function to avoid CORS.
  */
+const NOMINATIM_TIMEOUT_MS = 5000;
+
 export async function searchZW(
-  q: string, 
-  limit = 10, 
+  q: string,
+  limit = 10,
   viewbox?: { left: number; top: number; right: number; bottom: number },
-  bounded = false
+  bounded = false,
+  signal?: AbortSignal
 ): Promise<NominatimResult[]> {
   let fetchUrl: string;
   const headers: Record<string, string> = { Accept: 'application/json' };
@@ -60,9 +63,25 @@ export async function searchZW(
     headers['Authorization'] = `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`;
   }
 
-  const res = await fetch(fetchUrl, { headers });
-  if (!res.ok) throw new Error('Place search failed');
-  return res.json();
+  // Abort if the request takes too long, or if the caller's own signal fires
+  // (e.g. a shared deadline across a bounded + unbounded fallback pair).
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), NOMINATIM_TIMEOUT_MS);
+  if (signal) {
+    if (signal.aborted) controller.abort();
+    else signal.addEventListener('abort', () => controller.abort(), { once: true });
+  }
+
+  try {
+    const res = await fetch(fetchUrl, { headers, signal: controller.signal });
+    if (!res.ok) throw new Error('Place search failed');
+    return await res.json();
+  } catch (err) {
+    if (controller.signal.aborted) return [];
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 /**

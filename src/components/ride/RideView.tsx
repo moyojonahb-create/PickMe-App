@@ -21,7 +21,7 @@ import {
 } from '@/lib/backendSocketClient';
 import { acceptOffer, declineOffer } from '@/lib/offerHelpers';
 import { useRideRealtime } from '@/hooks/useRideRealtime';
-import { searchZW, reverseZW } from '@/lib/geo_osm';
+import { reverseZW } from '@/lib/geo_osm';
 import { cachePlaceFromNominatim } from '@/lib/placeCache';
 import { searchCachedPlacesPrefix } from '@/lib/placeCache';
 import { useToast } from '@/hooks/use-toast';
@@ -115,7 +115,7 @@ export default function RideView() {
   const [activeField, setActiveField] = useState<'pickup' | 'dropoff' | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [proximityRadius, setProximityRadius] = useState<number | null>(null);
-  const [nominatimResults, setNominatimResults] = useState<Array<{name: string;lat: number;lng: number;displayName: string;}>>([]);
+  const [nominatimResults, setNominatimResults] = useState<Array<{name: string;lat?: number;lng?: number;displayName: string;placeId?: string;source?: 'google' | 'osm';}>>([]);
   const [cachedPlaceResults, setCachedPlaceResults] = useState<Array<{name: string;lat: number;lng: number;displayName: string;}>>([]);
   const [nominatimLoading, setNominatimLoading] = useState(false);
   const [cachedPlacesLoading, setCachedPlacesLoading] = useState(false);
@@ -298,8 +298,36 @@ export default function RideView() {
     haptic('light');
   };
 
-  const handleNominatimSelect = (result: {name: string;lat: number;lng: number;}) => {
-    const loc: SelectedLocation = { name: result.name, lat: result.lat, lng: result.lng };
+  const handleNominatimSelect = async (result: {name: string;lat?: number;lng?: number;placeId?: string;}) => {
+    let { lat, lng, name } = result as { lat?: number; lng?: number; name: string };
+
+    // Google Places Autocomplete predictions don't include coordinates —
+    // resolve them via a details lookup before placing the pin.
+    if ((lat === undefined || lng === undefined) && result.placeId) {
+      try {
+        const base = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/google-places-search`;
+        const url = new URL(base);
+        url.searchParams.set('placeId', result.placeId);
+        const res = await fetch(url.toString(), {
+          headers: {
+            Accept: 'application/json',
+            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          },
+        });
+        const details = res.ok ? await res.json() : null;
+        if (typeof details?.lat === 'number' && typeof details?.lng === 'number') {
+          lat = details.lat;
+          lng = details.lng;
+          name = details.name || name;
+        }
+      } catch {
+        // handled by the guard below
+      }
+    }
+    if (lat === undefined || lng === undefined) return;
+
+    const loc: SelectedLocation = { name, lat, lng };
     if (activeStopId) {
       setRideStops((prev) => prev.map((s) => s.id === activeStopId ? { ...s, address: loc.name, lat: loc.lat, lng: loc.lng } : s));
       setActiveStopId(null);
@@ -343,26 +371,45 @@ export default function RideView() {
     if (query.trim().length < 3) {setNominatimResults([]);setNominatimLoading(false);return;}
     setNominatimLoading(true);
     nominatimDebounceRef.current = setTimeout(async () => {
+      // Cap total search time at 5s. This calls the google-places-search edge
+      // function, which tries Google Places first and falls back to Nominatim
+      // server-side — so this is a single request, not a bounded/unbounded pair.
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
       try {
-        // Strict town-bounded search: only show results within the selected town
-        const results = await searchZW(query.trim(), 20, selectedTown.nominatimViewbox, true);
-        const mapped = results.map((r) => ({ name: r.name || r.display_name.split(',')[0], lat: Number(r.lat), lng: Number(r.lon), displayName: r.display_name, category: '' }));
-        
-        // If bounded search returned nothing, try unbounded as fallback (but still with viewbox bias)
-        if (mapped.length === 0) {
-          const fallback = await searchZW(query.trim(), 10, selectedTown.nominatimViewbox, false);
-          // Filter results to only include those within the town's max distance
-          const { getDistance } = await import('@/lib/towns');
-          const filtered = fallback
-            .map((r) => ({ name: r.name || r.display_name.split(',')[0], lat: Number(r.lat), lng: Number(r.lon), displayName: r.display_name, category: '' }))
-            .filter((r) => getDistance(selectedTown.center.lat, selectedTown.center.lng, r.lat, r.lng) <= selectedTown.maxDistanceKm);
-          setNominatimResults(filtered);
-          for (const r of fallback) cachePlaceFromNominatim(r).catch(() => {});
-        } else {
-          setNominatimResults(mapped);
-          for (const r of results) cachePlaceFromNominatim(r).catch(() => {});
-        }
-      } catch {setNominatimResults([]);} finally {setNominatimLoading(false);}
+        const base = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/google-places-search`;
+        const url = new URL(base);
+        url.searchParams.set('q', query.trim());
+        url.searchParams.set('lat', String(selectedTown.center.lat));
+        url.searchParams.set('lng', String(selectedTown.center.lng));
+        url.searchParams.set('radiusKm', String(selectedTown.radiusKm));
+
+        const res = await fetch(url.toString(), {
+          signal: controller.signal,
+          headers: {
+            Accept: 'application/json',
+            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          },
+        });
+        if (!res.ok) throw new Error(`Place search failed: ${res.status}`);
+        const results: Array<{ placeId: string; name: string; description: string; category?: string; lat?: number; lng?: number; source?: 'google' | 'osm' }> = await res.json();
+        setNominatimResults(
+          (Array.isArray(results) ? results : []).map((r) => ({
+            name: r.name,
+            lat: r.lat,
+            lng: r.lng,
+            displayName: r.description,
+            placeId: r.placeId,
+            source: r.source,
+          }))
+        );
+      } catch {
+        setNominatimResults([]);
+      } finally {
+        setNominatimLoading(false);
+        clearTimeout(timeoutId);
+      }
     }, 150);
   }, [selectedTown]);
 
@@ -1329,7 +1376,7 @@ export default function RideView() {
                     </button>
               )}
 
-                {/* OpenStreetMap results */}
+                {/* Google Places results (falls back to OpenStreetMap server-side) */}
                 {nominatimResults.map((result, index) =>
               <button key={`nom-${index}`} onClick={() => handleNominatimSelect(result)} className="w-full flex items-center gap-4 px-4 py-3.5 hover:bg-primary/5 transition-colors border-b border-border/15 text-left">
                       <div className="w-11 h-11 rounded-2xl glass-card flex items-center justify-center shrink-0">
