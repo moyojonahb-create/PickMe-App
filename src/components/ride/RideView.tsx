@@ -977,19 +977,35 @@ export default function RideView() {
           </div>
 
 
-          {/* Pickup & Dropoff — premium cards with swap */}
+          {/* Pickup & Dropoff — unified premium journey card */}
 
+          <div className="relative glass-card rounded-[20px] border border-border/60">
+            {/* Vertical journey rail */}
+            <div className="absolute left-6 top-0 bottom-0 w-4 flex flex-col items-center justify-between py-7 pointer-events-none">
+              <div className="w-2.5 h-2.5 rounded-full bg-accent ring-[3px] ring-accent/15" />
+              <div className="flex-1 flex flex-col items-center my-1.5 w-px">
+                <div className="flex-1 w-px border-l border-dashed border-accent/25" />
+                <div className="flex-1 w-px border-l border-dashed border-primary/25" />
+              </div>
+              <div className="w-3 h-3 rounded-[5px] bg-primary ring-[3px] ring-primary/15" />
+            </div>
 
-          <div className="space-y-2 relative">
+            {/* Swap control */}
+            <button
+              onClick={handleSwapPickupDropoff}
+              className="absolute right-2 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full bg-primary/95 text-primary-foreground shadow-lg shadow-primary/25 flex items-center justify-center active:scale-90 transition-all"
+              title="Swap pickup and drop-off"
+              aria-label="Swap pickup and drop-off">
+              <Route className="w-4 h-4" />
+            </button>
+
+            {/* Pickup row */}
             <button
               onClick={() => {setActiveField('pickup');setSearchQuery('');}}
-              className="w-full min-h-[62px] flex items-center gap-3 px-3 py-3 rounded-2xl active:scale-[0.98] transition-all text-left glass-card">
-              <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-accent">
-                <MapPin className="w-4 h-4 text-accent-foreground" />
-              </div>
+              className="w-full min-h-[64px] flex items-center gap-3 pl-12 pr-3 py-3.5 active:scale-[0.98] transition-all text-left rounded-t-[20px] border-b border-border/40 hover:bg-foreground/[0.02]">
               <div className="flex-1 min-w-0">
                 <p className="text-[10px] font-semibold text-primary uppercase tracking-widest">Pickup</p>
-                <p className={cn("text-[14px] font-medium truncate", pickupLocation ? 'text-foreground' : 'text-muted-foreground')}>
+                <p className={cn("text-[15px] font-medium truncate", pickupLocation ? 'text-foreground' : 'text-muted-foreground')}>
                   {pickupLocation?.name || 'Where from?'}
                 </p>
               </div>
@@ -999,23 +1015,16 @@ export default function RideView() {
               }
             </button>
 
-            <DropoffAutocomplete
-              value={dropoffLocation}
-              center={selectedTown.center}
-              townName={selectedTown.name}
-              onSelect={(loc) => setDropoffLocation(loc as SelectedLocation)}
-              onClear={() => setDropoffLocation(null)}
-              onBrowseAll={() => {setActiveField('dropoff');setSearchQuery('');}} />
-
-
-            <button
-              onClick={handleSwapPickupDropoff}
-              className="absolute right-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-xl glass-card flex items-center justify-center text-primary active:scale-90 transition-all"
-              title="Swap pickup and drop-off"
-              aria-label="Swap pickup and drop-off">
-              
-              <Route className="w-4 h-4" />
-            </button>
+            {/* Dropoff row */}
+            <div className="relative [&>div>div]:!bg-transparent [&>div>div]:!border-0 [&>div>div]:!shadow-none [&>div>div]:!pl-12 [&>div>div>div:first-child]:!hidden [&_input]:!text-[15px]">
+              <DropoffAutocomplete
+                value={dropoffLocation}
+                center={selectedTown.center}
+                townName={selectedTown.name}
+                onSelect={(loc) => setDropoffLocation(loc as SelectedLocation)}
+                onClear={() => setDropoffLocation(null)}
+                onBrowseAll={() => {setActiveField('dropoff');setSearchQuery('');}} />
+            </div>
           </div>
 
 
