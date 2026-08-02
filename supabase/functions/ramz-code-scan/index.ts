@@ -212,10 +212,10 @@ serve(async (req: Request) => {
     });
 
     if (aiResp.status === 429) {
-      return json({ error: `${useOpenAI ? "OpenAI" : "AI"} rate limit — try again shortly.`, fallback: true, findings: [], scannedFiles: [] }, 200);
+      return json({ error: "Lovable AI rate limit — try again shortly.", fallback: true, findings: [], scannedFiles: [] }, 200);
     }
     if (aiResp.status === 402) {
-      return json({ error: `${useOpenAI ? "OpenAI quota exhausted" : "AI credits exhausted"} — top up your account.`, fallback: true, findings: [], scannedFiles: [] }, 200);
+      return json({ error: "Lovable AI credits exhausted — add credits in Settings → Plans & credits.", fallback: true, findings: [], scannedFiles: [] }, 200);
     }
     if (!aiResp.ok) {
       const text = await aiResp.text();
