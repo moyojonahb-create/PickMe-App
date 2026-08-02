@@ -14,13 +14,13 @@
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 import { createClient } from 'npm:@supabase/supabase-js@2.45.0';
 
-const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
+const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 
 // Models — keep aligned with the user-facing toggle.
-const MODEL_DEEP = 'gpt-4o';
-const MODEL_FAST = 'gpt-4o-mini';
+const MODEL_DEEP = 'google/gemini-3.1-pro-preview';
+const MODEL_FAST = 'google/gemini-3.6-flash';
 
 // Hard caps to control token spend.
 const MAX_FINDINGS = 80;
@@ -202,9 +202,9 @@ function buildUserPayload(body: RequestBody): string {
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
-  if (!OPENAI_API_KEY) {
+  if (!LOVABLE_API_KEY) {
     return new Response(
-      JSON.stringify({ error: 'OPENAI_API_KEY is not configured on the backend.' }),
+      JSON.stringify({ error: 'AI gateway key is not configured on the backend.' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
   }
@@ -260,13 +260,13 @@ Deno.serve(async (req) => {
   const model = body.mode === 'fast' ? MODEL_FAST : MODEL_DEEP;
   const userContent = buildUserPayload(body);
 
-  let openaiRes: Response;
+  let aiRes: Response;
   try {
-    openaiRes = await fetch('https://api.openai.com/v1/chat/completions', {
+    aiRes = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${OPENAI_API_KEY}`,
+        'Lovable-API-Key': LOVABLE_API_KEY,
       },
       body: JSON.stringify({
         model,
@@ -278,25 +278,24 @@ Deno.serve(async (req) => {
     });
   } catch (e) {
     return new Response(
-      JSON.stringify({ error: 'Network error calling OpenAI', detail: String(e) }),
+      JSON.stringify({ error: 'Network error calling AI gateway', detail: String(e) }),
       { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
   }
 
-  if (!openaiRes.ok) {
-    const text = await openaiRes.text();
-    let userMsg = 'OpenAI request failed.';
-    if (openaiRes.status === 401) userMsg = 'OpenAI API key is invalid.';
-    else if (openaiRes.status === 429) userMsg = 'OpenAI rate limit hit — try again shortly.';
-    else if (openaiRes.status === 402) userMsg = 'OpenAI account has insufficient quota.';
-    else if (openaiRes.status === 400) userMsg = 'OpenAI rejected the payload (model name or size).';
+  if (!aiRes.ok) {
+    const text = await aiRes.text();
+    let userMsg = 'AI request failed.';
+    if (aiRes.status === 429) userMsg = 'Rate limit hit — try again shortly.';
+    else if (aiRes.status === 402) userMsg = 'AI credits exhausted — add credits in Settings → Plans & credits.';
+    else if (aiRes.status === 400) userMsg = 'AI gateway rejected the payload (model name or size).';
     return new Response(
-      JSON.stringify({ error: userMsg, status: openaiRes.status, detail: text.slice(0, 500) }),
-      { status: openaiRes.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      JSON.stringify({ error: userMsg, status: aiRes.status, detail: text.slice(0, 500) }),
+      { status: aiRes.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
   }
 
-  const json = await openaiRes.json();
+  const json = await aiRes.json();
   const report: string = json?.choices?.[0]?.message?.content ?? '';
   const usage = json?.usage ?? null;
 
