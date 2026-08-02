@@ -1194,7 +1194,7 @@ export default function RideView() {
                   />
                 </div>
                 <PrimaryButton
-                  onClick={() => sheetExpanded ? handleSendOffer(totalFare) : setSheetExpanded(true)}
+                  onClick={() => handleSendOffer(totalFare)}
                   disabled={isRequesting}
                   className="w-full h-[48px] text-[15px] font-semibold rounded-2xl gap-2 inline-flex items-center justify-center active:scale-[0.97] transition-transform">
 
@@ -1206,7 +1206,7 @@ export default function RideView() {
                   ) : (
                     <>
                       <Car className="w-4 h-4" />
-                      {sheetExpanded ? `Send Offer • ${fmt(totalFare)}` : `Find Drivers • ${fmt(totalFare)}`}
+                      {`Find Drivers • ${fmt(totalFare)}`}
                     </>
                   )}
                 </PrimaryButton>
