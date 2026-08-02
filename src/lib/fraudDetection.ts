@@ -106,6 +106,19 @@ export async function detectSuspiciousPatterns(userId: string): Promise<FraudChe
 }
 
 /**
+ * Serialise fraud-check details without ever throwing.
+ * Circular refs / BigInt / corrupted telemetry must never crash a live trip.
+ */
+function safeClone(details: unknown): Record<string, unknown> {
+  try {
+    return JSON.parse(JSON.stringify(details ?? {})) as Record<string, unknown>;
+  } catch (e) {
+    console.warn("[fraudDetection] Unserialisable details, dropping payload", e);
+    return { serialization_error: true };
+  }
+}
+
+/**
  * Report a fraud flag to the database.
  */
 export async function reportFraudFlag(userId: string, check: FraudCheck) {
@@ -113,9 +126,10 @@ export async function reportFraudFlag(userId: string, check: FraudCheck) {
     user_id: userId,
     flag_type: check.type,
     severity: check.severity,
-    details: JSON.parse(JSON.stringify(check.details)),
+    details: safeClone(check.details),
   });
 }
+
 
 /**
  * Run all fraud checks for a location update.
