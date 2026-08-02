@@ -176,6 +176,21 @@ export default function RideView() {
     if (gpsState.status === 'idle' && navigator.geolocation) handleUseMyLocation();
   }, []);
 
+  // Prefer the rider's saved profile name (nickname) for the greeting
+  useEffect(() => {
+    if (!user?.id) { setProfileName(''); return; }
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      if (!cancelled && data?.full_name) setProfileName(data.full_name);
+    })();
+    return () => { cancelled = true; };
+  }, [user?.id]);
+
   // ── route / fare ──
   const { route: routeData, loading: routeLoading } = useOSRMRoute(
     pickupLocation ? { lat: pickupLocation.lat, lng: pickupLocation.lng } : null,
