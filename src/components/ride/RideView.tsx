@@ -143,6 +143,7 @@ export default function RideView() {
   const [sheetExpanded, setSheetExpanded] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [selectedTown, setSelectedTown] = useState<TownConfig>(DEFAULT_TOWN);
+  const [profileName, setProfileName] = useState<string>('');
   const [rideStops, setRideStops] = useState<RideStop[]>([]);
   const [scheduledAt, setScheduledAt] = useState<Date | null>(null);
   const [activeStopId, setActiveStopId] = useState<string | null>(null);
@@ -174,6 +175,21 @@ export default function RideView() {
   useEffect(() => {
     if (gpsState.status === 'idle' && navigator.geolocation) handleUseMyLocation();
   }, []);
+
+  // Prefer the rider's saved profile name (nickname) for the greeting
+  useEffect(() => {
+    if (!user?.id) { setProfileName(''); return; }
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      if (!cancelled && data?.full_name) setProfileName(data.full_name);
+    })();
+    return () => { cancelled = true; };
+  }, [user?.id]);
 
   // ── route / fare ──
   const { route: routeData, loading: routeLoading } = useOSRMRoute(
@@ -635,7 +651,9 @@ export default function RideView() {
     handleNominatimSearch(value);
   };
   const canRequestRide = pickupLocation && dropoffLocation && fareEstimate && !isRequesting;
-  const firstName = (user?.user_metadata?.full_name as string | undefined)?.split(' ')[0] || user?.email?.split('@')[0] || '';
+  const firstName = (profileName || (user?.user_metadata?.full_name as string | undefined) || user?.email?.split('@')[0] || '').split(' ')[0];
+  const mapCenter = gpsState.coords ?? pickupLocation ?? selectedTown.center;
+  const mapZoom = gpsState.coords ? 16 : 14;
   const estimatedWaitMinutes = Math.max(2, Math.min(8, Math.round(8 - nearbyDrivers.length * 0.6)));
   const showHomeContent = rideStatus === 'idle' && !pickupLocation && !dropoffLocation;
   const unifiedPlaceResults = [...cachedPlaceResults, ...nominatimResults.map((item) => ({ ...item, source: 'nominatim' as const }))]
@@ -651,7 +669,7 @@ export default function RideView() {
     return (
       <div className="relative h-[100dvh] w-full overflow-hidden bg-background">
         <div className="absolute inset-0">
-          <MapboxMap pickup={pickupLocation} dropoff={dropoffLocation} routeGeometry={routeData?.geometry} defaultCenter={selectedTown.center} defaultZoom={14} className="w-full h-full" height="100%" stops={rideStops.filter(s => s.lat && s.lng)} />
+          <MapboxMap pickup={pickupLocation} dropoff={dropoffLocation} routeGeometry={routeData?.geometry} defaultCenter={mapCenter} defaultZoom={mapZoom} className="w-full h-full" height="100%" stops={rideStops.filter(s => s.lat && s.lng)} />
         </div>
 
         {/* Top gradient */}
@@ -789,7 +807,7 @@ export default function RideView() {
     <div className="relative h-[100dvh] w-full overflow-hidden bg-background">
       {/* ── MAP ── */}
       <div className="absolute inset-0">
-        <MapboxMap pickup={pickupLocation} dropoff={dropoffLocation} routeGeometry={routeData?.geometry} onMapClick={handleMapClick} defaultCenter={selectedTown.center} defaultZoom={14} className="w-full h-full" height="100%" drivers={nearbyDrivers} stops={rideStops.filter(s => s.lat && s.lng)} />
+        <MapboxMap pickup={pickupLocation} dropoff={dropoffLocation} routeGeometry={routeData?.geometry} onMapClick={handleMapClick} defaultCenter={mapCenter} defaultZoom={mapZoom} className="w-full h-full" height="100%" drivers={nearbyDrivers} stops={rideStops.filter(s => s.lat && s.lng)} />
 
         {/* Floating map buttons */}
         <div className="absolute right-3 z-20" style={{ bottom: sheetExpanded ? 'calc(70vh + 16px)' : 'calc(48vh + 16px)', transition: 'bottom 0.3s cubic-bezier(0.32,0.72,0,1)' }}>
