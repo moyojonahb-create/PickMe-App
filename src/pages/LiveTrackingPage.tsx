@@ -120,6 +120,17 @@ export default function LiveTrackingPage() {
     return () => { supabase.removeChannel(channel); };
   }, [tripId]);
 
+  const timelineSteps = useMemo(() => {
+    const s = ride?.status;
+    return [
+      { label: 'Request placed', active: true },
+      { label: 'Driver assigned', active: ['accepted', 'driver_arriving', 'driver_arrived', 'in_progress', 'completed'].includes(s ?? '') },
+      { label: 'Driver en route', active: ['driver_arriving', 'driver_arrived', 'in_progress', 'completed'].includes(s ?? '') },
+      { label: 'Trip complete', active: s === 'completed' },
+    ];
+  }, [ride?.status]);
+
+
   if (loading) {
     return (
       <div className="min-h-[100dvh] bg-background flex items-center justify-center px-6">
