@@ -139,11 +139,11 @@ export async function preloadAllTownPricing(): Promise<Record<string, TownPricin
   if (Object.keys(pricingCache).length > 0) return pricingCache;
   const { data } = await supabase
     .from('town_pricing')
-    .select('town_id, base_fare, per_km, per_minute, minimum_fare, surge_multiplier, currency_code, currency_symbol')
+    .select('*')
     .limit(500);
   if (data) {
     for (const row of data) {
-      const config = row as unknown as TownPricingConfig;
+      const config = { ...DEFAULT_PRICING, ...(row as Partial<TownPricingConfig>) } as TownPricingConfig;
       pricingCache[config.town_id] = config;
     }
   }
