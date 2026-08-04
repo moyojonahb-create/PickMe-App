@@ -177,7 +177,7 @@ export default function RideView() {
   }, []);
 
   useEffect(() => {
-    if (gpsState.status === 'idle' && navigator.geolocation) handleUseMyLocation();
+    if (gpsState.status === 'idle' && navigator.geolocation) handleUseMyLocation(true);
   }, []);
 
   // Prefer the rider's saved profile name (nickname) for the greeting
@@ -1058,7 +1058,7 @@ export default function RideView() {
           )}
 
           {/* GPS state banner — explains denied/loading/unavailable with a one-tap retry. */}
-          <GpsPermissionBanner status={gpsState.status} error={gpsState.error} onRetry={handleUseMyLocation} />
+          <GpsPermissionBanner status={gpsState.status} error={gpsState.error} onRetry={() => handleUseMyLocation()} />
 
           {/* ── HOME CONTENT (idle state, before booking starts) ── */}
           {showHomeContent && (() => {
@@ -1378,7 +1378,7 @@ export default function RideView() {
           query={searchQuery}
           onQueryChange={handleSearchChange}
           onClose={() => {setActiveField(null);setSearchQuery('');setNominatimResults([]);}}
-          onUseMyLocation={handleUseMyLocation}
+          onUseMyLocation={() => handleUseMyLocation()}
           gpsLoading={gpsState.status === 'loading'}
           onChooseOnMap={() => setMapPickMode(true)}
           onSelectPlace={(place) => {
