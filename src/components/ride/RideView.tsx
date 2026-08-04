@@ -81,7 +81,6 @@ import { useNearbyDrivers } from '@/hooks/useNearbyDrivers';
 import GenderPreferenceToggle, { type GenderPreference } from './GenderPreferenceToggle';
 import ContactPickerSheet from './ContactPickerSheet';
 import PilotReadinessCard from '@/components/pilot/PilotReadinessCard';
-import LuggageButton from '@/components/luggage/LuggageButton';
 import LuggageSheet from '@/components/luggage/LuggageSheet';
 import GpsPermissionBanner from '@/components/ride/GpsPermissionBanner';
 import BookingForSomeoneElse from '@/components/ride/BookingForSomeoneElse';
