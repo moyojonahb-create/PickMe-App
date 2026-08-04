@@ -202,10 +202,22 @@ export default function RideView() {
   );
 
   const calculateFare = useCallback(() => {
-    if (!routeData?.distanceKm) return null;
-    const rec = calculateRecommendedFare(townPricing, routeData.distanceKm, routeData.durationMinutes);
-    return { fareR: rec.recommended, distanceKm: routeData.distanceKm, durationMinutes: routeData.durationMinutes, currencySymbol: rec.currencySymbol, currencyCode: rec.currencyCode };
-  }, [routeData, townPricing]);
+    // Prefer the routed distance; fall back to a straight-line estimate so the
+    // Find Drivers button never stays stuck on "Calculating…" when routing fails.
+    let distanceKm = routeData?.distanceKm ?? 0;
+    let durationMinutes = routeData?.durationMinutes ?? 0;
+    if (!distanceKm && pickupLocation && dropoffLocation) {
+      const fb = getFallbackRoute(
+        { lat: pickupLocation.lat, lng: pickupLocation.lng },
+        { lat: dropoffLocation.lat, lng: dropoffLocation.lng }
+      );
+      distanceKm = fb.distanceKm;
+      durationMinutes = fb.durationMinutes;
+    }
+    if (!distanceKm) return null;
+    const rec = calculateRecommendedFare(townPricing, distanceKm, durationMinutes);
+    return { fareR: rec.recommended, distanceKm, durationMinutes, currencySymbol: rec.currencySymbol, currencyCode: rec.currencyCode };
+  }, [routeData, townPricing, pickupLocation, dropoffLocation]);
   const fareEstimate = calculateFare();
 
   const applyRideOfferEvent = useCallback((event: BackendSocketEvent) => {
