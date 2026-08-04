@@ -265,7 +265,33 @@ export default function RideView() {
   const STUDENT_DISCOUNT = 1;
 
   // ── handlers ──
-  const handleUseMyLocation = useCallback(() => {
+  const applyPosition = useCallback(async (pos: GeolocationPosition, reverseGeocode: boolean) => {
+    const c = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+    setGpsState({ status: 'success', coords: c, error: null });
+    setPickupLocation((prev) => prev && prev.name !== 'My location' ? prev : { name: 'My location', lat: c.lat, lng: c.lng });
+    setActiveField(null);
+
+    // Use detected town
+    const detected = detectTown(c.lat, c.lng);
+    setSelectedTown(detected);
+
+    if (!reverseGeocode) return;
+    // Reverse geocode to get city name for better results
+    try {
+      const result = await reverseZW(c.lat, c.lng);
+      const name = result?.name || result?.display_name?.split(',')[0] || 'My location';
+      setPickupLocation({ name, lat: c.lat, lng: c.lng });
+    } catch (e) {
+      console.error('Reverse geocode error:', e);
+    }
+  }, []);
+
+  /**
+   * `fast` = coarse/cached fix used on mount so the map can centre almost
+   * immediately (high-accuracy GPS can take several seconds on low-end
+   * devices). A precise fix is requested straight after in the background.
+   */
+  const handleUseMyLocation = useCallback((fast = false) => {
     if (!navigator.geolocation) {
       setGpsState({ status: 'unavailable', coords: null, error: 'Geolocation not supported' });
       // Fallback to the pilot town if no geolocation
@@ -274,38 +300,47 @@ export default function RideView() {
       return;
     }
     setGpsState((prev) => ({ ...prev, status: 'loading', error: null }));
+
+    const onError = (err: GeolocationPositionError) => {
+      setGpsState({
+        status: 'denied',
+        coords: null,
+        error: err.code === err.PERMISSION_DENIED ? 'Location access denied' : 'Unable to get location',
+      });
+      // Fallback to the pilot town on error
+      setSelectedTown(DEFAULT_TOWN);
+    };
+
+    if (!fast) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => { void applyPosition(pos, true); },
+        onError,
+        { enableHighAccuracy: true, timeout: 10000 },
+      );
+      return;
+    }
+
     navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const c = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        setGpsState({ status: 'success', coords: c, error: null });
-        setPickupLocation({ name: 'My location', lat: c.lat, lng: c.lng });
-        setActiveField(null);
-        
-        // Use detected town
-        const detected = detectTown(c.lat, c.lng);
-        setSelectedTown(detected);
-        
-        // Reverse geocode to get city name for better results
-        try {
-          const result = await reverseZW(c.lat, c.lng);
-          const name = result?.name || result?.display_name?.split(',')[0] || 'My location';
-          setPickupLocation({ name, lat: c.lat, lng: c.lng });
-        } catch (e) {
-          console.error('Reverse geocode error:', e);
-        }
+      (pos) => {
+        void applyPosition(pos, false);
+        // Upgrade to a precise fix + street-level label once painted.
+        navigator.geolocation.getCurrentPosition(
+          (precise) => { void applyPosition(precise, true); },
+          () => {},
+          { enableHighAccuracy: true, timeout: 10000 },
+        );
       },
-      (err) => {
-        setGpsState({ 
-          status: 'denied', 
-          coords: null, 
-          error: err.code === err.PERMISSION_DENIED ? 'Location access denied' : 'Unable to get location' 
-        });
-        // Fallback to the pilot town on error
-        setSelectedTown(DEFAULT_TOWN);
+      // Coarse attempt failed (or timed out) — fall back to the precise one.
+      () => {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => { void applyPosition(pos, true); },
+          onError,
+          { enableHighAccuracy: true, timeout: 10000 },
+        );
       },
-      { enableHighAccuracy: true, timeout: 10000 }
+      { enableHighAccuracy: false, timeout: 4000, maximumAge: 60000 },
     );
-  }, []);
+  }, [applyPosition]);
 
   const handleLandmarkSelect = (landmark: Landmark) => {
     const loc: SelectedLocation = { name: landmark.name, lat: landmark.latitude, lng: landmark.longitude };
