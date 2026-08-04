@@ -100,7 +100,7 @@
         setTimeout(function () {
           window.__splashMinDone = true;
           tryHide();
-        }, 1200);
+        }, 400);
 
         // React calls window.__dismissSplash() when the app is mounted
         window.__dismissSplash = function () {
@@ -118,7 +118,7 @@
           window.__splashMinDone = true;
           window.__splashReady = true;
           tryHide();
-        }, 2500);
+        }, 2000);
 
       })();
     </script>
