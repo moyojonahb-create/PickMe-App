@@ -5,6 +5,7 @@ import { getCached, setCache } from '@/lib/queryCache';
 import { goBackend, type GoOfferCreateRequest } from '@/lib/goBackendClient';
 import { decimalToMinor } from '@/lib/money';
 import { normalizeRideRow } from '@/lib/rideContract';
+import { isGoBackendConfigured, isBackendUnavailable } from '@/lib/rideMatching';
 
 export type Offer = {
   id: string;
@@ -93,8 +94,26 @@ async function getUserOrThrow() {
 
 // Fetch pending offers for a ride (with LIMIT to prevent overload)
 export async function fetchPendingOffers(rideId: string): Promise<Offer[]> {
-  const data = await goBackend.get<GoOfferResponse[]>(`/api/rides/${rideId}/offers`);
-  return (data ?? []).slice(0, 50).map((offer) => normalizeOffer(offer, rideId));
+  const viaSupabase = async (): Promise<Offer[]> => {
+    const { data, error } = await supabase
+      .from('offers')
+      .select('id, ride_id, driver_id, price, eta_minutes, message, status, created_at')
+      .eq('ride_id', rideId)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: true })
+      .limit(50);
+    if (error) throw new Error(error.message);
+    return (data ?? []).map((row) => normalizeOffer(row as unknown as GoOfferResponse, rideId));
+  };
+
+  if (!isGoBackendConfigured()) return viaSupabase();
+  try {
+    const data = await goBackend.get<GoOfferResponse[]>(`/api/rides/${rideId}/offers`);
+    return (data ?? []).slice(0, 50).map((offer) => normalizeOffer(offer, rideId));
+  } catch (error) {
+    if (isBackendUnavailable(error)) return viaSupabase();
+    throw error;
+  }
 }
 
 // Fetch drivers by their user IDs, enriched with profile name
@@ -138,8 +157,30 @@ export async function fetchDriversByIds(driverIds: string[]): Promise<Record<str
 // Fetch open rides for drivers to bid on (only last 5 minutes)
 // OPTIMIZED: added LIMIT 30 to cap returned rides at scale
 export async function fetchOpenRides(driverGender?: string | null) {
-  const data = await goBackend.get<Record<string, unknown>[]>("/api/rides/open");
-  const rides = (data ?? []).map((ride) => normalizeRideRow(ride));
+  const viaSupabase = async () => {
+    const { data, error } = await supabase
+      .from('rides')
+      .select('*')
+      .eq('status', 'pending')
+      .is('driver_id', null)
+      .order('created_at', { ascending: false })
+      .limit(30);
+    if (error) throw new Error(error.message);
+    return (data ?? []) as unknown as Record<string, unknown>[];
+  };
+
+  let raw: Record<string, unknown>[];
+  if (!isGoBackendConfigured()) {
+    raw = await viaSupabase();
+  } else {
+    try {
+      raw = (await goBackend.get<Record<string, unknown>[]>("/api/rides/open")) ?? [];
+    } catch (error) {
+      if (!isBackendUnavailable(error)) throw error;
+      raw = await viaSupabase();
+    }
+  }
+  const rides = raw.map((ride) => normalizeRideRow(ride));
 
   // Server-side filtering: hide female-only rides from male drivers
   if (driverGender && driverGender !== 'female') {
@@ -188,22 +229,79 @@ export async function submitOffer(input: {
     message: input.message || null,
   };
 
-  const data = await goBackend.post<GoOfferResponse | { offer: GoOfferResponse }>(`/api/rides/${input.ride_id}/offers`, payload);
-  const offer = "offer" in data ? data.offer : data;
-  return normalizeOffer(offer, input.ride_id);
+  const viaSupabase = async (): Promise<Offer> => {
+    const user = await getUserOrThrow();
+    const { data, error } = await supabase
+      .from('offers')
+      .insert([{
+        ride_id: input.ride_id,
+        driver_id: user.id,
+        price: input.price,
+        eta_minutes: input.eta_minutes,
+        message: input.message || null,
+        status: 'pending',
+      }] as never)
+      .select('id, ride_id, driver_id, price, eta_minutes, message, status, created_at')
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!data) throw new Error('Offer could not be created');
+    return normalizeOffer(data as unknown as GoOfferResponse, input.ride_id);
+  };
+
+  if (!isGoBackendConfigured()) return viaSupabase();
+  try {
+    const data = await goBackend.post<GoOfferResponse | { offer: GoOfferResponse }>(`/api/rides/${input.ride_id}/offers`, payload);
+    const offer = "offer" in data ? data.offer : data;
+    return normalizeOffer(offer, input.ride_id);
+  } catch (error) {
+    if (isBackendUnavailable(error)) return viaSupabase();
+    throw error;
+  }
 }
 
 // Decline an offer
 export async function declineOffer(offerId: string, rideId?: string): Promise<void> {
+  const viaSupabase = async () => {
+    const { error } = await supabase
+      .from('offers')
+      .update({ status: 'rejected' } as never)
+      .eq('id', offerId);
+    if (error) throw new Error(error.message);
+  };
+
+  if (!isGoBackendConfigured()) return viaSupabase();
   const path = rideId
     ? `/api/rides/${rideId}/offers/${offerId}/reject`
     : `/api/rides/offers/${offerId}/reject`;
-  await goBackend.post(path);
+  try {
+    await goBackend.post(path);
+  } catch (error) {
+    if (isBackendUnavailable(error)) return viaSupabase();
+    throw error;
+  }
 }
 
 // Accept an offer
 export async function acceptOffer(rideId: string, offerOrId: string | Offer) {
   const offerId = typeof offerOrId === 'string' ? offerOrId : offerOrId.id;
   await getUserOrThrow();
-  return goBackend.post(`/api/rides/${rideId}/offers/${offerId}/accept`);
+
+  const viaSupabase = async () => {
+    const { data, error } = await supabase.rpc('accept_ride_offer' as never, {
+      p_ride_id: rideId,
+      p_offer_id: offerId,
+    } as never);
+    if (error) throw new Error(error.message);
+    const result = data as unknown as { ok?: boolean; reason?: string } | null;
+    if (result && result.ok === false) throw new Error(result.reason || 'Could not accept offer');
+    return result;
+  };
+
+  if (!isGoBackendConfigured()) return viaSupabase();
+  try {
+    return await goBackend.post(`/api/rides/${rideId}/offers/${offerId}/accept`);
+  } catch (error) {
+    if (isBackendUnavailable(error)) return viaSupabase();
+    throw error;
+  }
 }
