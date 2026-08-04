@@ -1331,18 +1331,24 @@ export default function RideView() {
             const fmt = (v: number) => `${sym}${v.toFixed(2)}`;
             return (
               <>
-                {studentDiscountAvailable && (
-                  <div className="mb-2 flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-primary/10 border border-primary/20">
-                    <span className="text-[12px] font-semibold text-primary">🎓 Student discount applied −{fmt(discount)}</span>
-                    <span className="text-[10px] text-muted-foreground">{studentRidesUsedToday}/{studentDailyCap} today</span>
+                {/* Luggage prompt — shown once, right after drop-off is picked */}
+                {luggagePromptOpen && (
+                  <div className="mb-2 flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-accent/10 border border-accent/30">
+                    <span className="text-[12px] font-semibold text-foreground">🧳 Travelling with luggage?</span>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => { setLuggagePromptOpen(false); setLuggageOpen(true); }}
+                        className="px-3 py-1 rounded-full bg-primary text-accent text-[11px] font-bold active:scale-95 transition-transform">
+                        Yes
+                      </button>
+                      <button
+                        onClick={() => setLuggagePromptOpen(false)}
+                        className="px-3 py-1 rounded-full bg-muted text-muted-foreground text-[11px] font-semibold active:scale-95 transition-transform">
+                        No
+                      </button>
+                    </div>
                   </div>
                 )}
-                <div className="mb-2 flex justify-start">
-                  <LuggageButton
-                    count={luggageDraft?.image_paths.length || 0}
-                    onClick={() => setLuggageOpen(true)}
-                  />
-                </div>
                 <div className="mb-2">
                   <PaymentMethodSelector
                     selected={paymentMethod}
