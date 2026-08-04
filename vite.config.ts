@@ -67,6 +67,10 @@ export default defineConfig(({ mode }) => {
           'vendor-react': ['react', 'react-dom', 'react-router-dom'],
           'vendor-supabase': ['@supabase/supabase-js'],
           'vendor-ui': ['@radix-ui/react-dialog', '@radix-ui/react-dropdown-menu', '@radix-ui/react-select', '@radix-ui/react-tabs', '@radix-ui/react-toast', '@radix-ui/react-popover'],
+          // clsx / tailwind-merge are used by every component AND by recharts.
+          // Without their own chunk they get bucketed into vendor-charts, which
+          // drags the whole 380KB charting bundle into the initial page load.
+          'vendor-utils': ['clsx', 'tailwind-merge', 'class-variance-authority'],
           'vendor-motion': ['framer-motion'],
           'vendor-query': ['@tanstack/react-query'],
           'vendor-maps': ['leaflet'],
