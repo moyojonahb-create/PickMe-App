@@ -12,6 +12,7 @@ import { useLandmarks } from '@/hooks/useLandmarks';
 import { supabase } from '@/lib/supabaseClient';
 import { requestRide } from '@/lib/requestRide';
 import { goBackend } from '@/lib/goBackendClient';
+import { getFallbackRoute } from '@/lib/osrm';
 import { createNotification, createRidePreferences, createRideStops, createStudentDiscountUsage } from '@/lib/businessApi';
 import {
   eventDriverId,
