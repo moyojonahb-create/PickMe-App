@@ -21,7 +21,7 @@ interface MapboxMapProps {
   onMapClick?: (coords: Coords) => void;
   className?: string;
   height?: string;
-  drivers?: Array<{ id: string; lat: number; lng: number; isOnline?: boolean }>;
+  drivers?: Array<{ id: string; lat: number; lng: number; isOnline?: boolean; white?: boolean }>;
   defaultCenter?: Coords;
   defaultZoom?: number;
   etaMinutes?: number;
@@ -126,7 +126,23 @@ function markerElement(label: string, color: string, textColor = "#fff", size = 
   return el;
 }
 
-function carElement(isOnline = true) {
+function carElement(isOnline = true, white = false) {
+  if (white) {
+    const el = document.createElement("div");
+    el.className = "pickme-mapbox-marker";
+    el.style.width = "30px";
+    el.style.height = "30px";
+    el.style.borderRadius = "999px";
+    el.style.background = "#ffffff";
+    el.style.border = "2px solid #1B3FA0";
+    el.style.boxShadow = "0 6px 16px rgba(15,23,42,0.22)";
+    el.style.display = "flex";
+    el.style.alignItems = "center";
+    el.style.justifyContent = "center";
+    el.innerHTML =
+      '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1B3FA0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17h14M6 17V9l2-4h8l2 4v8"/><circle cx="8" cy="17" r="1.6"/><circle cx="16" cy="17" r="1.6"/></svg>';
+    return el;
+  }
   const el = markerElement(">", isOnline ? "#22c55e" : "#9ca3af", "#fff", isOnline ? 34 : 30);
   el.style.fontSize = "16px";
   return el;
