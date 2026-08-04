@@ -12,6 +12,7 @@ import { useLandmarks } from '@/hooks/useLandmarks';
 import { supabase } from '@/lib/supabaseClient';
 import { requestRide } from '@/lib/requestRide';
 import { goBackend } from '@/lib/goBackendClient';
+import { getFallbackRoute } from '@/lib/osrm';
 import { createNotification, createRidePreferences, createRideStops, createStudentDiscountUsage } from '@/lib/businessApi';
 import {
   eventDriverId,
@@ -80,7 +81,6 @@ import { useNearbyDrivers } from '@/hooks/useNearbyDrivers';
 import GenderPreferenceToggle, { type GenderPreference } from './GenderPreferenceToggle';
 import ContactPickerSheet from './ContactPickerSheet';
 import PilotReadinessCard from '@/components/pilot/PilotReadinessCard';
-import LuggageButton from '@/components/luggage/LuggageButton';
 import LuggageSheet from '@/components/luggage/LuggageSheet';
 import GpsPermissionBanner from '@/components/ride/GpsPermissionBanner';
 import BookingForSomeoneElse from '@/components/ride/BookingForSomeoneElse';
@@ -142,6 +142,8 @@ export default function RideView() {
   const [offers, setOffers] = useState<DriverOffer[]>([]);
   const [luggageDraft, setLuggageDraft] = useState<import('@/components/luggage/LuggageSheet').LuggageDraft | null>(null);
   const [luggageOpen, setLuggageOpen] = useState(false);
+  const [luggagePromptOpen, setLuggagePromptOpen] = useState(false);
+  const [luggagePromptShown, setLuggagePromptShown] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
   const [sheetExpanded, setSheetExpanded] = useState(false);
@@ -176,6 +178,18 @@ export default function RideView() {
     }
   }, []);
 
+  // One-time luggage prompt as soon as a drop-off is chosen for this booking
+  useEffect(() => {
+    if (dropoffLocation && !luggagePromptShown) {
+      setLuggagePromptShown(true);
+      setLuggagePromptOpen(true);
+    }
+    if (!dropoffLocation) {
+      setLuggagePromptShown(false);
+      setLuggagePromptOpen(false);
+    }
+  }, [dropoffLocation, luggagePromptShown]);
+
   useEffect(() => {
     if (gpsState.status === 'idle' && navigator.geolocation) handleUseMyLocation(true);
   }, []);
@@ -202,10 +216,22 @@ export default function RideView() {
   );
 
   const calculateFare = useCallback(() => {
-    if (!routeData?.distanceKm) return null;
-    const rec = calculateRecommendedFare(townPricing, routeData.distanceKm, routeData.durationMinutes);
-    return { fareR: rec.recommended, distanceKm: routeData.distanceKm, durationMinutes: routeData.durationMinutes, currencySymbol: rec.currencySymbol, currencyCode: rec.currencyCode };
-  }, [routeData, townPricing]);
+    // Prefer the routed distance; fall back to a straight-line estimate so the
+    // Find Drivers button never stays stuck on "Calculating…" when routing fails.
+    let distanceKm = routeData?.distanceKm ?? 0;
+    let durationMinutes = routeData?.durationMinutes ?? 0;
+    if (!distanceKm && pickupLocation && dropoffLocation) {
+      const fb = getFallbackRoute(
+        { lat: pickupLocation.lat, lng: pickupLocation.lng },
+        { lat: dropoffLocation.lat, lng: dropoffLocation.lng }
+      );
+      distanceKm = fb.distanceKm;
+      durationMinutes = fb.durationMinutes;
+    }
+    if (!distanceKm) return null;
+    const rec = calculateRecommendedFare(townPricing, distanceKm, durationMinutes);
+    return { fareR: rec.recommended, distanceKm, durationMinutes, currencySymbol: rec.currencySymbol, currencyCode: rec.currencyCode };
+  }, [routeData, townPricing, pickupLocation, dropoffLocation]);
   const fareEstimate = calculateFare();
 
   const applyRideOfferEvent = useCallback((event: BackendSocketEvent) => {
@@ -1228,20 +1254,8 @@ export default function RideView() {
           <p className="text-[11px] text-accent font-medium -mt-1.5 ml-1">⚡ Extra passenger charges applied</p>
           }
 
-          {/* Preferences set in Profile Settings — shown as tags */}
-          {(quietRide || coolTemp || wavRequired || hearingImpaired || genderPreference !== 'any') && (
-            <div className="glass-card rounded-2xl px-3 py-2">
-              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-1">Your Preferences</p>
-              <div className="flex flex-wrap gap-1">
-                {quietRide && <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">🤫 Quiet Ride</span>}
-                {coolTemp && <span className="text-[10px] px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-600 font-medium">❄️ Cool Temp</span>}
-                {wavRequired && <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 font-medium">♿ WAV</span>}
-                {hearingImpaired && <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-600 font-medium">👂 Hearing</span>}
-                {genderPreference !== 'any' && <span className="text-[10px] px-2 py-0.5 rounded-full bg-pink-500/10 text-pink-600 font-medium">🛡️ Women Only</span>}
-              </div>
-              <p className="text-[9px] text-muted-foreground mt-1">Change in Profile → Ride Preferences</p>
-            </div>
-          )}
+          {/* Rider preferences live in Profile only; they are attached to the ride
+              and surfaced to the assigned driver, not shown here. */}
 
           {/* ── Fare breakdown + Negotiation (expanded) ── */}
           {pickupLocation && dropoffLocation && fareEstimate && (() => {
@@ -1318,18 +1332,24 @@ export default function RideView() {
             const fmt = (v: number) => `${sym}${v.toFixed(2)}`;
             return (
               <>
-                {studentDiscountAvailable && (
-                  <div className="mb-2 flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-primary/10 border border-primary/20">
-                    <span className="text-[12px] font-semibold text-primary">🎓 Student discount applied −{fmt(discount)}</span>
-                    <span className="text-[10px] text-muted-foreground">{studentRidesUsedToday}/{studentDailyCap} today</span>
+                {/* Luggage prompt — shown once, right after drop-off is picked */}
+                {luggagePromptOpen && (
+                  <div className="mb-2 flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-accent/10 border border-accent/30">
+                    <span className="text-[12px] font-semibold text-foreground">🧳 Travelling with luggage?</span>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => { setLuggagePromptOpen(false); setLuggageOpen(true); }}
+                        className="px-3 py-1 rounded-full bg-primary text-accent text-[11px] font-bold active:scale-95 transition-transform">
+                        Yes
+                      </button>
+                      <button
+                        onClick={() => setLuggagePromptOpen(false)}
+                        className="px-3 py-1 rounded-full bg-muted text-muted-foreground text-[11px] font-semibold active:scale-95 transition-transform">
+                        No
+                      </button>
+                    </div>
                   </div>
                 )}
-                <div className="mb-2 flex justify-start">
-                  <LuggageButton
-                    count={luggageDraft?.image_paths.length || 0}
-                    onClick={() => setLuggageOpen(true)}
-                  />
-                </div>
                 <div className="mb-2">
                   <PaymentMethodSelector
                     selected={paymentMethod}
