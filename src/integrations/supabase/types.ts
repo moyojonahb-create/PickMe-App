@@ -2789,6 +2789,10 @@ export type Database = {
         }[]
       }
       pay_ride_from_wallet: { Args: { p_ride_id: string }; Returns: Json }
+      realtime_topic_entity_id: {
+        Args: { p_prefixes: string; p_topic: string }
+        Returns: string
+      }
       request_wallet_ride: { Args: { p_payload: Json }; Returns: Json }
       request_withdrawal: {
         Args: {
