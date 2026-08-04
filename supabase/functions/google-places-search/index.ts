@@ -244,7 +244,15 @@ serve(async (req: Request) => {
 
     // 2️⃣ Fallback to Nominatim
     console.log('[google-places-search] Google returned no results, falling back to Nominatim');
-    const nomResults = await searchNominatim(q, lat || undefined, lng || undefined, radiusKm, viewbox || undefined, bounded);
+    let nomResults: any[] = [];
+    try {
+      nomResults = await searchNominatim(q, lat || undefined, lng || undefined, radiusKm, viewbox || undefined, bounded) || [];
+    } catch (nomErr) {
+      console.error('[google-places-search] Nominatim failed:', nomErr);
+      return new Response(JSON.stringify([]), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
     const seenNames = new Set<string>();
     const suggestions = nomResults
@@ -281,8 +289,8 @@ serve(async (req: Request) => {
     });
   } catch (error) {
     console.error('[google-places-search]', error);
-    return new Response(JSON.stringify({ error: 'Place autocomplete failed' }), {
-      status: 500,
+    return new Response(JSON.stringify([]), {
+      status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
