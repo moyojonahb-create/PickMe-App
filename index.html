@@ -45,8 +45,15 @@
     <meta name="twitter:site" content="@pickmeapp" />
 
     <!-- Leaflet CSS for OpenStreetMap (non-blocking) -->
-    <link rel="preload" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" as="style" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" onload="this.onload=null;this.rel='stylesheet'" />
-    <noscript><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" /></noscript>
+    <!-- Leaflet CSS is bundled with the admin / OSM map components that use it,
+         so it is no longer fetched from unpkg on every page load. -->
+
+    <!-- Fonts: preconnect + non-blocking stylesheet (was a render-blocking
+         @import inside index.css, which serialized three round trips). -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" onload="this.onload=null;this.rel='stylesheet'" />
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" /></noscript>
 
     <!-- DNS prefetch for external services -->
     <link rel="dns-prefetch" href="https://maps.googleapis.com" />
@@ -93,7 +100,7 @@
         setTimeout(function () {
           window.__splashMinDone = true;
           tryHide();
-        }, 1200);
+        }, 400);
 
         // React calls window.__dismissSplash() when the app is mounted
         window.__dismissSplash = function () {
@@ -111,7 +118,7 @@
           window.__splashMinDone = true;
           window.__splashReady = true;
           tryHide();
-        }, 2500);
+        }, 2000);
 
       })();
     </script>

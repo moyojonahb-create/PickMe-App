@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import PhoneMockup from '@/components/PhoneMockup';
 import { motion } from 'framer-motion';
-import heroImage from '@/assets/hero-city.jpg';
+import heroImage from '@/assets/hero-city.webp';
 
 interface LandingHeroProps {
   onGetStarted?: () => void;
@@ -20,6 +20,8 @@ const LandingHero = ({ onGetStarted }: LandingHeroProps) => {
           src={heroImage}
           alt="City streets at golden hour"
           className="w-full h-full object-cover"
+          fetchPriority="high"
+          decoding="async"
           width={1920}
           height={1080}
         />
