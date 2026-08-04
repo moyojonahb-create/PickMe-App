@@ -5,6 +5,7 @@ import { queueOfflineRide } from '@/lib/offlineQueue';
 import { detectSuspiciousPatterns, reportFraudFlag } from '@/lib/fraudDetection';
 import { isRateLimited } from '@/lib/rateLimit';
 import { normalizeRideRow } from '@/lib/rideContract';
+import { isGoBackendConfigured, isBackendUnavailable } from '@/lib/rideMatching';
 
 type RequestRideInput = {
   pickup_address: string;
@@ -105,6 +106,46 @@ export async function requestRide(input: RequestRideInput) {
     }
   }
 
+  const persistViaSupabase = async () => {
+    const row = {
+      user_id: user.id,
+      status: input.scheduled_at ? "scheduled" : "pending",
+      pickup_address,
+      dropoff_address,
+      pickup_lat: input.pickup_lat,
+      pickup_lon: input.pickup_lng,
+      dropoff_lat: input.dropoff_lat,
+      dropoff_lon: input.dropoff_lng,
+      fare,
+      distance_km,
+      duration_minutes: Math.round(duration_minutes),
+      vehicle_type: input.vehicle_type ?? "economy",
+      route_polyline: input.route_polyline ?? null,
+      passenger_count: input.passenger_count ?? 1,
+      payment_method: paymentMethod,
+      town_id: input.town_id ?? null,
+      gender_preference: input.gender_preference ?? "any",
+      ...(input.passenger_name?.trim() ? { passenger_name: input.passenger_name.trim() } : {}),
+      ...(input.passenger_phone?.trim() ? { passenger_phone: input.passenger_phone.trim() } : {}),
+      ...(input.scheduled_at ? { scheduled_at: input.scheduled_at } : {}),
+    };
+    const { data, error } = await supabase.from("rides").insert([row] as never).select("*").maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!data) throw new Error("Ride request failed: no ride returned");
+    return data as unknown as RideRow;
+  };
+
+  // Primary path: Go Core backend. Fallback: persist directly to the database
+  // so the request still reaches drivers when the Go backend isn't reachable.
+  if (!isGoBackendConfigured()) {
+    try {
+      const ride = await persistViaSupabase();
+      return { ok: true as const, ride };
+    } catch (e: unknown) {
+      return { ok: false as const, error: `Ride request failed: ${(e as Error).message}` };
+    }
+  }
+
   try {
     const created = await goBackend.post<GoRideResponse>("/api/rides", ridePayload);
     if (created.ok === false) {
@@ -115,6 +156,14 @@ export async function requestRide(input: RequestRideInput) {
     if (!rideId) return { ok: false as const, error: "Ride request failed: backend did not return a ride id" };
     return { ok: true as const, ride: { ...ride, id: rideId } as RideRow };
   } catch (e: unknown) {
+    if (isBackendUnavailable(e)) {
+      try {
+        const ride = await persistViaSupabase();
+        return { ok: true as const, ride };
+      } catch (fallbackError: unknown) {
+        return { ok: false as const, error: `Ride request failed: ${(fallbackError as Error).message}` };
+      }
+    }
     return { ok: false as const, error: `Ride request failed: ${(e as Error).message}` };
   }
 }

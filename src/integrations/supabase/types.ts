@@ -2673,6 +2673,10 @@ export type Database = {
       }
     }
     Functions: {
+      accept_ride_offer: {
+        Args: { p_offer_id: string; p_ride_id: string }
+        Returns: Json
+      }
       admin_approve_deposit: {
         Args: { p_deposit_id: string; p_note?: string }
         Returns: Json
