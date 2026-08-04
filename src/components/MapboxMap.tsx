@@ -3,6 +3,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { createPickupPinElement, type RiderGender } from "@/lib/pickupPin";
 import { getMapboxToken, loadMapbox, resetMapboxLoader, type MapboxGL, type MapboxMapInstance } from "@/lib/mapboxLoader";
 
 export interface Coords {
@@ -25,6 +26,7 @@ interface MapboxMapProps {
   defaultZoom?: number;
   etaMinutes?: number;
   stops?: Array<{ id: string; address: string; lat: number; lng: number }>;
+  riderGender?: RiderGender;
 }
 
 const ZW_CENTER: Coords = { lat: -19.015, lng: 29.155 };
@@ -204,6 +206,7 @@ function InnerMapboxMap({
   defaultCenter,
   defaultZoom = 13,
   stops,
+  riderGender,
 }: MapboxMapProps & { mapboxgl: MapboxGL }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapboxMapInstance | null>(null);
@@ -278,11 +281,11 @@ function InnerMapboxMap({
     markersRef.current.forEach((marker) => marker.remove());
     markersRef.current = [];
 
-    const addMarker = (coords: Coords, el: HTMLElement) => {
-      markersRef.current.push(new mapboxgl.Marker({ element: el }).setLngLat([coords.lng, coords.lat]).addTo(map));
+    const addMarker = (coords: Coords, el: HTMLElement, anchor: "center" | "bottom" = "center") => {
+      markersRef.current.push(new mapboxgl.Marker({ element: el, anchor }).setLngLat([coords.lng, coords.lat]).addTo(map));
     };
 
-    if (pickup) addMarker(pickup, markerElement("P", "#fbbf24", "#111827"));
+    if (pickup) addMarker(pickup, createPickupPinElement(riderGender), "bottom");
     if (dropoff) addMarker(dropoff, markerElement("D", "#1B3FA0"));
     if (driverLocation) addMarker(driverLocation, markerElement("D", "#2563eb"));
     stops?.forEach((stop, index) => {
@@ -327,6 +330,7 @@ function InnerMapboxMap({
     secondaryRoute,
     smoothDrivers,
     stops,
+    riderGender,
     defaultCenter?.lat,
     defaultCenter?.lng,
   ]);
