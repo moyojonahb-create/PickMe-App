@@ -65,14 +65,14 @@ jobs:
           load: true
           tags: pickme/frontend:ci
       - name: Scan backend image
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v1
         with:
           image-ref: pickme/backend:ci
           format: sarif
           output: trivy-backend.sarif
           severity: CRITICAL,HIGH
       - name: Scan frontend image
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v1
         with:
           image-ref: pickme/frontend:ci
           format: sarif
