@@ -21,7 +21,7 @@ interface MapboxMapProps {
   onMapClick?: (coords: Coords) => void;
   className?: string;
   height?: string;
-  drivers?: Array<{ id: string; lat: number; lng: number; isOnline?: boolean }>;
+  drivers?: Array<{ id: string; lat: number; lng: number; isOnline?: boolean; white?: boolean }>;
   defaultCenter?: Coords;
   defaultZoom?: number;
   etaMinutes?: number;
@@ -64,9 +64,9 @@ function lerpVal(a: number, b: number, t: number) {
   return a + (b - a) * Math.min(1, Math.max(0, t));
 }
 
-function useSmoothDrivers(drivers?: Array<{ id: string; lat: number; lng: number; isOnline?: boolean }>) {
+function useSmoothDrivers(drivers?: Array<{ id: string; lat: number; lng: number; isOnline?: boolean; white?: boolean }>) {
   const prevRef = useRef<Map<string, Coords>>(new Map());
-  const [smoothed, setSmoothed] = useState<Array<{ id: string; lat: number; lng: number; isOnline?: boolean }>>([]);
+  const [smoothed, setSmoothed] = useState<Array<{ id: string; lat: number; lng: number; isOnline?: boolean; white?: boolean }>>([]);
   const rafRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -90,6 +90,7 @@ function useSmoothDrivers(drivers?: Array<{ id: string; lat: number; lng: number
           lat: lerpVal(from.lat, d.lat, eased),
           lng: lerpVal(from.lng, d.lng, eased),
           isOnline: d.isOnline,
+          white: d.white,
         };
       });
       setSmoothed(result);
@@ -126,7 +127,23 @@ function markerElement(label: string, color: string, textColor = "#fff", size = 
   return el;
 }
 
-function carElement(isOnline = true) {
+function carElement(isOnline = true, white = false) {
+  if (white) {
+    const el = document.createElement("div");
+    el.className = "pickme-mapbox-marker";
+    el.style.width = "30px";
+    el.style.height = "30px";
+    el.style.borderRadius = "999px";
+    el.style.background = "#ffffff";
+    el.style.border = "2px solid #1B3FA0";
+    el.style.boxShadow = "0 6px 16px rgba(15,23,42,0.22)";
+    el.style.display = "flex";
+    el.style.alignItems = "center";
+    el.style.justifyContent = "center";
+    el.innerHTML =
+      '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1B3FA0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17h14M6 17V9l2-4h8l2 4v8"/><circle cx="8" cy="17" r="1.6"/><circle cx="16" cy="17" r="1.6"/></svg>';
+    return el;
+  }
   const el = markerElement(">", isOnline ? "#22c55e" : "#9ca3af", "#fff", isOnline ? 34 : 30);
   el.style.fontSize = "16px";
   return el;
@@ -291,7 +308,7 @@ function InnerMapboxMap({
     stops?.forEach((stop, index) => {
       if (stop.lat && stop.lng) addMarker({ lat: stop.lat, lng: stop.lng }, markerElement(String(index + 1), "#f59e0b", "#111827"));
     });
-    smoothDrivers.forEach((driver) => addMarker(driver, carElement(driver.isOnline)));
+    smoothDrivers.forEach((driver) => addMarker(driver, carElement(driver.isOnline, driver.white)));
 
     updateRoute(map, "primary-route", primaryRoute, "#1B3FA0");
     updateRoute(map, "secondary-route", secondaryRoute, "#60a5fa", true);
