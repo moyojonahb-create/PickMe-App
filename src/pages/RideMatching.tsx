@@ -19,6 +19,21 @@ import {
 } from '@/lib/rideMatching';
 
 const SEARCH_TIMEOUT_MS = 60_000;
+const RADIUS_STEPS_KM = [1, 3, 6, 10];
+
+/** Placeholder cars scattered inside the current search radius (not real data). */
+function makePlaceholderCars(center: { lat: number; lng: number } | null, radiusKm: number, count: number) {
+  if (!center) return [];
+  const cars: Array<{ id: string; lat: number; lng: number; white: boolean }> = [];
+  for (let i = 0; i < count; i++) {
+    const angle = (i / count) * Math.PI * 2 + (i * 1.7);
+    const dist = radiusKm * (0.45 + ((i * 37) % 55) / 100);
+    const dLat = (dist * Math.cos(angle)) / 111;
+    const dLng = (dist * Math.sin(angle)) / (111 * Math.cos((center.lat * Math.PI) / 180));
+    cars.push({ id: `ph-${radiusKm}-${i}`, lat: center.lat + dLat, lng: center.lng + dLng, white: true });
+  }
+  return cars;
+}
 const ACCEPTED_STATUSES = ['accepted', 'enroute', 'enroute_pickup', 'arrived', 'in_progress'];
 
 export default function RideMatching() {
@@ -30,7 +45,8 @@ export default function RideMatching() {
   const [driver, setDriver] = useState<MatchedDriver | null>(null);
   const [driverLocation, setDriverLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [offers, setOffers] = useState<Offer[]>([]);
-  const [elapsed, setElapsed] = useState(0);
+  const [remaining, setRemaining] = useState(60);
+  const [radiusIndex, setRadiusIndex] = useState(0);
   const [timedOut, setTimedOut] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [accepting, setAccepting] = useState<string | null>(null);
@@ -87,16 +103,32 @@ export default function RideMatching() {
     return () => clearInterval(id);
   }, [rideId, isMatched, loadRide]);
 
-  /* ── Searching timer / 60s timeout ─────────────────────────── */
+  /* ── 60s countdown; each cycle widens the search radius ────── */
   useEffect(() => {
     if (isMatched) return;
     const id = setInterval(() => {
-      const ms = Date.now() - waitStartedAt.current;
-      setElapsed(Math.floor(ms / 1000));
-      if (ms >= SEARCH_TIMEOUT_MS) setTimedOut(true);
+      const left = Math.max(0, Math.ceil((SEARCH_TIMEOUT_MS - (Date.now() - waitStartedAt.current)) / 1000));
+      setRemaining(left);
+      if (left === 0) {
+        setRadiusIndex((prev) => {
+          if (prev >= RADIUS_STEPS_KM.length - 1) {
+            setTimedOut(true);
+            return prev;
+          }
+          waitStartedAt.current = Date.now();
+          setRemaining(60);
+          return prev + 1;
+        });
+      }
     }, 1000);
     return () => clearInterval(id);
   }, [isMatched]);
+
+  const searchRadiusKm = RADIUS_STEPS_KM[radiusIndex];
+  const placeholderCars = useMemo(
+    () => makePlaceholderCars(ride ? { lat: ride.pickup_lat, lng: ride.pickup_lon } : null, searchRadiusKm, 2 + radiusIndex * 2),
+    [ride?.pickup_lat, ride?.pickup_lon, searchRadiusKm, radiusIndex]
+  );
 
   /* ── Driver details + live position once matched ───────────── */
   useEffect(() => {
@@ -144,7 +176,7 @@ export default function RideMatching() {
 
   const handleKeepWaiting = () => {
     waitStartedAt.current = Date.now();
-    setElapsed(0);
+    setRemaining(60);
     setTimedOut(false);
   };
 
@@ -180,6 +212,7 @@ export default function RideMatching() {
           pickup={pickup}
           dropoff={dropoff}
           driverLocation={driverLocation}
+          drivers={isMatched ? undefined : placeholderCars}
           routeGeometry={ride?.route_polyline ?? null}
           className="w-full h-full"
           height="100%"
@@ -224,7 +257,10 @@ export default function RideMatching() {
           animate={{ y: 0, opacity: 1 }}
           className="mx-auto max-w-md bg-card rounded-[24px] shadow-[0_-4px_28px_rgba(0,0,0,0.14)] overflow-hidden"
         >
-          <div className="h-1.5 w-12 rounded-full bg-accent mx-auto mt-3" />
+          {/* Blue ribbon with yellow drag handle */}
+          <div className="bg-[#1B3FA0] rounded-t-[24px] pt-2.5 pb-2.5 flex items-center justify-center">
+            <div className="h-1.5 w-12 rounded-full bg-[#FFC107]" />
+          </div>
 
           <AnimatePresence mode="wait">
             {isMatched ? (
@@ -319,18 +355,20 @@ export default function RideMatching() {
               <motion.div key="searching" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-4 space-y-3">
                 <div className="flex items-center gap-2">
                   <h2 className="text-lg font-extrabold text-foreground">Finding your driver</h2>
-                  <span className="flex gap-1 items-end pb-1">
-                    {[0, 1, 2].map((i) => (
-                      <motion.span
-                        key={i}
-                        className="w-1.5 h-1.5 rounded-full bg-accent"
-                        animate={{ y: [0, -4, 0], opacity: [0.5, 1, 0.5] }}
-                        transition={{ repeat: Infinity, duration: 0.9, delay: i * 0.15 }}
-                      />
-                    ))}
+                  <span className="relative flex-1 h-6 overflow-hidden">
+                    <motion.span
+                      className="absolute top-1/2 -translate-y-1/2 flex items-center justify-center w-6 h-6 rounded-full bg-[#1B3FA0]"
+                      initial={{ x: '-120%' }}
+                      animate={{ x: ['-120%', '420%'] }}
+                      transition={{ repeat: Infinity, duration: 2.2, ease: 'linear' }}
+                    >
+                      <Car className="w-3.5 h-3.5 text-white" />
+                    </motion.span>
                   </span>
                 </div>
-                <p className="text-xs text-muted-foreground">Searching nearby drivers · {elapsed}s</p>
+                <p className="text-xs text-muted-foreground">
+                  Searching within {searchRadiusKm} km · <span className="font-bold text-[#1B3FA0]">{remaining}s</span>
+                </p>
 
                 <TripSummary ride={ride} />
 
