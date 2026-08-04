@@ -715,6 +715,24 @@ export default function RideView() {
   const firstName = (profileName || (user?.user_metadata?.full_name as string | undefined) || user?.email?.split('@')[0] || '').split(' ')[0];
   const mapCenter = gpsState.coords ?? pickupLocation ?? selectedTown.center;
   const mapZoom = gpsState.coords ? 16 : 14;
+  const searchResultRows: SearchResultRow[] = useMemo(() => {
+    const rows: SearchResultRow[] = [];
+    landmarks.forEach((l) => rows.push({
+      id: `lm-${l.id}`,
+      name: l.name,
+      secondary: [l.category, l.distance !== undefined ? (l.distance < 1 ? `${Math.round(l.distance * 1000)}m` : `${l.distance.toFixed(1)}km`) : null].filter(Boolean).join(' · '),
+      onSelect: () => handleLandmarkSelect(l),
+    }));
+    cachedPlaceResults.forEach((r, i) => rows.push({
+      id: `cache-${i}`, name: r.name, secondary: r.displayName, onSelect: () => handleNominatimSelect(r),
+    }));
+    nominatimResults.forEach((r, i) => rows.push({
+      id: `nom-${i}`, name: r.name, secondary: r.displayName, onSelect: () => handleNominatimSelect(r),
+    }));
+    return rows;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [landmarks, cachedPlaceResults, nominatimResults, activeField, activeStopId]);
+
   const estimatedWaitMinutes = Math.max(2, Math.min(8, Math.round(8 - nearbyDrivers.length * 0.6)));
   const showHomeContent = rideStatus === 'idle' && !pickupLocation && !dropoffLocation;
   const unifiedPlaceResults = [...cachedPlaceResults, ...nominatimResults.map((item) => ({ ...item, source: 'nominatim' as const }))]
