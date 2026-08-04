@@ -64,9 +64,9 @@ function lerpVal(a: number, b: number, t: number) {
   return a + (b - a) * Math.min(1, Math.max(0, t));
 }
 
-function useSmoothDrivers(drivers?: Array<{ id: string; lat: number; lng: number; isOnline?: boolean }>) {
+function useSmoothDrivers(drivers?: Array<{ id: string; lat: number; lng: number; isOnline?: boolean; white?: boolean }>) {
   const prevRef = useRef<Map<string, Coords>>(new Map());
-  const [smoothed, setSmoothed] = useState<Array<{ id: string; lat: number; lng: number; isOnline?: boolean }>>([]);
+  const [smoothed, setSmoothed] = useState<Array<{ id: string; lat: number; lng: number; isOnline?: boolean; white?: boolean }>>([]);
   const rafRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -90,6 +90,7 @@ function useSmoothDrivers(drivers?: Array<{ id: string; lat: number; lng: number
           lat: lerpVal(from.lat, d.lat, eased),
           lng: lerpVal(from.lng, d.lng, eased),
           isOnline: d.isOnline,
+          white: d.white,
         };
       });
       setSmoothed(result);
@@ -307,7 +308,7 @@ function InnerMapboxMap({
     stops?.forEach((stop, index) => {
       if (stop.lat && stop.lng) addMarker({ lat: stop.lat, lng: stop.lng }, markerElement(String(index + 1), "#f59e0b", "#111827"));
     });
-    smoothDrivers.forEach((driver) => addMarker(driver, carElement(driver.isOnline)));
+    smoothDrivers.forEach((driver) => addMarker(driver, carElement(driver.isOnline, driver.white)));
 
     updateRoute(map, "primary-route", primaryRoute, "#1B3FA0");
     updateRoute(map, "secondary-route", secondaryRoute, "#60a5fa", true);
