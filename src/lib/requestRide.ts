@@ -5,6 +5,7 @@ import { queueOfflineRide } from '@/lib/offlineQueue';
 import { detectSuspiciousPatterns, reportFraudFlag } from '@/lib/fraudDetection';
 import { isRateLimited } from '@/lib/rateLimit';
 import { normalizeRideRow } from '@/lib/rideContract';
+import { isGoBackendConfigured, isBackendUnavailable } from '@/lib/rideMatching';
 
 type RequestRideInput = {
   pickup_address: string;
@@ -117,7 +118,7 @@ export async function requestRide(input: RequestRideInput) {
       dropoff_lon: input.dropoff_lng,
       fare,
       distance_km,
-      duration_minutes: Math.round(durationMinutes),
+      duration_minutes: Math.round(duration_minutes),
       vehicle_type: input.vehicle_type ?? "economy",
       route_polyline: input.route_polyline ?? null,
       passenger_count: input.passenger_count ?? 1,
