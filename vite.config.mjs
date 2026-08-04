@@ -60,6 +60,7 @@ export default defineConfig(({ mode }) => {
             "vendor-react": ["react", "react-dom", "react-router-dom"],
             "vendor-supabase": ["@supabase/supabase-js"],
             "vendor-ui": ["@radix-ui/react-dialog", "@radix-ui/react-dropdown-menu", "@radix-ui/react-select", "@radix-ui/react-tabs", "@radix-ui/react-toast", "@radix-ui/react-popover"],
+            "vendor-utils": ["clsx", "tailwind-merge", "class-variance-authority"],
             "vendor-motion": ["framer-motion"],
             "vendor-query": ["@tanstack/react-query"],
             "vendor-maps": ["leaflet"],
