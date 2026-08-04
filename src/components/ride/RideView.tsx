@@ -143,6 +143,8 @@ export default function RideView() {
   const [offers, setOffers] = useState<DriverOffer[]>([]);
   const [luggageDraft, setLuggageDraft] = useState<import('@/components/luggage/LuggageSheet').LuggageDraft | null>(null);
   const [luggageOpen, setLuggageOpen] = useState(false);
+  const [luggagePromptOpen, setLuggagePromptOpen] = useState(false);
+  const [luggagePromptShown, setLuggagePromptShown] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
   const [sheetExpanded, setSheetExpanded] = useState(false);
