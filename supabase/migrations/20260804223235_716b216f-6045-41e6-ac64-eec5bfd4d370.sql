@@ -1,0 +1,1 @@
+DROP POLICY IF EXISTS "Deny anonymous access to trip_events" ON public.trip_events;
