@@ -11,65 +11,115 @@ import { I18nProvider } from "./lib/i18n";
 import { FemaleThemeProvider } from "./hooks/useFemaleTheme";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { initNativePlatform } from "./lib/nativeBridge";
-import { initDatadog } from './rum';
-import { installRuntimeBreadcrumbs } from './lib/runtimeBreadcrumbs';
 import "./index.css";
 
-// Initialize Sentry before anything else
-Sentry.init({
-  dsn: "https://fae54652b1b4535904d5ca4d198008f7@o4511199932645376.ingest.de.sentry.io/4511200277692496",
-  environment: import.meta.env.MODE,
-  enabled: import.meta.env.PROD,
-  release: import.meta.env.VITE_APP_VERSION,
-  sendDefaultPii: true,
-  integrations: [
-    Sentry.browserTracingIntegration(),
-    Sentry.replayIntegration({ maskAllText: false, blockAllMedia: false }),
-  ],
-  tracesSampleRate: 0.3,
-  replaysOnErrorSampleRate: 1.0,
-  replaysSessionSampleRate: 0.1,
-  // Ignore noisy non-actionable errors
-  ignoreErrors: [
-    'ResizeObserver loop',
-    'Non-Error promise rejection',
-    'Loading chunk',
-    'Failed to fetch',
-    'NetworkError',
-    'AbortError',
-  ],
-  beforeSend(event) {
-    // Enrich with device context
-    event.tags = {
-      ...event.tags,
-      screen_width: `${window.screen?.width ?? 0}`,
-      connection: (navigator as any).connection?.effectiveType ?? 'unknown',
-      online: String(navigator.onLine),
-    };
-    return event;
-  },
+const SENTRY_DSN = "https://fae54652b1b4535904d5ca4d198008f7@o4511199932645376.ingest.de.sentry.io/4511200277692496";
+
+// ── Early error buffer ────────────────────────────────────────────────
+// Telemetry SDKs are initialized AFTER first paint (see initTelemetry).
+// Anything thrown before that is buffered here and replayed into Sentry
+// once it is ready, so deferring init never loses a crash.
+const earlyErrors: unknown[] = [];
+let telemetryReady = false;
+
+function captureError(err: unknown) {
+  if (telemetryReady) Sentry.captureException(err);
+  else if (earlyErrors.length < 20) earlyErrors.push(err);
+}
+
+window.addEventListener('unhandledrejection', (event) => {
+  captureError(event.reason);
+  console.error('[PickMe] Unhandled promise rejection:', event.reason);
+});
+
+window.addEventListener('error', (event) => {
+  captureError(event.error || event.message);
+  console.error('[PickMe] Global runtime error:', event.error || event.message);
 });
 
 // Initialize native Capacitor plugins (no-ops on web)
 initNativePlatform();
 
-// Initialize telemetry as early as possible (before rendering)
-initDatadog();
+/**
+ * All third-party monitoring runs off the critical path.
+ *
+ * Sentry (incl. session replay), Datadog RUM and the runtime breadcrumb
+ * patches used to run synchronously before `createRoot().render()`, adding
+ * SDK parse/exec plus ingest requests to every single page load. They are
+ * now scheduled in idle time after the first paint.
+ */
+function initTelemetry() {
+  Sentry.init({
+    dsn: SENTRY_DSN,
+    environment: import.meta.env.MODE,
+    enabled: import.meta.env.PROD,
+    release: import.meta.env.VITE_APP_VERSION,
+    sendDefaultPii: true,
+    integrations: [Sentry.browserTracingIntegration()],
+    tracesSampleRate: 0.3,
+    replaysOnErrorSampleRate: 1.0,
+    replaysSessionSampleRate: 0.1,
+    // Ignore noisy non-actionable errors
+    ignoreErrors: [
+      'ResizeObserver loop',
+      'Non-Error promise rejection',
+      'Loading chunk',
+      'Failed to fetch',
+      'NetworkError',
+      'AbortError',
+    ],
+    beforeSend(event) {
+      // Enrich with device context
+      event.tags = {
+        ...event.tags,
+        screen_width: `${window.screen?.width ?? 0}`,
+        connection: (navigator as any).connection?.effectiveType ?? 'unknown',
+        online: String(navigator.onLine),
+      };
+      return event;
+    },
+  });
 
-// Install breadcrumb capture — records clicks, navigations, console.error
-// and 5xx fetches, then attaches the trail to every Sentry event so we can
-// see exactly which button / route / request led to a crash.
-installRuntimeBreadcrumbs();
+  telemetryReady = true;
+  earlyErrors.splice(0).forEach((err) => Sentry.captureException(err));
 
-window.addEventListener('unhandledrejection', (event) => {
-  Sentry.captureException(event.reason);
-  console.error('[PickMe] Unhandled promise rejection:', event.reason);
-});
+  // Session replay is the heaviest integration (DOM mutation observers +
+  // snapshotting) — load it separately, and only in production.
+  if (import.meta.env.PROD) {
+    Sentry.lazyLoadIntegration('replayIntegration')
+      .then((replayIntegration) => {
+        Sentry.getClient()?.addIntegration(
+          (replayIntegration as typeof Sentry.replayIntegration)({
+            maskAllText: false,
+            blockAllMedia: false,
+          }),
+        );
+      })
+      .catch(() => {
+        /* replay is best-effort — never break the app for it */
+      });
+  }
 
-window.addEventListener('error', (event) => {
-  Sentry.captureException(event.error || event.message);
-  console.error('[PickMe] Global runtime error:', event.error || event.message);
-});
+  // Breadcrumb capture — records clicks, navigations, console.error and 5xx
+  // fetches, then attaches the trail to every Sentry event.
+  import('./lib/runtimeBreadcrumbs')
+    .then((m) => m.installRuntimeBreadcrumbs())
+    .catch(() => {});
+
+  // Datadog RUM (opt-in via VITE_DD_RUM_ENABLED) — dynamic import keeps the
+  // SDK out of the entry chunk entirely when it is disabled.
+  if (import.meta.env.VITE_DD_RUM_ENABLED === 'true') {
+    import('./rum').then((m) => m.initDatadog()).catch(() => {});
+  }
+}
+
+function scheduleTelemetry() {
+  const ric = (window as unknown as {
+    requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number;
+  }).requestIdleCallback;
+  if (typeof ric === 'function') ric(() => initTelemetry(), { timeout: 4000 });
+  else setTimeout(initTelemetry, 2000);
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -128,3 +178,5 @@ createRoot(document.getElementById("root")!).render(
     </QueryClientProvider>
   </Sentry.ErrorBoundary>
 );
+
+scheduleTelemetry();
