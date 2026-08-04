@@ -52,7 +52,9 @@ const Index = () => {
 
   return (
     <>
-      <InstallPromptBanner />
+      <Suspense fallback={null}>
+        <InstallPromptBanner />
+      </Suspense>
       <div className="min-h-screen bg-background">
       <Header 
         onLoginClick={handleLoginClick} 
@@ -64,30 +66,42 @@ const Index = () => {
       
       <main>
         <LandingHero onGetStarted={handleGetStarted} />
-        <SuggestionsSection />
-        <DriveSection />
-        <BusinessSection />
-        <SafetySection />
+        <Suspense fallback={<div className="min-h-[40vh]" />}>
+          <SuggestionsSection />
+          <DriveSection />
+          <BusinessSection />
+          <SafetySection />
+        </Suspense>
       </main>
 
-      <Footer />
+      <Suspense fallback={null}>
+        <Footer />
+      </Suspense>
 
-      <AuthModalWrapper
-        isOpen={authModalOpen}
-        onClose={() => setAuthModalOpen(false)}
-        mode={authMode}
-        onSwitchMode={handleSwitchMode}
-      />
+      <Suspense fallback={null}>
+        {authModalOpen && (
+          <AuthModalWrapper
+            isOpen={authModalOpen}
+            onClose={() => setAuthModalOpen(false)}
+            mode={authMode}
+            onSwitchMode={handleSwitchMode}
+          />
+        )}
 
-      <FavoritesSheet
-        isOpen={favoritesOpen}
-        onClose={() => setFavoritesOpen(false)}
-      />
+        {favoritesOpen && (
+          <FavoritesSheet
+            isOpen={favoritesOpen}
+            onClose={() => setFavoritesOpen(false)}
+          />
+        )}
 
-      <RideHistorySheet
-        isOpen={historyOpen}
-        onClose={() => setHistoryOpen(false)}
-      />
+        {historyOpen && (
+          <RideHistorySheet
+            isOpen={historyOpen}
+            onClose={() => setHistoryOpen(false)}
+          />
+        )}
+      </Suspense>
     </div>
     </>
   );
