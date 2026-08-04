@@ -179,6 +179,18 @@ export default function RideView() {
     }
   }, []);
 
+  // One-time luggage prompt as soon as a drop-off is chosen for this booking
+  useEffect(() => {
+    if (dropoffLocation && !luggagePromptShown) {
+      setLuggagePromptShown(true);
+      setLuggagePromptOpen(true);
+    }
+    if (!dropoffLocation) {
+      setLuggagePromptShown(false);
+      setLuggagePromptOpen(false);
+    }
+  }, [dropoffLocation, luggagePromptShown]);
+
   useEffect(() => {
     if (gpsState.status === 'idle' && navigator.geolocation) handleUseMyLocation(true);
   }, []);
