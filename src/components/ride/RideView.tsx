@@ -83,6 +83,8 @@ import PilotReadinessCard from '@/components/pilot/PilotReadinessCard';
 import LuggageButton from '@/components/luggage/LuggageButton';
 import LuggageSheet from '@/components/luggage/LuggageSheet';
 import GpsPermissionBanner from '@/components/ride/GpsPermissionBanner';
+import BookingForSomeoneElse from '@/components/ride/BookingForSomeoneElse';
+import DestinationSearchScreen, { type SearchResultRow } from '@/components/ride/DestinationSearchScreen';
 
 interface SelectedLocation {name: string;lat: number;lng: number;}
 interface GPSState {status: 'idle' | 'loading' | 'success' | 'denied' | 'unavailable';coords: {lat: number;lng: number;} | null;error: string | null;}
@@ -976,22 +978,22 @@ export default function RideView() {
 
       {/* ── BOTTOM SHEET ── */}
       <GlassSheet
-        className="absolute left-3 right-3 z-50 flex flex-col"
+        className="absolute left-0 right-0 z-50 flex flex-col overflow-hidden"
         style={{
-          bottom: 8,
-          height: sheetExpanded ? '70vh' : '48vh',
+          bottom: 0,
+          height: sheetExpanded ? '76vh' : '52vh',
           transition: 'height 0.3s cubic-bezier(0.32,0.72,0,1)',
           paddingBottom: 'env(safe-area-inset-bottom)',
-          borderTopLeftRadius: 28,
-          borderTopRightRadius: 28
+          borderTopLeftRadius: 20,
+          borderTopRightRadius: 20
         }}>
-        
-        {/* Blue ribbon handle bar */}
+
+        {/* Blue ribbon with yellow drag handle */}
         <button
           onClick={() => setSheetExpanded((e) => !e)}
-          className="w-full py-3 flex justify-center shrink-0 rounded-t-[28px]"
-          style={{ background: 'var(--gradient-primary)' }}>
-          <div className="w-12 h-1.5 rounded-full bg-primary-foreground/40" />
+          aria-label="Expand booking sheet"
+          className="w-full py-2.5 flex justify-center shrink-0 bg-primary rounded-t-[20px]">
+          <div className="w-11 h-1.5 rounded-full bg-accent" />
         </button>
 
         {/* Scrollable content */}
@@ -1046,11 +1048,29 @@ export default function RideView() {
             </div>
           }
 
-          {/* Town selector row */}
-          <div className="flex items-center justify-between">
+          {/* Town / scope row */}
+          <div className="flex items-center justify-between text-muted-foreground">
             <TownSelectorSheet currentTown={selectedTown} onSelect={(town) => {setSelectedTown(town);setPickupLocation(null);setDropoffLocation(null);}} />
-            <p className="text-[10px] text-muted-foreground">{selectedTown.radiusKm}km area</p>
+            <p className="text-[11px]">{selectedTown.radiusKm} km area</p>
           </div>
+
+          {/* ETA + fare heading */}
+          {dropoffLocation && (
+            <div className="flex items-end justify-between gap-3 px-0.5">
+              <div className="flex items-baseline gap-2 min-w-0">
+                <span className="text-[26px] leading-none font-bold text-primary tabular-nums">
+                  {fareEstimate ? `${fareEstimate.currencySymbol}${fareEstimate.fareR.toFixed(2)}` : '—'}
+                </span>
+                <span className="text-[13px] text-muted-foreground truncate">
+                  {routeData?.duration ? `${Math.max(1, Math.round(routeData.duration / 60))} min trip` : 'Estimating…'}
+                </span>
+              </div>
+              <div className="flex items-center gap-1 text-[12px] text-muted-foreground shrink-0">
+                <Clock className="w-3.5 h-3.5" />
+                {estimatedWaitMinutes} min away
+              </div>
+            </div>
+          )}
 
 
           {/* Pickup & Dropoff — unified premium journey card */}
