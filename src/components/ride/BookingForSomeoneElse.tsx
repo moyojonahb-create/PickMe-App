@@ -42,7 +42,8 @@ export default function BookingForSomeoneElse({
         type="button"
         onClick={toggle}
         aria-expanded={open}
-        className="w-full flex items-center gap-2.5 px-3.5 py-3 rounded-2xl border border-accent/60 bg-accent/15 active:scale-[0.99] transition-all"
+        style={{ backgroundColor: '#FFF6DA', borderColor: '#FFC107' }}
+        className="w-full flex items-center gap-2.5 px-3.5 py-3 rounded-2xl border active:scale-[0.99] transition-all"
       >
         <UserPlus className="w-4 h-4 text-primary shrink-0" />
         <span className="flex-1 text-left text-[13px] font-semibold text-primary">
