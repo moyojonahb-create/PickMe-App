@@ -711,7 +711,7 @@ export default function RideView() {
 
       // ⚡ Navigate instantly — the ride detail page renders map immediately
       if (!scheduledAt) {
-        navigate(`/ride/${result.ride.id}`, { replace: true });
+        navigate(`/ride/${result.ride.id}/matching`, { replace: true });
       } else {
         toast({ title: 'Ride scheduled!', description: 'Your ride has been scheduled for later.' });
         setRideStatus('idle');setScheduledAt(null);setRideStops([]);

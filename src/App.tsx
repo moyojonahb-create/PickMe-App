@@ -25,6 +25,7 @@ const Ride = lazy(() => import("./pages/Ride").then((m) => { recordPrefetched("/
 const RideDetail = lazy(() => import("./pages/RideDetail"));
 const DriverDashboard = lazy(() => import("./pages/DriverDashboard"));
 const RiderRideDetail = lazy(() => import("./pages/RiderRideDetail"));
+const RideMatching = lazy(() => import("./pages/RideMatching"));
 const AppDashboard = lazy(() => import("./pages/AppDashboard"));
 
 // ─── Secondary screens ───
@@ -158,6 +159,7 @@ export default function App() {
           <Route path="/mapp/*" element={<Navigate to="/ride" replace />} />
 
           <Route path="/ride" element={<SuspenseWrap variant="ride"><AuthGuard><Ride /></AuthGuard></SuspenseWrap>} />
+          <Route path="/ride/:rideId/matching" element={<SuspenseWrap variant="ride"><AuthGuard><RideMatching /></AuthGuard></SuspenseWrap>} />
           <Route path="/ride/:rideId" element={<SuspenseWrap><AuthGuard><RiderRideDetail /></AuthGuard></SuspenseWrap>} />
           <Route path="/rider/ride/:rideId" element={<SuspenseWrap><AuthGuard><RiderRideDetail /></AuthGuard></SuspenseWrap>} />
           <Route path="/history" element={<SuspenseWrap><AuthGuard><RideHistory /></AuthGuard></SuspenseWrap>} />
