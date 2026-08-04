@@ -1062,7 +1062,7 @@ export default function RideView() {
                   {fareEstimate ? `${fareEstimate.currencySymbol}${fareEstimate.fareR.toFixed(2)}` : '—'}
                 </span>
                 <span className="text-[13px] text-muted-foreground truncate">
-                  {routeData?.duration ? `${Math.max(1, Math.round(routeData.duration / 60))} min trip` : 'Estimating…'}
+                  {fareEstimate ? `${Math.round(fareEstimate.durationMinutes)} min trip` : "Estimating…"}
                 </span>
               </div>
               <div className="flex items-center gap-1 text-[12px] text-muted-foreground shrink-0">
