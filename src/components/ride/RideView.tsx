@@ -116,6 +116,7 @@ export default function RideView() {
   const [serviceType, setServiceType] = useState<ServiceType>('ride');
   const [gpsState, setGpsState] = useState<GPSState>({ status: 'idle', coords: null, error: null });
   const [activeField, setActiveField] = useState<'pickup' | 'dropoff' | null>(null);
+  const [mapPickMode, setMapPickMode] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [proximityRadius, setProximityRadius] = useState<number | null>(null);
   const [nominatimResults, setNominatimResults] = useState<Array<{name: string;lat?: number;lng?: number;displayName: string;placeId?: string;source?: 'google' | 'osm';}>>([]);
@@ -867,7 +868,7 @@ export default function RideView() {
     <div className="relative h-[100dvh] w-full overflow-hidden bg-background">
       {/* ── MAP ── */}
       <div className="absolute inset-0">
-        <MapboxMap pickup={pickupLocation} dropoff={dropoffLocation} routeGeometry={routeData?.geometry} onMapClick={handleMapClick} defaultCenter={mapCenter} defaultZoom={mapZoom} className="w-full h-full" height="100%" drivers={nearbyDrivers} stops={rideStops.filter(s => s.lat && s.lng)} />
+        <MapboxMap pickup={pickupLocation} dropoff={dropoffLocation} routeGeometry={routeData?.geometry} onMapClick={handleMapClick} defaultCenter={mapCenter} defaultZoom={mapZoom} className="w-full h-full" height="100%" drivers={nearbyDrivers} stops={rideStops.filter(s => s.lat && s.lng)} riderGender={(riderPrefs?.gender as "male" | "female" | undefined) ?? null} />
 
         {/* Floating map buttons */}
         <div className="absolute right-3 z-20" style={{ bottom: sheetExpanded ? 'calc(70vh + 16px)' : 'calc(48vh + 16px)', transition: 'bottom 0.3s cubic-bezier(0.32,0.72,0,1)' }}>
@@ -1112,17 +1113,31 @@ export default function RideView() {
             </button>
 
             {/* Dropoff row */}
-            <div className="relative [&>div>div]:!bg-transparent [&>div>div]:!border-0 [&>div>div]:!shadow-none [&>div>div]:!pl-12 [&>div>div>div:first-child]:!hidden [&_input]:!text-[15px]">
-              <DropoffAutocomplete
-                value={dropoffLocation}
-                center={selectedTown.center}
-                townName={selectedTown.name}
-                onSelect={(loc) => setDropoffLocation(loc as SelectedLocation)}
-                onClear={() => setDropoffLocation(null)}
-                onBrowseAll={() => {setActiveField('dropoff');setSearchQuery('');}} />
-            </div>
+            <button
+              onClick={() => {setActiveField('dropoff');setSearchQuery('');}}
+              className="w-full min-h-[64px] flex items-center gap-3 pl-12 pr-3 py-3.5 active:scale-[0.98] transition-all text-left rounded-b-[20px] hover:bg-foreground/[0.02]">
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] font-semibold text-primary uppercase tracking-widest">Drop-off</p>
+                <p className={cn("text-[15px] font-medium truncate", dropoffLocation ? 'text-foreground' : 'text-muted-foreground')}>
+                  {dropoffLocation?.name || 'Search destination'}
+                </p>
+              </div>
+              {dropoffLocation && (
+                <span onClick={(e) => {e.stopPropagation();setDropoffLocation(null);}} className="p-1.5 hover:bg-foreground/5 rounded-full"><X className="w-3.5 h-3.5 text-muted-foreground" /></span>
+              )}
+            </button>
           </div>
 
+          {/* Booking for someone else */}
+          <BookingForSomeoneElse
+            enabled={bookForSomeoneElse}
+            onEnabledChange={setBookForSomeoneElse}
+            name={passengerName}
+            phone={passengerPhone}
+            onNameChange={setPassengerName}
+            onPhoneChange={setPassengerPhone}
+            onOpenContacts={handlePickPassengerFromContacts}
+          />
 
           {/* Multi-stop + Schedule */}
           <div className="grid grid-cols-2 gap-2">
@@ -1159,25 +1174,6 @@ export default function RideView() {
           {passengerCount > 3 &&
           <p className="text-[11px] text-accent font-medium -mt-1.5 ml-1">⚡ Extra passenger charges applied</p>
           }
-
-          <div className='glass-card rounded-2xl px-3 py-2 space-y-2'>
-            <div className='flex items-center justify-between'>
-              <p className='text-xs font-semibold'>Book for someone else</p>
-              <button onClick={() => setBookForSomeoneElse((v) => !v)} className={cn('h-5 w-9 rounded-full transition-colors', bookForSomeoneElse ? 'bg-primary' : 'bg-muted')}>
-                <span className={cn('block h-4 w-4 rounded-full bg-white transition-transform', bookForSomeoneElse ? 'translate-x-[16px]' : 'translate-x-0.5')} />
-              </button>
-            </div>
-            {bookForSomeoneElse &&
-            <>
-                <div className='grid grid-cols-1 gap-1.5'>
-                  <InputField placeholder='Passenger name' value={passengerName} onChange={(e) => setPassengerName(e.target.value)} />
-                  <InputField placeholder='Passenger phone' value={passengerPhone} onChange={(e) => setPassengerPhone(e.target.value)} />
-                </div>
-                <IconPillButton onClick={handlePickPassengerFromContacts}><ContactRound className='w-4 h-4' />Pick from contacts</IconPillButton>
-                <p className='text-[10px] text-muted-foreground'>Driver can contact this passenger.</p>
-              </>
-            }
-          </div>
 
           {/* Preferences set in Profile Settings — shown as tags */}
           {(quietRide || coolTemp || wavRequired || hearingImpaired || genderPreference !== 'any') && (
@@ -1292,7 +1288,7 @@ export default function RideView() {
                 <PrimaryButton
                   onClick={() => handleSendOffer(totalFare)}
                   disabled={isRequesting}
-                  className="w-full h-[48px] text-[15px] font-semibold rounded-2xl gap-2 inline-flex items-center justify-center active:scale-[0.97] transition-transform">
+                  className="w-full h-[48px] text-[15px] font-semibold rounded-2xl gap-2 inline-flex items-center justify-center active:scale-[0.97] transition-transform !bg-primary !text-accent">
 
                   {isRequesting ? (
                     <>
@@ -1319,148 +1315,29 @@ export default function RideView() {
       </GlassSheet>
 
 
-      {/* ═══ SEARCH OVERLAY ═══ */}
-      {activeField &&
-      <div className="fixed inset-0 z-[60] flex flex-col" style={{ background: 'hsl(var(--background) / 0.97)', backdropFilter: 'blur(28px)', WebkitBackdropFilter: 'blur(28px)' }}>
-          {/* Search sheet — full screen */}
-          <div className="flex-1 flex flex-col overflow-hidden">
-          {/* Search header */}
-          <div className="flex items-center gap-3 px-4 border-b border-border/30" style={{ paddingTop: 'calc(env(safe-area-inset-top) + 14px)', paddingBottom: '14px' }}>
-            <button onClick={() => {setActiveField(null);setSearchQuery('');setNominatimResults([]);}} className="w-11 h-11 flex items-center justify-center rounded-full glass-card active:scale-90 transition-all shrink-0">
-              <ArrowLeft className="w-5 h-5 text-primary" />
-            </button>
-            <div className="flex-1 relative">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground pointer-events-none" />
-              <input
-                autoFocus type="text"
-                placeholder={activeField === 'pickup' ? 'Search pickup location…' : 'Search destination…'}
-                value={searchQuery}
-                onChange={(e) => handleSearchChange(e.target.value)}
-                className="w-full h-12 pl-11 pr-4 glass-card text-[16px] font-medium text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/25 border-0"
-                style={{ borderRadius: 18 }} />
-            
-            </div>
-          </div>
-
-          {/* Results */}
-          <div className="flex-1 overflow-y-auto">
-            {/* GPS button */}
-            {activeField === 'pickup' &&
-            <button onClick={handleUseMyLocation} disabled={gpsState.status === 'loading'} className="w-full flex items-center gap-4 px-5 py-4 hover:bg-primary/5 active:bg-primary/8 transition-colors border-b border-border/15 text-left">
-                <div className="w-11 h-11 rounded-2xl flex items-center justify-center shrink-0" style={{ background: 'var(--gradient-primary)' }}>
-                  {gpsState.status === 'loading' ? <Loader2 className="w-5 h-5 animate-spin text-primary-foreground" /> : <Crosshair className="w-5 h-5 text-primary-foreground" />}
-                </div>
-                <div>
-                  <p className="font-medium text-foreground">Use my current location</p>
-                  <p className="text-sm text-muted-foreground">Find pickup point automatically</p>
-                </div>
-              </button>
-            }
-
-            {gpsState.error && <p className="text-sm text-destructive bg-destructive/10 mx-4 my-3 p-3 rounded-xl">{gpsState.error}</p>}
-
-            {gpsState.coords &&
-            <div className="px-4 pt-3 pb-1">
-                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-2">Nearby places</p>
-                <ProximityFilter selected={proximityRadius} onSelect={setProximityRadius} />
-              </div>
-            }
-
-            {/* Show town places by default when no search query */}
-            {!searchQuery.trim() &&
-            <>
-                <div className="px-4 pt-3 pb-1">
-                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
-                    📍 Places in {selectedTown.name}
-                  </p>
-                </div>
-                {landmarksLoading ?
-              <div className="flex items-center justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div> :
-              landmarks.length > 0 ?
-              landmarks.map((landmark) =>
-              <button key={landmark.id} onClick={() => handleLandmarkSelect(landmark)} className="w-full flex items-center gap-4 px-4 py-3.5 hover:bg-primary/5 transition-colors border-b border-border/15 text-left">
-                      <div className="w-10 h-10 rounded-2xl glass-card flex items-center justify-center shrink-0">
-                        <MapPin className="w-4.5 h-4.5 text-primary" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="font-medium text-foreground truncate text-sm">{landmark.name}</p>
-                        <p className="text-xs text-muted-foreground capitalize">{landmark.category}{landmark.distance ? ` · ${landmark.distance < 1 ? `${Math.round(landmark.distance * 1000)}m` : `${landmark.distance.toFixed(1)}km`}` : ''}</p>
-                      </div>
-                    </button>
-              ) :
-
-              <p className="text-sm text-muted-foreground text-center py-6">No places found in {selectedTown.name}</p>
-              }
-              </>
-            }
-
-            {searchQuery.trim().length >= 3 &&
-            <>
-                {/* Single unified section: Streets & Places */}
-                <div className="px-4 py-2 bg-accent/8 border-t border-border/15">
-                  <p className="text-[11px] font-semibold text-foreground uppercase tracking-widest">Showing locations within {selectedTown.name}</p>
-                </div>
-
-                {(landmarksLoading || cachedPlacesLoading || nominatimLoading) && landmarks.length === 0 && unifiedPlaceResults.length === 0 &&
-              <div className="flex items-center justify-center gap-2 py-8 text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin" /><span className="text-sm">Searching places…</span></div>
-              }
-
-                {/* Landmark results */}
-                {landmarks.map((landmark) =>
-              <button key={landmark.id} onClick={() => handleLandmarkSelect(landmark)} className="w-full flex items-center gap-4 px-4 py-3.5 hover:bg-primary/5 transition-colors border-b border-border/15 text-left">
-                      <div className="w-11 h-11 rounded-2xl glass-card flex items-center justify-center shrink-0">
-                        <MapPin className="w-5 h-5 text-primary" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="font-medium text-foreground truncate">{landmark.name}</p>
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                          <span className="text-xs text-muted-foreground capitalize">{landmark.category}</span>
-                          {landmark.distance !== undefined && <span className="text-xs text-muted-foreground">· {landmark.distance < 1 ? `${Math.round(landmark.distance * 1000)}m` : `${landmark.distance.toFixed(1)}km`}</span>}
-                        </div>
-                      </div>
-                    </button>
-              )}
-
-                {/* Cached places */}
-                {cachedPlaceResults.map((result, index) =>
-              <button key={`cache-${index}`} onClick={() => handleNominatimSelect(result)} className="w-full flex items-center gap-4 px-4 py-3.5 hover:bg-primary/5 transition-colors border-b border-border/15 text-left">
-                      <div className="w-11 h-11 rounded-2xl glass-card flex items-center justify-center shrink-0">
-                        <MapPin className="w-5 h-5 text-primary" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="font-medium text-foreground truncate">{result.name}</p>
-                        <p className="text-sm text-muted-foreground truncate">{result.displayName}</p>
-                      </div>
-                    </button>
-              )}
-
-                {/* Google Places results (falls back to OpenStreetMap server-side) */}
-                {nominatimResults.map((result, index) =>
-              <button key={`nom-${index}`} onClick={() => handleNominatimSelect(result)} className="w-full flex items-center gap-4 px-4 py-3.5 hover:bg-primary/5 transition-colors border-b border-border/15 text-left">
-                      <div className="w-11 h-11 rounded-2xl glass-card flex items-center justify-center shrink-0">
-                        <MapPin className="w-5 h-5 text-primary" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="font-medium text-foreground truncate">{result.name}</p>
-                        <p className="text-sm text-muted-foreground truncate">{result.displayName}</p>
-                      </div>
-                    </button>
-              )}
-
-                {/* Empty state */}
-                {!landmarksLoading && !cachedPlacesLoading && !nominatimLoading && landmarks.length === 0 && cachedPlaceResults.length === 0 && nominatimResults.length === 0 && searchQuery.trim().length >= 3 &&
-              <div className="text-center py-12 text-muted-foreground">
-                      <MapPin className="w-10 h-10 mx-auto mb-3 opacity-30" />
-                      <p className="text-sm">No results for "{searchQuery}" in {selectedTown.name}</p>
-                      <p className="text-xs mt-1">Try switching to a different town above</p>
-                    </div>
-              }
-              </>
-            }
-          </div>
-          </div>
-        </div>
-      }
+      {/* ═══ DESTINATION SEARCH SCREEN ═══ */}
+      {activeField && !mapPickMode && (
+        <DestinationSearchScreen
+          activeField={activeField}
+          onActiveFieldChange={(f) => {setActiveField(f);setSearchQuery('');setNominatimResults([]);}}
+          pickupName={pickupLocation?.name || ''}
+          dropoffName={dropoffLocation?.name || ''}
+          query={searchQuery}
+          onQueryChange={handleSearchChange}
+          onClose={() => {setActiveField(null);setSearchQuery('');setNominatimResults([]);}}
+          onUseMyLocation={handleUseMyLocation}
+          gpsLoading={gpsState.status === 'loading'}
+          onChooseOnMap={() => setMapPickMode(true)}
+          onSelectPlace={(place) => {
+            const loc: SelectedLocation = { name: place.name, lat: place.lat, lng: place.lng };
+            if (activeField === 'pickup') {setPickupLocation(loc);setActiveField('dropoff');}
+            else {setDropoffLocation(loc);setActiveField(null);}
+            setSearchQuery('');
+          }}
+          loading={landmarksLoading || cachedPlacesLoading || nominatimLoading}
+          results={searchResultRows}
+        />
+      )}
 
       {/* Modals */}
       <OffersModal isOpen={offersOpen} tripId={currentRideId || ''} viewing={viewingDrivers} offers={offers} onAcceptOffer={handleAcceptOffer} onDeclineOffer={handleDeclineOffer} onCancelRide={handleCancelRide} onClose={() => setOffersOpen(false)} />
