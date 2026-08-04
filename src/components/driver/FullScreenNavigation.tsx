@@ -30,7 +30,7 @@ import { RideCommunication } from "@/components/ride/RideCommunication";
 import { goBackend } from "@/lib/goBackendClient";
 import { createNotification } from "@/lib/businessApi";
 import type { Coordinates } from "@/lib/osrm";
-import MapboxMap from "@/components/MapboxMap";
+import MapboxMap from "@/components/map/LazyMapboxMap";
 
 interface ActiveTrip {
   id: string;

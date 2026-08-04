@@ -82,7 +82,26 @@ export const useLandmarks = ({ userLocation, searchQuery = '', limit = 10, radiu
       setLoading(false);
     };
 
-    fetchLandmarks();
+    // Cached data is applied synchronously inside fetchLandmarks; a cold fetch
+    // is deferred to idle time so it never competes with first paint.
+    const cached = getCached<Landmark[]>('landmarks');
+    if (cached) {
+      fetchLandmarks();
+      return;
+    }
+
+    const idle = (window as unknown as {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+    }).requestIdleCallback;
+    let handle: number;
+    if (typeof idle === 'function') {
+      handle = idle(() => { void fetchLandmarks(); }, { timeout: 1200 });
+      return () => {
+        (window as unknown as { cancelIdleCallback?: (h: number) => void }).cancelIdleCallback?.(handle);
+      };
+    }
+    handle = window.setTimeout(() => { void fetchLandmarks(); }, 200);
+    return () => window.clearTimeout(handle);
   }, []);
 
   // Fuzzy match score - returns higher score for better matches

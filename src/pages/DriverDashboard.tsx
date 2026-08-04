@@ -74,7 +74,7 @@ import VoiceCallButton from "@/components/ride/VoiceCallButton";
 import DriverEarningsDashboard from "@/components/driver/DriverEarningsDashboard";
 import DriverSelfieCheck from "@/components/driver/DriverSelfieCheck";
 import DemandHeatmap from "@/components/driver/DemandHeatmap";
-import MapboxMap from "@/components/MapboxMap";
+import MapboxMap from "@/components/map/LazyMapboxMap";
 import { useNearbyDrivers } from "@/hooks/useNearbyDrivers";
 import { useOSRMRoute } from "@/hooks/useOSRMRoute";
 import { runLocationFraudChecks } from "@/lib/fraudDetection";

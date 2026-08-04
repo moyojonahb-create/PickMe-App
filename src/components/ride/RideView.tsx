@@ -43,7 +43,7 @@ import {
   Sheet, SheetContent, SheetHeader, SheetTitle } from
 '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
-import MapboxMap from '@/components/MapboxMap';
+import MapboxMap from '@/components/map/LazyMapboxMap';
 import RideStatusBanner, { type RideStatus } from './RideStatusBanner';
 import OffersModal, { type DriverViewing, type DriverOffer } from '@/components/OffersModal';
 import AuthModalWrapper from '@/components/auth/AuthModalWrapper';
