@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MapPin, Plus, X, GripVertical } from 'lucide-react';
+import { MapPin, Plus, X, GripVertical, Route } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -32,9 +32,9 @@ export default function MultiStopInput({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         onClick={onAddStop}
-        className="w-full flex items-center gap-2 justify-center text-sm text-muted-foreground hover:text-primary py-2 transition-colors"
+        className="w-full flex items-center gap-2 justify-center text-[13px] font-medium text-foreground/80 hover:text-primary py-2.5 transition-colors"
       >
-        <Plus className="h-4 w-4" />
+        <Route className="h-4 w-4 text-primary" />
         Add a stop
       </motion.button>
     );
