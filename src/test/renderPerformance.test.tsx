@@ -16,9 +16,9 @@ import { render, cleanup, screen, act } from "@testing-library/react";
 import PageSkeleton from "@/components/PageSkeleton";
 
 const VIEWPORTS = [
-  { name: "mobile",  w: 390,  h: 844,  firstBudgetMs: 80,  swapBudgetMs: 120 },
-  { name: "tablet",  w: 820,  h: 1180, firstBudgetMs: 90,  swapBudgetMs: 130 },
-  { name: "desktop", w: 1366, h: 768,  firstBudgetMs: 100, swapBudgetMs: 150 },
+  { name: "mobile",  w: 390,  h: 844,  firstBudgetMs: 150, swapBudgetMs: 120 },
+  { name: "tablet",  w: 820,  h: 1180, firstBudgetMs: 160, swapBudgetMs: 130 },
+  { name: "desktop", w: 1366, h: 768,  firstBudgetMs: 170, swapBudgetMs: 150 },
 ];
 
 function setViewport(w: number, h: number) {

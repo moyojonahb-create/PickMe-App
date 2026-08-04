@@ -44,7 +44,9 @@ const clientFiles = allFiles.filter(
     !f.endsWith(".spec.tsx") &&
     // Auto-generated DB types mirror the schema (including pin_hash column),
     // but the client never reads them at runtime — exclude from this scan.
-    !f.endsWith("integrations/supabase/types.ts")
+    // Normalize to forward slashes: `join()` uses `\` on Windows, so a
+    // literal forward-slash suffix would never match there.
+    !f.replace(/\\/g, "/").endsWith("integrations/supabase/types.ts")
 );
 
 describe("wallet PIN hash exposure (client)", () => {
@@ -70,10 +72,16 @@ describe("wallet PIN hash exposure (client)", () => {
     expect(offenders, `wallet_pins table queried from client: ${offenders.join(", ")}`).toEqual([]);
   });
 
-  it("PIN operations only go through the wallet-pin edge function", () => {
+  it("PIN operations only go through the wallet API's server-side endpoint", () => {
+    // useWalletPin.ts delegates to walletApi.ts's walletPin(), which posts to
+    // the Go backend (with a legacy-path fallback) rather than a Supabase
+    // edge function — see src/lib/walletApi.ts.
     const hook = readFileSync(join(SRC, "hooks/useWalletPin.ts"), "utf8");
-    expect(hook).toMatch(/functions\/v1\/wallet-pin/);
+    const api = readFileSync(join(SRC, "lib/walletApi.ts"), "utf8");
+    expect(hook).toMatch(/walletPin/);
+    expect(api).toMatch(/\/api\/wallets?\/pin/);
     expect(hook).not.toMatch(/pin_hash/);
+    expect(api).not.toMatch(/pin_hash/);
   });
 });
 

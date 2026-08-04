@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { calculateRecommendedFare, formatFare, getFareStep } from '@/hooks/useTownPricing';
 import type { TownPricingConfig } from '@/hooks/useTownPricing';
 
@@ -21,6 +21,17 @@ const usdTown: TownPricingConfig = {
 };
 
 describe('calculateRecommendedFare', () => {
+  // Pin the clock to daytime noon so calculateRecommendedFare's night-time
+  // surcharge (see isNightTime() in useTownPricing.ts, applied 8pm-5am)
+  // doesn't make these assertions depend on when the suite happens to run.
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-06-15T12:00:00'));
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('calculates USD fare: base + distance * rate + duration * 0.03', () => {
     const result = calculateRecommendedFare(usdTown, 5, 10);
     // 2 + 5*0.80 + 10*0.03 = 2 + 4 + 0.3 = 6.3 → rounded to $6.50

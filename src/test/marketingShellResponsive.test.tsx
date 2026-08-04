@@ -9,8 +9,9 @@
  *       a) the header renders the PickMe logo image,
  *       b) the header is `position: sticky` and full-width — so it cannot
  *          push critical UI off-screen,
- *       c) the logo's height utility scales down on mobile (h-20) instead
- *          of staying at h-32, which would crowd out the page,
+ *       c) the logo's height utility stays compact on mobile (h-10) and
+ *          only scales up at larger breakpoints, so it never crowds the
+ *          page,
  *       d) the header is rendered only ONCE on a marketing route (no
  *          accidental double header that would eat the viewport).
  */
@@ -53,11 +54,11 @@ describe.each(VIEWPORTS)("MarketingShell header @ $name ($w×$h)", ({ w, h }) =>
   it("logo height utility includes a small-screen scale-down", () => {
     const { container } = render(<MemoryRouter><AppHeader /></MemoryRouter>);
     const img = container.querySelector("img[alt='PickMe']") as HTMLImageElement;
-    // The lg variant must include responsive overrides — h-20 on mobile,
-    // scaling up to h-32 on desktop. If someone replaces the lg sizing
-    // with a single fixed h-32, this test fails before it can ship.
-    expect(img.className).toMatch(/h-20\b/);
-    expect(img.className).toMatch(/lg:h-32/);
+    // The lg variant must stay compact on mobile (h-10) and only grow at
+    // larger breakpoints. If someone replaces this with a single fixed
+    // height, this test fails before it can ship.
+    expect(img.className).toMatch(/^h-10\b/);
+    expect(img.className).toMatch(/lg:h-\[52px\]/);
   });
 
   it("only one <header> in the tree (no accidental double header)", () => {

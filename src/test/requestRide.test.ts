@@ -6,11 +6,14 @@ const supabaseMock = vi.hoisted(() => ({
     getUser: vi.fn(),
     getSession: vi.fn(),
   },
-  from: vi.fn(),
-  rpc: vi.fn(),
+}));
+
+const goBackendMock = vi.hoisted(() => ({
+  post: vi.fn(),
 }));
 
 vi.mock("@/lib/supabaseClient", () => ({ supabase: supabaseMock }));
+vi.mock("@/lib/goBackendClient", () => ({ goBackend: goBackendMock }));
 vi.mock("@/lib/offlineQueue", () => ({ queueOfflineRide: vi.fn() }));
 vi.mock("@/lib/fraudDetection", () => ({
   detectSuspiciousPatterns: vi.fn(() => Promise.resolve([])),
@@ -38,34 +41,26 @@ function mockOnline(value: boolean) {
   });
 }
 
-function mockRideFetch(result: { data: unknown; error: unknown }) {
-  const maybeSingle = vi.fn().mockResolvedValue(result);
-  const eq = vi.fn(() => ({ maybeSingle }));
-  const select = vi.fn(() => ({ eq }));
-  supabaseMock.from.mockReturnValue({ select });
-  return { select, eq, maybeSingle };
-}
-
 describe("requestRide", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockOnline(true);
-    supabaseMock.auth.getSession.mockResolvedValue({ data: { session: null } });
     supabaseMock.auth.getUser.mockResolvedValue({
       data: { user: { id: "user-1", email: undefined, email_confirmed_at: null } },
       error: null,
     });
   });
 
-  it("creates a cash ride through the server-side fare RPC", async () => {
-    supabaseMock.rpc.mockResolvedValue({ data: { ok: true, ride_id: "ride-1", fare: 5 }, error: null });
-    mockRideFetch({ data: { id: "ride-1", status: "pending" }, error: null });
+  it("creates a cash ride via the Go backend", async () => {
+    goBackendMock.post.mockResolvedValue({ id: "ride-1" });
 
     const result = await requestRide(validInput);
 
-    expect(result).toEqual({ ok: true, ride: { id: "ride-1", status: "pending" } });
-    expect(supabaseMock.rpc).toHaveBeenCalledWith("request_cash_ride", {
-      p_payload: expect.objectContaining({
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.ride.id).toBe("ride-1");
+    expect(goBackendMock.post).toHaveBeenCalledWith(
+      "/api/rides",
+      expect.objectContaining({
         user_id: "user-1",
         pickup_address: "Pickup",
         dropoff_address: "Dropoff",
@@ -74,7 +69,7 @@ describe("requestRide", () => {
         payment_method: "cash",
         status: "pending",
       }),
-    });
+    );
   });
 
   it("returns a safe error when the user is not authenticated", async () => {
@@ -83,7 +78,7 @@ describe("requestRide", () => {
     const result = await requestRide(validInput);
 
     expect(result).toEqual({ ok: false, error: "You must be logged in to request a ride." });
-    expect(supabaseMock.from).not.toHaveBeenCalled();
+    expect(goBackendMock.post).not.toHaveBeenCalled();
   });
 
   it("rejects invalid ride input before calling the API", async () => {
@@ -91,52 +86,57 @@ describe("requestRide", () => {
 
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error).toBe("Pickup address is required.");
-    expect(supabaseMock.from).not.toHaveBeenCalled();
+    expect(goBackendMock.post).not.toHaveBeenCalled();
   });
 
   it("rejects invalid payment methods before calling the API", async () => {
     const result = await requestRide({ ...validInput, payment_method: "bitcoin" });
 
     expect(result).toEqual({ ok: false, error: "Select a valid payment method." });
-    expect(supabaseMock.from).not.toHaveBeenCalled();
+    expect(goBackendMock.post).not.toHaveBeenCalled();
   });
 
-  it("surfaces network/API RPC failures", async () => {
-    supabaseMock.rpc.mockResolvedValue({
-      data: null,
-      error: { message: "Network request failed", details: "fetch failed", hint: "Retry later" },
-    });
+  it("returns a business-logic error when the backend responds with ok:false", async () => {
+    goBackendMock.post.mockResolvedValue({ ok: false, reason: "No drivers available" });
+
+    const result = await requestRide(validInput);
+
+    expect(result).toEqual({ ok: false, error: "No drivers available" });
+  });
+
+  it("surfaces Go backend failures", async () => {
+    goBackendMock.post.mockRejectedValue(new Error("Network error while contacting backend"));
 
     const result = await requestRide(validInput);
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expect(result.error).toContain("Ride request failed: Network request failed");
-      expect(result.error).toContain("Details: fetch failed");
-      expect(result.error).toContain("Hint: Retry later");
+      expect(result.error).toBe("Ride request failed: Network error while contacting backend");
     }
   });
 
-  it("handles an empty successful fetch response without crashing", async () => {
-    supabaseMock.rpc.mockResolvedValue({ data: { ok: true, ride_id: "ride-1", fare: 5 }, error: null });
-    mockRideFetch({ data: null, error: null });
+  it("falls back to a top-level ride_id when the backend omits a nested ride object", async () => {
+    goBackendMock.post.mockResolvedValue({ ride_id: "ride-1", fare: 5 });
 
     const result = await requestRide(validInput);
 
-    expect(result).toEqual({ ok: true, ride: { id: "ride-1", fare: 5 } });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.ride.id).toBe("ride-1");
+      expect(result.ride.fare).toBe(5);
+    }
   });
 
-  it("uses wallet RPC and handles empty fetch response", async () => {
-    supabaseMock.rpc.mockResolvedValue({ data: { ok: true, ride_id: "ride-wallet" }, error: null });
-    supabaseMock.from.mockReturnValue({
-      select: vi.fn(() => ({
-        eq: vi.fn(() => ({ maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }) })),
-      })),
-    });
+  it("sends the wallet payment method through to the Go backend", async () => {
+    goBackendMock.post.mockResolvedValue({ id: "ride-wallet" });
 
     const result = await requestRide({ ...validInput, payment_method: "wallet" });
 
-    expect(supabaseMock.rpc).toHaveBeenCalledWith("request_wallet_ride", expect.any(Object));
-    expect(result).toEqual({ ok: true, ride: { id: "ride-wallet" } });
+    expect(goBackendMock.post).toHaveBeenCalledWith(
+      "/api/rides",
+      expect.objectContaining({ payment_method: "wallet" }),
+    );
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.ride.id).toBe("ride-wallet");
   });
 });
