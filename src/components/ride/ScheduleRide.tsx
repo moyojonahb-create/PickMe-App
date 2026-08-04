@@ -71,9 +71,9 @@ export default function ScheduleRide({ scheduledAt, onSchedule }: ScheduleRidePr
   return (
     <button
       onClick={() => setShowPicker(true)}
-      className="w-full flex items-center gap-2 justify-center text-sm text-muted-foreground hover:text-foreground py-2 transition-colors"
+      className="w-full flex items-center gap-2 justify-center text-[13px] font-medium text-foreground/80 hover:text-primary py-2.5 transition-colors"
     >
-      <Calendar className="h-4 w-4" />
+      <Calendar className="h-4 w-4 text-primary" />
       Schedule for later
     </button>
   );
