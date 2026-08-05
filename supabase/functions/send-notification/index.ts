@@ -44,6 +44,61 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
+    // --- Authorization helpers -------------------------------------------
+    const isAdmin = async (): Promise<boolean> => {
+      const { data } = await serviceClient.rpc("has_role", {
+        _user_id: userId,
+        _role: "admin",
+      });
+      return data === true;
+    };
+
+    const getRideParties = async (
+      id: unknown,
+    ): Promise<{ riderId: string; driverUserId: string | null } | null> => {
+      if (typeof id !== "string" || !/^[0-9a-fA-F-]{36}$/.test(id)) return null;
+      const { data: ride } = await serviceClient
+        .from("rides")
+        .select("user_id, driver_id")
+        .eq("id", id)
+        .maybeSingle();
+      if (!ride) return null;
+      let driverUserId: string | null = null;
+      if (ride.driver_id) {
+        const { data: drv } = await serviceClient
+          .from("drivers")
+          .select("user_id")
+          .eq("id", ride.driver_id)
+          .maybeSingle();
+        driverUserId = drv?.user_id ?? null;
+      }
+      return { riderId: ride.user_id, driverUserId };
+    };
+
+    const forbidden = () =>
+      new Response(
+        JSON.stringify({ error: "Forbidden" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+
+    // Caller must be a party to the ride, and the target must be the other party.
+    const assertRideParticipants = async (): Promise<Response | null> => {
+      if (!targetUserId || typeof targetUserId !== "string") {
+        return new Response(
+          JSON.stringify({ error: "targetUserId required" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      if (await isAdmin()) return null;
+      const parties = await getRideParties(rideId);
+      if (!parties) return forbidden();
+      const members = [parties.riderId, parties.driverUserId].filter(Boolean) as string[];
+      if (!members.includes(userId) || !members.includes(targetUserId) || targetUserId === userId) {
+        return forbidden();
+      }
+      return null;
+    };
+
     // Store notification in DB
     const storeNotification = async (uid: string, notifTitle: string, notifBody: string, notifType: string) => {
       await serviceClient.from("notifications").insert({
@@ -56,6 +111,13 @@ serve(async (req) => {
 
     switch (type) {
       case "ride_requested": {
+        // Broadcast to drivers is only allowed for the rider who owns the ride
+        // (or an admin) — never for arbitrary callers.
+        if (!(await isAdmin())) {
+          const parties = await getRideParties(rideId);
+          if (!parties || parties.riderId !== userId) return forbidden();
+        }
+
         // Notify all online drivers about new ride request
         const { data: onlineDrivers } = await serviceClient
           .from("drivers")
@@ -83,12 +145,8 @@ serve(async (req) => {
 
       case "ride_accepted": {
         // Notify rider that a driver accepted
-        if (!targetUserId) {
-          return new Response(
-            JSON.stringify({ error: "targetUserId required" }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
+        const denied = await assertRideParticipants();
+        if (denied) return denied;
         await storeNotification(
           targetUserId,
           "✅ Ride Accepted!",
@@ -102,12 +160,8 @@ serve(async (req) => {
       }
 
       case "driver_arrived": {
-        if (!targetUserId) {
-          return new Response(
-            JSON.stringify({ error: "targetUserId required" }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
+        const denied = await assertRideParticipants();
+        if (denied) return denied;
         await storeNotification(
           targetUserId,
           "📍 Driver Arrived",
@@ -121,12 +175,8 @@ serve(async (req) => {
       }
 
       case "ride_completed": {
-        if (!targetUserId) {
-          return new Response(
-            JSON.stringify({ error: "targetUserId required" }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
+        const denied = await assertRideParticipants();
+        if (denied) return denied;
         await storeNotification(
           targetUserId,
           "🏁 Ride Complete",
@@ -140,12 +190,8 @@ serve(async (req) => {
       }
 
       case "ride_cancelled": {
-        if (!targetUserId) {
-          return new Response(
-            JSON.stringify({ error: "targetUserId required" }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
+        const denied = await assertRideParticipants();
+        if (denied) return denied;
         await storeNotification(
           targetUserId,
           "❌ Ride Cancelled",
@@ -159,12 +205,8 @@ serve(async (req) => {
       }
 
       case "new_offer": {
-        if (!targetUserId) {
-          return new Response(
-            JSON.stringify({ error: "targetUserId required" }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
+        const denied = await assertRideParticipants();
+        if (denied) return denied;
         await storeNotification(
           targetUserId,
           "💰 New Offer Received",
@@ -184,6 +226,7 @@ serve(async (req) => {
             { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
+        if (!(await isAdmin())) return forbidden();
         await storeNotification(
           targetUserId,
           "💵 Deposit Approved",
