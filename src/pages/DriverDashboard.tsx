@@ -397,9 +397,25 @@ export default function DriverDashboard() {
           dropoff_lat: Number(activeTripRow.dropoff_lat ?? 0),
           dropoff_lon: Number(activeTripRow.dropoff_lon ?? 0),
           payment_method: String(activeTripRow.payment_method || 'cash'),
-          passenger_name: (activeTripRow.passenger_name as string | null) || null,
-          passenger_phone: (activeTripRow.passenger_phone as string | null) || null,
+          passenger_name: null,
+          passenger_phone: null,
         });
+
+        // Passenger contact details live in a protected table and are only
+        // readable once this driver is actually assigned to the ride.
+        void (async () => {
+          const { data: contact } = await supabase
+            .from('ride_passenger_contacts')
+            .select('passenger_name, passenger_phone')
+            .eq('ride_id', String(activeTripRow.id))
+            .maybeSingle();
+          if (contact) {
+            setActiveTrip((prev) => (prev && prev.id === String(activeTripRow.id)
+              ? { ...prev, passenger_name: contact.passenger_name, passenger_phone: contact.passenger_phone }
+              : prev));
+          }
+        })();
+
 
         // Notify driver when rider accepts their offer
         if (newStatus === 'accepted' && prevStatus !== 'accepted') {

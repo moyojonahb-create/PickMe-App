@@ -125,15 +125,26 @@ export async function requestRide(input: RequestRideInput) {
       payment_method: paymentMethod,
       town_id: input.town_id ?? null,
       gender_preference: input.gender_preference ?? "any",
-      ...(input.passenger_name?.trim() ? { passenger_name: input.passenger_name.trim() } : {}),
-      ...(input.passenger_phone?.trim() ? { passenger_phone: input.passenger_phone.trim() } : {}),
       ...(input.scheduled_at ? { scheduled_at: input.scheduled_at } : {}),
     };
     const { data, error } = await supabase.from("rides").insert([row] as never).select("*").maybeSingle();
     if (error) throw new Error(error.message);
     if (!data) throw new Error("Ride request failed: no ride returned");
-    return data as unknown as RideRow;
+    const created = data as unknown as RideRow;
+    const contactName = input.passenger_name?.trim();
+    const contactPhone = input.passenger_phone?.trim();
+    if (created?.id && (contactName || contactPhone)) {
+      // Passenger contact details are stored separately so that only the rider,
+      // the assigned driver and admins can read them (never the open ride feed).
+      await supabase.from("ride_passenger_contacts").insert([{
+        ride_id: created.id,
+        passenger_name: contactName || null,
+        passenger_phone: contactPhone || null,
+      }] as never);
+    }
+    return created;
   };
+
 
   // Primary path: Go Core backend. Fallback: persist directly to the database
   // so the request still reaches drivers when the Go backend isn't reachable.
