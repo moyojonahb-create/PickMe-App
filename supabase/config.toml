@@ -51,7 +51,8 @@ verify_jwt = true
 verify_jwt = false
 
 [functions.sms-invite]
-verify_jwt = false
+verify_jwt = true
+
 
 [functions.google-routes]
 verify_jwt = false
