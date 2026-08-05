@@ -39,18 +39,15 @@ export default defineConfig(({ mode }) => {
       telemetry: false,
     }),
   ].filter(Boolean),
-  define: {
-    'import.meta.env.VITE_SUPABASE_URL': JSON.stringify(
-      publicEnv(env, 'VITE_SUPABASE_URL')
-    ),
-    'import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY': JSON.stringify(
-      publicEnv(env, 'VITE_SUPABASE_PUBLISHABLE_KEY')
-    ),
-    // Mapbox uses a public browser token. Keep it in env so builds never carry stale keys.
-    'import.meta.env.VITE_MAPBOX_ACCESS_TOKEN': JSON.stringify(
-      env.VITE_MAPBOX_ACCESS_TOKEN || ''
-    ),
-  },
+  // Only inject values that actually exist. Defining them unconditionally
+  // stomped Vite's own env replacement with "" and crashed the published app
+  // with "supabaseUrl is required".
+  define: Object.fromEntries(
+    (['VITE_SUPABASE_URL', 'VITE_SUPABASE_PUBLISHABLE_KEY', 'VITE_MAPBOX_ACCESS_TOKEN'] as const)
+      .map((key) => [key, publicEnv(env, key)] as const)
+      .filter(([, value]) => Boolean(value))
+      .map(([key, value]) => [`import.meta.env.${key}`, JSON.stringify(value)])
+  ),
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
