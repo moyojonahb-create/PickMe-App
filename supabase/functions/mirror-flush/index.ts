@@ -116,11 +116,38 @@ async function flush() {
   return { processed: rows.length, ok, failed };
 }
 
+const CRON_SECRET = Deno.env.get("CRON_SECRET");
+
+function isAuthorized(req: Request): boolean {
+  const provided = req.headers.get("x-cron-secret") ?? "";
+  if (CRON_SECRET && provided === CRON_SECRET) return true;
+  const auth = req.headers.get("Authorization") ?? "";
+  if (auth.startsWith("Bearer ") && auth.slice(7) === SERVICE_ROLE) return true;
+  return false;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+
+  if (!isAuthorized(req)) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 401,
+    });
+  }
+
   const result = await flush();
-  return new Response(JSON.stringify(result), {
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-    status: 200,
-  });
+  // Never leak internal error/connection details to the caller; details stay in logs.
+  return new Response(
+    JSON.stringify({
+      processed: result.processed,
+      ok: (result as { ok?: number }).ok ?? 0,
+      failed: (result as { failed?: number }).failed ?? 0,
+      error: result.error ? true : undefined,
+    }),
+    {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 200,
+    },
+  );
 });
