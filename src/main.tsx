@@ -1,7 +1,6 @@
 // Environment polyfill MUST be imported first to patch missing env vars
 import './lib/envPolyfill';
 
-import * as Sentry from "@sentry/react";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "next-themes";
@@ -21,9 +20,10 @@ const SENTRY_DSN = "https://fae54652b1b4535904d5ca4d198008f7@o4511199932645376.i
 // once it is ready, so deferring init never loses a crash.
 const earlyErrors: unknown[] = [];
 let telemetryReady = false;
+let reportTelemetryError: ((error: unknown) => void) | null = null;
 
 function captureError(err: unknown) {
-  if (telemetryReady) Sentry.captureException(err);
+  if (telemetryReady && reportTelemetryError) reportTelemetryError(err);
   else if (earlyErrors.length < 20) earlyErrors.push(err);
 }
 
@@ -48,7 +48,8 @@ initNativePlatform();
  * SDK parse/exec plus ingest requests to every single page load. They are
  * now scheduled in idle time after the first paint.
  */
-function initTelemetry() {
+async function initTelemetry() {
+  const Sentry = await import("@sentry/react");
   Sentry.init({
     dsn: SENTRY_DSN,
     environment: import.meta.env.MODE,
@@ -80,6 +81,7 @@ function initTelemetry() {
     },
   });
 
+  reportTelemetryError = (error) => Sentry.captureException(error);
   telemetryReady = true;
   earlyErrors.splice(0).forEach((err) => Sentry.captureException(err));
 
@@ -117,8 +119,9 @@ function scheduleTelemetry() {
   const ric = (window as unknown as {
     requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number;
   }).requestIdleCallback;
-  if (typeof ric === 'function') ric(() => initTelemetry(), { timeout: 4000 });
-  else setTimeout(initTelemetry, 2000);
+  const start = () => { void initTelemetry().catch(() => {}); };
+  if (typeof ric === 'function') ric(start, { timeout: 5000 });
+  else setTimeout(start, 3000);
 }
 
 const queryClient = new QueryClient({
@@ -146,13 +149,8 @@ if ('serviceWorker' in navigator) {
           console.log('[PickMe] PWA SW registration failed:', error);
         });
 
-      navigator.serviceWorker.register('/sw-tiles.js')
-        .then((registration) => {
-          console.log('[PickMe] Tile cache SW registered:', registration.scope);
-        })
-        .catch((error) => {
-          console.log('[PickMe] Tile cache SW registration failed:', error);
-        });
+      // sw.js already owns tile caching. Registering a second worker at the
+      // same root scope replaced the app-shell worker on some devices.
     } else {
       // Clean up previously installed service workers while in dev.
       const regs = await navigator.serviceWorker.getRegistrations();
@@ -161,22 +159,23 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-createRoot(document.getElementById("root")!).render(
-  <Sentry.ErrorBoundary fallback={<p className="p-8 text-center text-destructive">Something went wrong. Please refresh.</p>}>
-    <QueryClientProvider client={queryClient}>
-      <ErrorBoundary>
-        <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
-          <I18nProvider>
-            <FemaleThemeProvider>
-              <AuthProvider>
-                <App />
-              </AuthProvider>
-            </FemaleThemeProvider>
-          </I18nProvider>
-        </ThemeProvider>
-      </ErrorBoundary>
-    </QueryClientProvider>
-  </Sentry.ErrorBoundary>
+const rootElement = document.getElementById("root");
+if (!rootElement) throw new Error("PickMe root element is missing");
+
+createRoot(rootElement).render(
+  <QueryClientProvider client={queryClient}>
+    <ErrorBoundary>
+      <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
+        <I18nProvider>
+          <FemaleThemeProvider>
+            <AuthProvider>
+              <App />
+            </AuthProvider>
+          </FemaleThemeProvider>
+        </I18nProvider>
+      </ThemeProvider>
+    </ErrorBoundary>
+  </QueryClientProvider>
 );
 
 scheduleTelemetry();
