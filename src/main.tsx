@@ -149,13 +149,8 @@ if ('serviceWorker' in navigator) {
           console.log('[PickMe] PWA SW registration failed:', error);
         });
 
-      navigator.serviceWorker.register('/sw-tiles.js')
-        .then((registration) => {
-          console.log('[PickMe] Tile cache SW registered:', registration.scope);
-        })
-        .catch((error) => {
-          console.log('[PickMe] Tile cache SW registration failed:', error);
-        });
+      // sw.js already owns tile caching. Registering a second worker at the
+      // same root scope replaced the app-shell worker on some devices.
     } else {
       // Clean up previously installed service workers while in dev.
       const regs = await navigator.serviceWorker.getRegistrations();
