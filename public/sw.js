@@ -1,5 +1,5 @@
 // Bump cache name to force clients to pick up fresh assets after updates
-const CACHE_NAME = 'voyex-v8';
+const CACHE_NAME = 'voyex-v9';
 const TILE_CACHE = 'voyex-tiles-v1';
 const STATIC_ASSETS = [
   '/',
