@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">PickMe Ride</string>
-    <string name="title_activity_main">PickMe Ride</string>
-    <string name="package_name">com.pickme.app</string>
-    <string name="custom_url_scheme">com.pickme.app</string>
+    <string name="app_name">PickMe</string>
+    <string name="title_activity_main">PickMe</string>
+    <string name="package_name">zw.co.pickme</string>
+    <string name="custom_url_scheme">zw.co.pickme</string>
 </resources>

@@ -40,3 +40,8 @@ ops/prometheus/secrets/backend_metrics_token
 # Supabase CLI local link cache (machine-specific; must not override config.toml's project_id in CI)
 supabase/.temp/
 supabase/.branches/
+
+# Android release signing (never commit — see keystore safety notes)
+*.jks
+*.keystore
+key.properties

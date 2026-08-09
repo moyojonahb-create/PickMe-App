@@ -39,6 +39,13 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- Permission for camera (driver selfie + document upload) -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+
+    <!-- Permission for microphone (Agora in-app calls) -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
     <!-- Permissions for location -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />

@@ -1,8 +1,8 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.voyex.app',
-  appName: 'Voyex Ride',
+  appId: 'zw.co.pickme',
+  appName: 'PickMe',
   webDir: 'dist',
   server: {
     // NOTE: Uncomment only for local development with live reload

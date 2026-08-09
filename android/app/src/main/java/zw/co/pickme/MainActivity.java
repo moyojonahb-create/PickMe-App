@@ -1,4 +1,4 @@
-package com.voyex.app;
+package zw.co.pickme;
 
 import com.getcapacitor.BridgeActivity;
 
