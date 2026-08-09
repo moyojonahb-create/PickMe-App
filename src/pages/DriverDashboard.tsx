@@ -57,7 +57,7 @@ import WalletBalance from "@/components/wallet/WalletBalance";
 import DepositModal from "@/components/wallet/DepositModal";
 import TransactionsSheet from "@/components/wallet/TransactionsSheet";
 import { RideCommunication } from "@/components/ride/RideCommunication";
-import { GlassCard } from "@/components/ui/glass-card";
+
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { SecondaryButton } from "@/components/ui/secondary-button";
 import { InputField } from "@/components/ui/input-field";
@@ -73,7 +73,7 @@ import ActiveCallOverlay from "@/components/ride/ActiveCallOverlay";
 import VoiceCallButton from "@/components/ride/VoiceCallButton";
 import DriverEarningsDashboard from "@/components/driver/DriverEarningsDashboard";
 import DriverSelfieCheck from "@/components/driver/DriverSelfieCheck";
-import DemandHeatmap from "@/components/driver/DemandHeatmap";
+
 import MapboxMap from "@/components/map/LazyMapboxMap";
 import { useNearbyDrivers } from "@/hooks/useNearbyDrivers";
 import { useOSRMRoute } from "@/hooks/useOSRMRoute";
@@ -922,12 +922,6 @@ export default function DriverDashboard() {
           <DriverEarningsDashboard />
         )}
 
-        {/* Demand Heatmap */}
-        {isOnline && (
-          <GlassCard className="rounded-2xl p-4">
-            <DemandHeatmap townId="gwanda" />
-          </GlassCard>
-        )}
 
         {/* Trial Banner */}
         {profile && trialActive && (
