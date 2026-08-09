@@ -16,12 +16,13 @@ import { supabase } from "./integrations/supabase/client";
 // keeps /ride, /wallet, /profile navigation instant after refresh.
 warmFromCache();
 
-// ─── Only the landing page is eagerly loaded ───
-import Index from "./pages/Index";
-// ─── Everything else is lazy — prefetched in idle time ───
+// The rider screen is the primary app experience, so keep it in the entry
+// graph. This avoids a second network round-trip after auth restoration.
+import Ride from "./pages/Ride";
+// Marketing and secondary screens stay lazy.
+const Index = lazy(() => import("./pages/Index"));
 const Auth = lazy(() => import("./pages/Auth"));
 const Signup = lazy(() => import("./pages/Signup"));
-const Ride = lazy(() => import("./pages/Ride").then((m) => { recordPrefetched("/ride"); return m; }));
 const RideDetail = lazy(() => import("./pages/RideDetail"));
 const DriverDashboard = lazy(() => import("./pages/DriverDashboard"));
 const RiderRideDetail = lazy(() => import("./pages/RiderRideDetail"));
@@ -138,8 +139,8 @@ export default function App() {
 
       <ErrorBoundary>
         <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="/home" element={<Index />} />
+          <Route path="/" element={<Navigate to="/ride" replace />} />
+          <Route path="/home" element={<SuspenseWrap><Index /></SuspenseWrap>} />
           <Route path="/auth" element={<MarketingShell><Auth /></MarketingShell>} />
           <Route path="/login" element={<Navigate to="/auth" replace />} />
           <Route path="/signup" element={<MarketingShell><Signup /></MarketingShell>} />

@@ -1629,6 +1629,45 @@ export type Database = {
           },
         ]
       }
+      ride_passenger_contacts: {
+        Row: {
+          created_at: string
+          passenger_name: string | null
+          passenger_phone: string | null
+          ride_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          passenger_name?: string | null
+          passenger_phone?: string | null
+          ride_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          passenger_name?: string | null
+          passenger_phone?: string | null
+          ride_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ride_passenger_contacts_ride_id_fkey"
+            columns: ["ride_id"]
+            isOneToOne: true
+            referencedRelation: "pending_rides_safe"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ride_passenger_contacts_ride_id_fkey"
+            columns: ["ride_id"]
+            isOneToOne: true
+            referencedRelation: "rides"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ride_preferences: {
         Row: {
           cool_temperature: boolean
@@ -1822,8 +1861,6 @@ export type Database = {
           id: string
           locked_price: number | null
           passenger_count: number
-          passenger_name: string | null
-          passenger_phone: string | null
           payment_failed: boolean
           payment_failure_reason: string | null
           payment_method: string
@@ -1855,8 +1892,6 @@ export type Database = {
           id?: string
           locked_price?: number | null
           passenger_count?: number
-          passenger_name?: string | null
-          passenger_phone?: string | null
           payment_failed?: boolean
           payment_failure_reason?: string | null
           payment_method?: string
@@ -1888,8 +1923,6 @@ export type Database = {
           id?: string
           locked_price?: number | null
           passenger_count?: number
-          passenger_name?: string | null
-          passenger_phone?: string | null
           payment_failed?: boolean
           payment_failure_reason?: string | null
           payment_method?: string

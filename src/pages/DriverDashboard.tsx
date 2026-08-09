@@ -57,7 +57,7 @@ import WalletBalance from "@/components/wallet/WalletBalance";
 import DepositModal from "@/components/wallet/DepositModal";
 import TransactionsSheet from "@/components/wallet/TransactionsSheet";
 import { RideCommunication } from "@/components/ride/RideCommunication";
-import { GlassCard } from "@/components/ui/glass-card";
+
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { SecondaryButton } from "@/components/ui/secondary-button";
 import { InputField } from "@/components/ui/input-field";
@@ -73,7 +73,7 @@ import ActiveCallOverlay from "@/components/ride/ActiveCallOverlay";
 import VoiceCallButton from "@/components/ride/VoiceCallButton";
 import DriverEarningsDashboard from "@/components/driver/DriverEarningsDashboard";
 import DriverSelfieCheck from "@/components/driver/DriverSelfieCheck";
-import DemandHeatmap from "@/components/driver/DemandHeatmap";
+
 import MapboxMap from "@/components/map/LazyMapboxMap";
 import { useNearbyDrivers } from "@/hooks/useNearbyDrivers";
 import { useOSRMRoute } from "@/hooks/useOSRMRoute";
@@ -85,7 +85,7 @@ import RideRequestCard from "@/components/driver/RideRequestCard";
 import DriverOfferModal from "@/components/driver/DriverOfferModal";
 import PassengerInfoCard from "@/components/driver/PassengerInfoCard";
 import TopFlashBanner from "@/components/ui/top-flash-banner";
-import PilotReadinessCard from "@/components/pilot/PilotReadinessCard";
+
 import { subscribeRiderComing } from "@/lib/rideSignals";
 import { goBackend, type GoDriverPresenceRequest, type GoRideStatusRequest } from "@/lib/goBackendClient";
 import { getDriverWalletSummary } from "@/lib/walletApi";
@@ -397,9 +397,25 @@ export default function DriverDashboard() {
           dropoff_lat: Number(activeTripRow.dropoff_lat ?? 0),
           dropoff_lon: Number(activeTripRow.dropoff_lon ?? 0),
           payment_method: String(activeTripRow.payment_method || 'cash'),
-          passenger_name: (activeTripRow.passenger_name as string | null) || null,
-          passenger_phone: (activeTripRow.passenger_phone as string | null) || null,
+          passenger_name: null,
+          passenger_phone: null,
         });
+
+        // Passenger contact details live in a protected table and are only
+        // readable once this driver is actually assigned to the ride.
+        void (async () => {
+          const { data: contact } = await supabase
+            .from('ride_passenger_contacts')
+            .select('passenger_name, passenger_phone')
+            .eq('ride_id', String(activeTripRow.id))
+            .maybeSingle();
+          if (contact) {
+            setActiveTrip((prev) => (prev && prev.id === String(activeTripRow.id)
+              ? { ...prev, passenger_name: contact.passenger_name, passenger_phone: contact.passenger_phone }
+              : prev));
+          }
+        })();
+
 
         // Notify driver when rider accepts their offer
         if (newStatus === 'accepted' && prevStatus !== 'accepted') {
@@ -900,50 +916,12 @@ export default function DriverDashboard() {
           </div>
         </div>
 
-        <PilotReadinessCard
-          tone="driver"
-          title="Pilot shift readiness"
-          subtitle="Before taking Gwanda pilot rides, confirm the basics."
-          items={[
-            {
-              label: isOnline ? "Online and visible" : "Go online",
-              detail: isOnline ? "You can receive nearby ride requests." : "Open settings and switch online when ready.",
-              done: isOnline,
-            },
-            {
-              label: driverCoords ? "Location is active" : "Enable location",
-              detail: driverCoords ? "GPS is updating for pickup guidance." : "Allow precise location so riders and ops can track trips.",
-              done: !!driverCoords,
-            },
-            {
-              label: voiceEnabled ? "Alerts enabled" : "Enable alerts",
-              detail: voiceEnabled ? "Voice and sound cues are on for new requests." : "Turn on alerts before joining the pilot shift.",
-              done: voiceEnabled,
-            },
-            {
-              label: driverBalance >= 0 ? "Cash fallback ready" : "Cash fallback",
-              detail: "For pilot day, confirm cash collection with the rider before trip completion.",
-              done: true,
-            },
-          ]}
-          footer={
-            <div className="rounded-xl border border-destructive/20 bg-destructive/5 px-3 py-2 text-[11px] font-medium text-destructive">
-              If the app stalls during a live trip, call pilot support and keep the rider informed before retrying actions.
-            </div>
-          }
-        />
 
         {/* Earnings Dashboard (toggled via icon) */}
         {earningsOpen && (
           <DriverEarningsDashboard />
         )}
 
-        {/* Demand Heatmap */}
-        {isOnline && (
-          <GlassCard className="rounded-2xl p-4">
-            <DemandHeatmap townId="gwanda" />
-          </GlassCard>
-        )}
 
         {/* Trial Banner */}
         {profile && trialActive && (

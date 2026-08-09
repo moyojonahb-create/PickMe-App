@@ -1,8 +1,7 @@
 // Bump cache name to force clients to pick up fresh assets after updates
-const CACHE_NAME = 'voyex-v8';
+const CACHE_NAME = 'pickme-shell-v10';
 const TILE_CACHE = 'voyex-tiles-v1';
 const STATIC_ASSETS = [
-  '/',
   '/ride',
   '/manifest.json',
   '/favicon.ico',
@@ -165,8 +164,10 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Navigation must always prefer the latest deployed shell. Hashed assets
+  // remain cacheable, but an old HTML shell must never pin a broken bundle.
   event.respondWith(
-    fetch(event.request)
+    fetch(event.request, event.request.mode === 'navigate' ? { cache: 'no-store' } : undefined)
       .then((response) => {
         const responseClone = response.clone();
         caches.open(CACHE_NAME).then((cache) => {

@@ -1153,8 +1153,8 @@ export default function RideView() {
           )}
 
 
-          {/* Pickup & Dropoff — unified premium journey card */}
-
+          {/* Pickup & Dropoff — unified premium journey card (hidden on idle home screen) */}
+          {!showHomeContent && (
           <div className="relative glass-card rounded-[20px] border border-border/60">
             {/* Vertical journey rail */}
             <div className="absolute left-6 top-0 bottom-0 w-4 flex flex-col items-center justify-between py-7 pointer-events-none">
@@ -1206,6 +1206,7 @@ export default function RideView() {
               )}
             </button>
           </div>
+          )}
 
           {/* Booking for someone else */}
           <BookingForSomeoneElse

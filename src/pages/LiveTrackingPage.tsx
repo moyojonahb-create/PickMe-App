@@ -16,7 +16,7 @@ interface RideInfo {
   status: string;
   driver_id: string | null;
   fare: number | null;
-  passenger_name: string | null;
+  passenger_name?: string | null;
 }
 
 interface DriverInfo {
@@ -58,7 +58,7 @@ export default function LiveTrackingPage() {
     (async () => {
       const { data: rideData, error: rideErr } = await supabase
         .from("rides")
-        .select("id, pickup_address, dropoff_address, status, driver_id, pickup_lat, pickup_lon, dropoff_lat, dropoff_lon, fare, passenger_name")
+        .select("id, pickup_address, dropoff_address, status, driver_id, pickup_lat, pickup_lon, dropoff_lat, dropoff_lon, fare")
         .eq("id", tripId)
         .maybeSingle();
 
