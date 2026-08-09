@@ -85,7 +85,7 @@ import RideRequestCard from "@/components/driver/RideRequestCard";
 import DriverOfferModal from "@/components/driver/DriverOfferModal";
 import PassengerInfoCard from "@/components/driver/PassengerInfoCard";
 import TopFlashBanner from "@/components/ui/top-flash-banner";
-import PilotReadinessCard from "@/components/pilot/PilotReadinessCard";
+
 import { subscribeRiderComing } from "@/lib/rideSignals";
 import { goBackend, type GoDriverPresenceRequest, type GoRideStatusRequest } from "@/lib/goBackendClient";
 import { getDriverWalletSummary } from "@/lib/walletApi";
@@ -916,38 +916,6 @@ export default function DriverDashboard() {
           </div>
         </div>
 
-        <PilotReadinessCard
-          tone="driver"
-          title="Pilot shift readiness"
-          subtitle="Before taking Gwanda pilot rides, confirm the basics."
-          items={[
-            {
-              label: isOnline ? "Online and visible" : "Go online",
-              detail: isOnline ? "You can receive nearby ride requests." : "Open settings and switch online when ready.",
-              done: isOnline,
-            },
-            {
-              label: driverCoords ? "Location is active" : "Enable location",
-              detail: driverCoords ? "GPS is updating for pickup guidance." : "Allow precise location so riders and ops can track trips.",
-              done: !!driverCoords,
-            },
-            {
-              label: voiceEnabled ? "Alerts enabled" : "Enable alerts",
-              detail: voiceEnabled ? "Voice and sound cues are on for new requests." : "Turn on alerts before joining the pilot shift.",
-              done: voiceEnabled,
-            },
-            {
-              label: driverBalance >= 0 ? "Cash fallback ready" : "Cash fallback",
-              detail: "For pilot day, confirm cash collection with the rider before trip completion.",
-              done: true,
-            },
-          ]}
-          footer={
-            <div className="rounded-xl border border-destructive/20 bg-destructive/5 px-3 py-2 text-[11px] font-medium text-destructive">
-              If the app stalls during a live trip, call pilot support and keep the rider informed before retrying actions.
-            </div>
-          }
-        />
 
         {/* Earnings Dashboard (toggled via icon) */}
         {earningsOpen && (
