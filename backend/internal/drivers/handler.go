@@ -396,34 +396,51 @@ func (h *Handler) Online(c *fiber.Ctx) error {
 		req.VehicleType = "economy"
 	}
 
-	_, err := h.db.Exec(context.Background(), `
-		INSERT INTO public.driver_sessions (
-			driver_id,
+	cmdTag, err := h.db.Exec(context.Background(), `
+		UPDATE public.drivers
+		SET is_online = true,
+		    vehicle_type = $2,
+		    updated_at = NOW()
+		WHERE user_id = $1
+	`,
+		req.DriverID,
+		req.VehicleType,
+	)
+
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	if cmdTag.RowsAffected() == 0 {
+		return c.Status(404).JSON(fiber.Map{"error": "Driver profile not found"})
+	}
+
+	_, err = h.db.Exec(context.Background(), `
+		INSERT INTO public.live_locations (
+			user_id,
+			user_type,
 			latitude,
 			longitude,
 			heading,
 			speed,
-			vehicle_type,
 			is_online,
-			last_seen
+			updated_at
 		)
-		VALUES ($1,$2,$3,$4,$5,$6,true,NOW())
-		ON CONFLICT (driver_id)
+		VALUES ($1,'driver',$2,$3,$4,$5,true,NOW())
+		ON CONFLICT (user_id)
 		DO UPDATE SET
 			latitude = EXCLUDED.latitude,
 			longitude = EXCLUDED.longitude,
 			heading = EXCLUDED.heading,
 			speed = EXCLUDED.speed,
-			vehicle_type = EXCLUDED.vehicle_type,
 			is_online = true,
-			last_seen = NOW()
+			updated_at = NOW()
 	`,
 		req.DriverID,
 		req.Latitude,
 		req.Longitude,
 		req.Heading,
 		req.Speed,
-		req.VehicleType,
 	)
 
 	if err != nil {
@@ -483,10 +500,10 @@ func (h *Handler) Heartbeat(c *fiber.Ctx) error {
 	req.DriverID = authUserID
 
 	commandTag, err := h.db.Exec(context.Background(), `
-		UPDATE public.driver_sessions
-		SET last_seen = NOW(),
-		    is_online = true
-		WHERE driver_id = $1
+		UPDATE public.drivers
+		SET is_online = true,
+		    updated_at = NOW()
+		WHERE user_id = $1
 	`, req.DriverID)
 
 	if err != nil {
@@ -495,6 +512,15 @@ func (h *Handler) Heartbeat(c *fiber.Ctx) error {
 
 	if commandTag.RowsAffected() == 0 {
 		return c.Status(404).JSON(fiber.Map{"error": "Driver not found"})
+	}
+
+	if _, err := h.db.Exec(context.Background(), `
+		UPDATE public.live_locations
+		SET is_online = true,
+		    updated_at = NOW()
+		WHERE user_id = $1
+	`, req.DriverID); err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
 
 	h.writeRedisDriverPresence(middleware.RequestContext(c), geo.DriverPresence{
@@ -541,10 +567,10 @@ func (h *Handler) Offline(c *fiber.Ctx) error {
 	body.DriverID = authUserID
 
 	commandTag, err := h.db.Exec(context.Background(), `
-		UPDATE public.driver_sessions
+		UPDATE public.drivers
 		SET is_online = false,
-		    last_seen = NOW()
-		WHERE driver_id = $1
+		    updated_at = NOW()
+		WHERE user_id = $1
 	`, body.DriverID)
 
 	if err != nil {
@@ -553,6 +579,15 @@ func (h *Handler) Offline(c *fiber.Ctx) error {
 
 	if commandTag.RowsAffected() == 0 {
 		return c.Status(404).JSON(fiber.Map{"error": "Driver session not found"})
+	}
+
+	if _, err := h.db.Exec(context.Background(), `
+		UPDATE public.live_locations
+		SET is_online = false,
+		    updated_at = NOW()
+		WHERE user_id = $1
+	`, body.DriverID); err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
 
 	h.writeRedisDriverPresence(middleware.RequestContext(c), geo.DriverPresence{
@@ -615,13 +650,13 @@ func (h *Handler) Nearby(c *fiber.Ctx) error {
 
 	rows, err := h.db.Query(context.Background(), `
 		SELECT
-			driver_id,
-			latitude,
-			longitude,
-			vehicle_type,
-			speed,
-			heading,
-			last_seen,
+			ll.user_id AS driver_id,
+			ll.latitude,
+			ll.longitude,
+			d.vehicle_type,
+			ll.speed,
+			ll.heading,
+			ll.updated_at AS last_seen,
 			(
 				6371 * acos(
 					LEAST(
@@ -629,19 +664,19 @@ func (h *Handler) Nearby(c *fiber.Ctx) error {
 						GREATEST(
 							-1,
 							cos(radians($1)) *
-							cos(radians(latitude)) *
-							cos(radians(longitude) - radians($2)) +
+							cos(radians(ll.latitude)) *
+							cos(radians(ll.longitude) - radians($2)) +
 							sin(radians($1)) *
-							sin(radians(latitude))
+							sin(radians(ll.latitude))
 						)
 					)
 				)
 			) AS distance_km
-		FROM public.driver_sessions
-		WHERE is_online = true
-		  AND latitude IS NOT NULL
-		  AND longitude IS NOT NULL
-		  AND last_seen >= NOW() - INTERVAL '5 minutes'
+		FROM public.live_locations ll
+		JOIN public.drivers d ON d.user_id = ll.user_id
+		WHERE ll.is_online = true
+		  AND ll.user_type = 'driver'
+		  AND ll.updated_at >= NOW() - INTERVAL '5 minutes'
 		  AND (
 				6371 * acos(
 					LEAST(
@@ -649,10 +684,10 @@ func (h *Handler) Nearby(c *fiber.Ctx) error {
 						GREATEST(
 							-1,
 							cos(radians($1)) *
-							cos(radians(latitude)) *
-							cos(radians(longitude) - radians($2)) +
+							cos(radians(ll.latitude)) *
+							cos(radians(ll.longitude) - radians($2)) +
 							sin(radians($1)) *
-							sin(radians(latitude))
+							sin(radians(ll.latitude))
 						)
 					)
 				)

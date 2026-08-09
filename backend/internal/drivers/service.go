@@ -22,10 +22,24 @@ func (s *Service) StartCleanupWorker() {
 			_, err := s.db.Exec(
 				context.Background(),
 				`
-				UPDATE public.driver_sessions
-				SET is_online = false
+				UPDATE public.drivers
+				SET is_online = false, updated_at = NOW()
 				WHERE is_online = true
-				AND last_seen < NOW() - INTERVAL '2 minutes'
+				AND updated_at < NOW() - INTERVAL '2 minutes'
+				`,
+			)
+
+			if err != nil {
+				log.Println("Driver cleanup worker error:", err)
+			}
+
+			_, err = s.db.Exec(
+				context.Background(),
+				`
+				UPDATE public.live_locations
+				SET is_online = false, updated_at = NOW()
+				WHERE is_online = true
+				AND updated_at < NOW() - INTERVAL '2 minutes'
 				`,
 			)
 

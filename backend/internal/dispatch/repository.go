@@ -297,29 +297,13 @@ func (r *PostgresRepository) ExpireRideOffers(ctx context.Context, rideID string
 	return tag.RowsAffected(), nil
 }
 
+// SetDriverAvailability is a no-op: "availability" and "current_ride_id" have
+// no column in the current schema (drivers/live_locations only track
+// is_online), and dispatch's actual availability gating already reads Redis
+// presence (see geo.DriverPresence), not Postgres. Kept as a method so the
+// OfferRepository interface and callers don't need to change.
 func (r *PostgresRepository) SetDriverAvailability(ctx context.Context, driverID string, availability string, rideID string) error {
-	observability.RecordPostgresQuery("dispatch_set_driver_availability")
-	_, err := r.db.Exec(ctx, `
-		INSERT INTO public.driver_sessions (
-			driver_id,
-			is_online,
-			availability,
-			current_ride_id,
-			last_seen,
-			updated_at
-		)
-		VALUES ($1,true,$2,$3,NOW(),NOW())
-		ON CONFLICT (driver_id)
-		DO UPDATE SET
-			availability = EXCLUDED.availability,
-			current_ride_id = EXCLUDED.current_ride_id,
-			updated_at = NOW()
-	`, driverID, availability, nullable(rideID))
-	if err != nil {
-		observability.RecordPostgresFailure("dispatch_set_driver_availability")
-		observability.CaptureError(err)
-	}
-	return err
+	return nil
 }
 
 func nullable(value string) any {
