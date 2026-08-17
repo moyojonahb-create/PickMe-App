@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { authReady } from "@/lib/authReady";
 
 export type GoBackendErrorCode =
   | "UNAUTHENTICATED"
@@ -63,6 +64,8 @@ export type GoRideStatusRequest = {
 
 export type GoDriverPresenceRequest = {
   is_online: boolean;
+  latitude?: number;
+  longitude?: number;
 };
 
 export type GoDriverLocationRequest = {
@@ -86,11 +89,17 @@ export class GoBackendError extends Error {
   }
 }
 
-const API_BASE_URL =
-  import.meta.env.VITE_GO_BACKEND_URL ||
-  import.meta.env.VITE_API_BASE_URL ||
-  import.meta.env.VITE_BACKEND_URL ||
-  "";
+// In local dev, the deployed backend's CORS allowlist rejects the
+// localhost origin outright — every request fails before it even reaches
+// the server. Route through Vite's dev-only proxy (see vite.config.ts)
+// instead, which forwards server-to-server and isn't subject to browser
+// CORS. Production builds are unaffected — import.meta.env.DEV is false.
+const API_BASE_URL = import.meta.env.DEV
+  ? "/go-api"
+  : (import.meta.env.VITE_GO_BACKEND_URL ||
+     import.meta.env.VITE_API_BASE_URL ||
+     import.meta.env.VITE_BACKEND_URL ||
+     "");
 
 function resolveUrl(path: string): string {
   if (!API_BASE_URL) {
@@ -131,6 +140,10 @@ async function parseResponse(response: Response): Promise<unknown> {
 }
 
 async function authHeaders(): Promise<Record<string, string>> {
+  // Wait for the Supabase client's first real session result before ever
+  // reading a token — reading getSession() before that has settled can hand
+  // back a not-yet-hydrated/stale session and send the request into a 401.
+  await authReady;
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
   if (!token) {
@@ -141,20 +154,57 @@ async function authHeaders(): Promise<Record<string, string>> {
   };
 }
 
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
-  let response: Response;
+// No request to the Go backend may hang indefinitely — a stalled DNS lookup,
+// a blocked port, or a server that accepts the connection but never replies
+// must fail fast into the Supabase fallback path instead of leaving the
+// caller's await stuck forever (see requestRide.ts / isBackendUnavailable).
+// Kept short deliberately: a fast failure with a retry affordance beats a
+// long hang that just delays the same failure.
+const REQUEST_TIMEOUT_MS = 8_000;
+
+async function doFetch(method: string, path: string, headers: Record<string, string>, body?: unknown): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
-    response = await fetch(resolveUrl(path), {
+    return await fetch(resolveUrl(path), {
       method,
       headers: {
-        ...(await authHeaders()),
+        ...headers,
         ...(body === undefined ? {} : { "Content-Type": "application/json" }),
       },
       body: body === undefined ? undefined : JSON.stringify(body),
+      signal: controller.signal,
     });
   } catch (error) {
-    console.warn("[GoBackend] request failed", { method, path, error: String(error) });
-    throw new GoBackendError("Network error while contacting backend", "NETWORK_ERROR", undefined, error);
+    const timedOut = (error as { name?: string })?.name === "AbortError";
+    console.warn("[GoBackend] request failed", { method, path, timedOut, error: String(error) });
+    throw new GoBackendError(
+      timedOut ? "Backend request timed out" : "Network error while contacting backend",
+      "NETWORK_ERROR",
+      undefined,
+      error
+    );
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function request<T>(method: string, path: string, body?: unknown, isRetry = false): Promise<T> {
+  // Resolved outside the fetch try/catch below so an auth failure (no/expired
+  // session) surfaces as UNAUTHENTICATED instead of being masked as a generic
+  // network error.
+  const headers = await authHeaders();
+  const response = await doFetch(method, path, headers, body);
+
+  // The session looked valid client-side but the server rejected the token
+  // (e.g. it expired between attach and receipt) — refresh once and retry
+  // before surfacing an error, instead of failing a call that would have
+  // succeeded a moment later.
+  if (response.status === 401 && !isRetry) {
+    const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
+    if (!refreshError && refreshed.session) {
+      return request<T>(method, path, body, true);
+    }
   }
 
   const payload = await parseResponse(response);

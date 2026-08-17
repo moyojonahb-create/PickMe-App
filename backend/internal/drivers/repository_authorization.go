@@ -36,23 +36,23 @@ var defaultGetDriverAuthStatus GetDriverAuthStatusFunc = func(ctx context.Contex
 		return status, nil
 	}
 
-	// Attempt to query a canonical drivers table. If the table or columns don't exist,
-	// treat as non-existent driver record and return Exists=false.
-	var approved, active, suspended bool
-	var deleted bool
+	// public.drivers has no approved/active/suspended/deleted_at columns and
+	// is keyed by user_id (its own `id` is an unrelated internal PK) — the
+	// previous query here selected columns that don't exist and joined on
+	// the wrong key, so it always failed to scan and fell through to
+	// Exists=false, denying every real driver unconditionally. Eligibility
+	// is actually carried entirely by the `status` text column (see the
+	// 'pending' | 'approved' | 'suspended' | 'banned' check constraint).
+	var driverStatus string
 
 	row := repoPool.QueryRow(ctx, `
-SELECT
-  COALESCE(approved, false)  AS approved,
-  COALESCE(active, true)     AS active,
-  COALESCE(suspended, false) AS suspended,
-  (deleted_at IS NOT NULL)   AS deleted
+SELECT status
 FROM public.drivers
-WHERE id = $1
+WHERE user_id = $1
 LIMIT 1
 `, userID.String())
 
-	if err := row.Scan(&approved, &active, &suspended, &deleted); err != nil {
+	if err := row.Scan(&driverStatus); err != nil {
 		// If row not found or any error, log at debug and return Exists=false without exposing error.
 		// Only return real error on unexpected DB failures.
 		log.Println("GetDriverAuthorizationStatus: drivers table missing or row not found:", err)
@@ -60,10 +60,10 @@ LIMIT 1
 	}
 
 	status.Exists = true
-	status.Approved = approved
-	status.Active = active
-	status.Suspended = suspended
-	status.Deleted = deleted
+	status.Approved = driverStatus == "approved"
+	status.Active = driverStatus != "banned"
+	status.Suspended = driverStatus == "suspended"
+	status.Deleted = false
 
 	return status, nil
 }

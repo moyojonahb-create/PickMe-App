@@ -2,6 +2,7 @@
 import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabaseClient';
+import { markAuthReady } from '@/lib/authReady';
 
 interface AuthContextType {
   user: User | null;
@@ -35,6 +36,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
+        markAuthReady();
       }
     );
 
@@ -51,6 +53,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
+        markAuthReady();
       })
       .catch((err: unknown) => {
         if (!mounted) return;
@@ -58,6 +61,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setSession(null);
         setUser(null);
         setLoading(false);
+        markAuthReady();
       });
 
     return () => {

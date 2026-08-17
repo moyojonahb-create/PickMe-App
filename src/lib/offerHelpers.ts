@@ -6,6 +6,7 @@ import { goBackend, type GoOfferCreateRequest } from '@/lib/goBackendClient';
 import { decimalToMinor } from '@/lib/money';
 import { normalizeRideRow } from '@/lib/rideContract';
 import { isGoBackendConfigured, isBackendUnavailable } from '@/lib/rideMatching';
+import { authReady } from '@/lib/authReady';
 
 export type Offer = {
   id: string;
@@ -57,12 +58,15 @@ export type DriverProfile = {
   plate_number: string | null;
   vehicle_make: string | null;
   vehicle_model: string | null;
+  vehicle_color: string | null;
+  vehicle_photo_url: string | null;
   is_online: boolean | null;
   trial_ends_at: string | null;
   gender: string | null;
   avatar_url: string | null;
   rating_avg: number | null;
   total_trips: number | null;
+  preferred_service_area?: string | null;
 };
 
 // Round to nearest $0.50
@@ -86,10 +90,16 @@ export function defaultNightMultiplier(): number {
 }
 
 async function getUserOrThrow() {
-  const { data, error } = await supabase.auth.getUser();
+  // getSession() reads the already-hydrated local session instead of making
+  // a round trip to /auth/v1/user — that round trip was the head-of-line
+  // blocker stalling getDriverProfile() (and everything sequenced after it
+  // on the driver dashboard) for upwards of 14s. RLS still enforces the real
+  // JWT server-side on every query, so this loses no security here.
+  await authReady;
+  const { data, error } = await supabase.auth.getSession();
   if (error) throw new Error(error.message);
-  if (!data?.user) throw new Error("Please log in.");
-  return data.user;
+  if (!data?.session?.user) throw new Error("Please log in.");
+  return data.session.user;
 }
 
 // Fetch pending offers for a ride (with LIMIT to prevent overload)
@@ -125,7 +135,7 @@ export async function fetchDriversByIds(driverIds: string[]): Promise<Record<str
   const [driversRes, profilesRes] = await Promise.all([
     supabase
       .from("drivers")
-      .select("id, user_id, status, vehicle_type, plate_number, vehicle_make, vehicle_model, is_online, trial_ends_at, gender, avatar_url, rating_avg, total_trips")
+      .select("id, user_id, status, vehicle_type, plate_number, vehicle_make, vehicle_model, vehicle_color, is_online, trial_ends_at, gender, avatar_url, rating_avg, total_trips")
       .in("user_id", driverIds)
       .limit(driverIds.length),
     supabase
@@ -203,7 +213,7 @@ export async function getDriverProfile(): Promise<DriverProfile | null> {
 
   const { data, error } = await supabase
     .from("drivers")
-    .select("id, user_id, status, vehicle_type, plate_number, vehicle_make, vehicle_model, is_online, trial_ends_at, gender, avatar_url, rating_avg, total_trips")
+    .select("id, user_id, status, vehicle_type, plate_number, vehicle_make, vehicle_model, vehicle_color, is_online, trial_ends_at, gender, avatar_url, rating_avg, total_trips, preferred_service_area")
     .eq("user_id", user.id)
     .maybeSingle();
   

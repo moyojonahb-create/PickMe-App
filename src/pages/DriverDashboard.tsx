@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { motion } from "framer-motion";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
+import DriverBottomNav from "@/components/driver/DriverBottomNav";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/hooks/useAuth";
 import { useFemaleTheme } from "@/hooks/useFemaleTheme";
@@ -8,86 +9,65 @@ import { useOpenRidesRealtime } from "@/hooks/useRideRealtime";
 import {
   fetchOpenRides,
   getDriverProfile,
-  submitOffer,
-  clampTo5,
-  isNightLocal,
-  defaultNightMultiplier,
   type DriverProfile,
 } from "@/lib/offerHelpers";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import {
   ArrowLeft,
-  MapPin,
   Navigation,
   Minus,
   Plus,
   Send,
   Radio,
-  Bell,
   Volume2,
-  History,
   Wallet,
   CheckCircle2,
   Clock,
   AlertTriangle,
-  MessageCircle,
   Star,
   TrendingUp,
   Zap,
-  BarChart3,
-  CreditCard,
-  Phone,
-  PhoneCall,
+  Menu,
+  ChevronRight,
+  Car,
+  DollarSign,
 } from "lucide-react";
 import { playAlert, vibrateAlert, showBrowserNotification } from "@/lib/alerts";
 import { playAcceptedSound, playNewRequestSound } from "@/lib/notificationSounds";
 import { updateDriverLocation } from "@/lib/driverLocation";
 import { useVoiceNavigation } from "@/hooks/useVoiceNavigation";
-import { filterActiveRides, getSecondsRemaining, expireOldRides } from "@/lib/rideExpiry";
+import { filterActiveRides, expireOldRides } from "@/lib/rideExpiry";
 import { normalizeRideRow } from "@/lib/rideContract";
 import { preloadAllTownPricing, type TownPricingConfig } from "@/hooks/useTownPricing";
 
-import { completeTrip } from "@/lib/completeTrip";
-import { canCurrentDriverOperate, createNotification, isCurrentDriverTopDriver } from "@/lib/businessApi";
-import WalletBalance from "@/components/wallet/WalletBalance";
-import DepositModal from "@/components/wallet/DepositModal";
-import TransactionsSheet from "@/components/wallet/TransactionsSheet";
-import { RideCommunication } from "@/components/ride/RideCommunication";
+import { canCurrentDriverOperate, isCurrentDriverTopDriver } from "@/lib/businessApi";
+import PickMeLogo from "@/components/PickMeLogo";
+import { NotificationBell } from "@/components/NotificationCenter";
+import defaultDriverAvatar from "@/assets/driver-avatar-jonah.png";
+import searchCarImage from "@/assets/search-car.png";
 
-import { PrimaryButton } from "@/components/ui/primary-button";
-import { SecondaryButton } from "@/components/ui/secondary-button";
-import { InputField } from "@/components/ui/input-field";
-import { EmptyState } from "@/components/ui/empty-state";
-import { SectionHeader } from "@/components/ui/section-header";
-import DriverNavigationView from "@/components/driver/DriverNavigationView";
 import FullScreenNavigation from "@/components/driver/FullScreenNavigation";
+import DriverConnectedTrip, { type RiderInfo } from "@/components/driver/DriverConnectedTrip";
 import DriverSettingsSheet from "@/components/driver/DriverSettingsSheet";
 import type { Coordinates } from "@/lib/osrm";
 import { useAgoraCall } from "@/hooks/useAgoraCall";
 import IncomingCallModal from "@/components/ride/IncomingCallModal";
 import ActiveCallOverlay from "@/components/ride/ActiveCallOverlay";
-import VoiceCallButton from "@/components/ride/VoiceCallButton";
 import DriverEarningsDashboard from "@/components/driver/DriverEarningsDashboard";
 import DriverSelfieCheck from "@/components/driver/DriverSelfieCheck";
 
-import MapboxMap from "@/components/map/LazyMapboxMap";
-import { useNearbyDrivers } from "@/hooks/useNearbyDrivers";
-import { useOSRMRoute } from "@/hooks/useOSRMRoute";
 import { runLocationFraudChecks } from "@/lib/fraudDetection";
 import { useFatigueMonitor } from "@/hooks/useFatigueMonitor";
 import FatigueAlert from "@/components/driver/FatigueAlert";
-import RidePreferenceTags from "@/components/ride/RidePreferenceTags";
-import RideRequestCard from "@/components/driver/RideRequestCard";
-import DriverOfferModal from "@/components/driver/DriverOfferModal";
-import PassengerInfoCard from "@/components/driver/PassengerInfoCard";
 import TopFlashBanner from "@/components/ui/top-flash-banner";
 
 import { subscribeRiderComing } from "@/lib/rideSignals";
-import { goBackend, type GoDriverPresenceRequest, type GoRideStatusRequest } from "@/lib/goBackendClient";
+import { setDriverOnline } from "@/lib/driverPresence";
+import { useDriverRideAlerts, type DriverServiceArea } from "@/hooks/useDriverRideAlerts";
+import { useAppBootstrap } from "@/hooks/useAppBootstrap";
 import { getDriverWalletSummary } from "@/lib/walletApi";
 import { Footprints } from "lucide-react";
 
@@ -118,58 +98,53 @@ type Ride = {
 
 export default function DriverDashboard() {
   const nav = useNavigate();
+  const location = useLocation();
   const { user, loading: authLoading } = useAuth();
   const { setFemaleMode } = useFemaleTheme();
+  const { profile: cachedProfile, driverProfile: cachedDriverProfile, refreshDriverProfile } = useAppBootstrap();
 
-  const [profile, setProfile] = useState<DriverProfile | null>(null);
+  // Seeded from the splash-time cache (see useAppBootstrap) so a returning
+  // driver gets a fully-rendered dashboard on the very first frame instead
+  // of a skeleton — refresh() below still re-fetches for freshness, but
+  // never flips `loading` back to true, so there's no flash once seeded.
+  const [profile, setProfile] = useState<DriverProfile | null>((cachedDriverProfile as unknown as DriverProfile) ?? null);
   const [rides, setRides] = useState<Ride[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!cachedDriverProfile);
   const [error, setError] = useState<string | null>(null);
-  const [isOnline, setIsOnline] = useState(false);
+  // Seeded from the splash-time cache so the toggle shows the driver's real
+  // last-known status instead of flashing "Offline" on every mount while
+  // refresh() below re-fetches it — this is corrected against the DB within
+  // one refresh() cycle either way.
+  const [isOnline, setIsOnline] = useState(cachedDriverProfile?.is_online ?? false);
   const [togglingOnline, setTogglingOnline] = useState(false);
 
-  const [selectedRide, setSelectedRide] = useState<Ride | null>(null);
-  const [mult, setMult] = useState(defaultNightMultiplier());
-  const [offerPrice, setOfferPrice] = useState(50);
-  const [eta, setEta] = useState(10);
-  const [note, setNote] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [messagesOpen, setMessagesOpen] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
-  const [depositModalOpen, setDepositModalOpen] = useState(false);
-  const [transactionsOpen, setTransactionsOpen] = useState(false);
-  const [activeTrip, setActiveTrip] = useState<{ id: string; pickup_address: string; dropoff_address: string; fare: number; user_id: string; status: string; pickup_lat: number; pickup_lon: number; dropoff_lat: number; dropoff_lon: number; payment_method: string; passenger_name?: string | null; passenger_phone?: string | null } | null>(null);
-  const [earningsOpen, setEarningsOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [fullName, setFullName] = useState("");
+  const [todayTrips, setTodayTrips] = useState(0);
+  const [todayDistanceKm, setTodayDistanceKm] = useState(0);
+  const [todayEarnings, setTodayEarnings] = useState<number | null>(null);
+  const [yesterdayEarnings, setYesterdayEarnings] = useState<number | null>(null);
+  const [onlineMinutesToday, setOnlineMinutesToday] = useState<number | null>(null);
+  const [activeTrip, setActiveTrip] = useState<{ id: string; pickup_address: string; dropoff_address: string; fare: number; user_id: string; status: string; pickup_lat: number; pickup_lon: number; dropoff_lat: number; dropoff_lon: number; payment_method: string; distance_km?: number | null; passenger_count?: number | null; passenger_name?: string | null; passenger_phone?: string | null } | null>(null);
+  const [riderInfo, setRiderInfo] = useState<RiderInfo | null>(null);
+  const [earningsOpen, setEarningsOpen] = useState(Boolean((location.state as { openEarnings?: boolean } | null)?.openEarnings));
   const [driverCoords, setDriverCoords] = useState<Coordinates | null>(null);
   const [riderPhone, setRiderPhone] = useState<string | null>(null);
-  const [completing, setCompleting] = useState(false);
   const [isTopDriver, setIsTopDriver] = useState(false);
   const [selfieCheckOpen, setSelfieCheckOpen] = useState(false);
   const [pendingOnlineAfterSelfie, setPendingOnlineAfterSelfie] = useState(false);
   const [townPricingMap, setTownPricingMap] = useState<Record<string, TownPricingConfig>>({});
-  const [ridePreferences, setRidePreferences] = useState<Record<string, { quiet_ride: boolean; cool_temperature: boolean; wav_required?: boolean; hearing_impaired?: boolean; gender_preference?: string }>>({});
   const [fullNavMode, setFullNavMode] = useState(false);
   const [riderComingBanner, setRiderComingBanner] = useState<{ open: boolean; name?: string }>({ open: false });
-  const [statusUpdating, setStatusUpdating] = useState(false);
   const [driverBalance, setDriverBalance] = useState(0);
 
-  const quickStats = useMemo(() => [
-    { label: "Rating", value: profile?.rating_avg?.toFixed(1) || "—", icon: Star, tone: "primary" },
-    { label: "Trips", value: String(profile?.total_trips || 0), icon: TrendingUp, tone: "accent" },
-    { label: "Wallet", value: `$${driverBalance % 1 === 0 ? driverBalance : driverBalance.toFixed(2)}`, icon: Zap, tone: "gradient" },
-  ], [profile?.rating_avg, profile?.total_trips, driverBalance]);
-
-  const shiftSummary = useMemo(() => isOnline
-    ? {
-        title: "Online & ready",
-        description: "You can receive nearby requests now.",
-        tone: "emerald",
-      }
-    : {
-        title: "Offline",
-        description: "Use the settings menu to go online when you're ready.",
-        tone: "muted",
-      }, [isOnline]);
+  const greeting = useMemo(() => {
+    const hour = new Date().getHours();
+    if (hour < 12) return "Good morning";
+    if (hour < 18) return "Good afternoon";
+    return "Good evening";
+  }, []);
 
   const lastRideIds = useRef<Set<string>>(new Set());
   const locationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -178,9 +153,103 @@ export default function DriverDashboard() {
     if (!user) return;
     const data = await getDriverWalletSummary();
     setDriverBalance(data.balance ?? 0);
+
+    // Today's/yesterday's net earnings — same driver_earnings figures shown
+    // on the Wallet screen, just bucketed by day for the dashboard summary.
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const startOfYesterday = new Date(startOfToday.getTime() - 24 * 60 * 60 * 1000);
+    let todaySum = 0;
+    let yestSum = 0;
+    for (const e of data.earnings) {
+      const t = new Date(e.created_at).getTime();
+      if (t >= startOfToday.getTime()) todaySum += Number(e.driver_earnings);
+      else if (t >= startOfYesterday.getTime()) yestSum += Number(e.driver_earnings);
+    }
+    setTodayEarnings(todaySum);
+    setYesterdayEarnings(yestSum);
   }, [user]);
-  useEffect(() => { fetchDriverBalance(); }, [fetchDriverBalance]);
+  // Wallet summary is non-critical (only feeds the earnings cards) — deferred
+  // until the shell has actually rendered (`loading` false) instead of firing
+  // in the same burst as the profile/active-trip queries the first paint
+  // depends on. `loading` only ever goes true → false once per mount, so this
+  // still fires exactly once on load.
+  useEffect(() => {
+    if (loading || !user) return;
+    fetchDriverBalance();
+  }, [loading, user, fetchDriverBalance]);
   useEffect(() => { preloadAllTownPricing().then(setTownPricingMap); }, []);
+
+  // Driver's display name for the header greeting — sourced from the
+  // splash-time profile cache (see useAppBootstrap) instead of a dedicated
+  // `profiles` query, since that data is already in memory by the time this
+  // screen mounts.
+  useEffect(() => {
+    if (!user) return;
+    setFullName(cachedProfile?.full_name || user.email?.split('@')[0] || 'Driver');
+  }, [user, cachedProfile]);
+
+  // Service-area preference — gates which new-ride alerts fire below. Reused
+  // from the driver-profile fetch (refresh() below) instead of its own
+  // separate `drivers` round trip.
+  const [driverServiceArea, setDriverServiceArea] = useState<DriverServiceArea>(
+    (cachedDriverProfile?.preferred_service_area as DriverServiceArea | undefined) ?? 'both'
+  );
+  useEffect(() => {
+    setDriverServiceArea((profile?.preferred_service_area as DriverServiceArea | undefined) ?? 'both');
+  }, [profile?.preferred_service_area]);
+
+  // New-ride-request alert — real Supabase realtime subscription, fires the
+  // banner/sound/haptic/badge the instant a matching open ride is inserted.
+  const newRideAlert = useDriverRideAlerts(isOnline, driverServiceArea, profile?.gender);
+
+  // Today's completed-trip count + distance for the shift/performance cards.
+  const loadTodayTrips = useCallback(async () => {
+    if (!profile) return;
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const { data } = await supabase
+      .from('rides')
+      .select('distance_km')
+      .eq('driver_id', profile.id)
+      .eq('status', 'completed')
+      .gte('created_at', startOfToday.toISOString());
+    const list = data ?? [];
+    setTodayTrips(list.length);
+    setTodayDistanceKm(list.reduce((sum, r) => sum + Number((r as { distance_km: number | null }).distance_km ?? 0), 0));
+  }, [profile]);
+  useEffect(() => { loadTodayTrips(); }, [loadTodayTrips]);
+
+  // Today's online time — same driver_sessions source the fatigue monitor
+  // already reads, just bucketed to "since local midnight" instead of a
+  // rolling 24h window.
+  const loadOnlineTimeToday = useCallback(async () => {
+    if (!user) return;
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const { data } = await supabase
+      .from('driver_sessions')
+      .select('went_online_at, went_offline_at')
+      .eq('driver_id', user.id)
+      .gte('went_online_at', startOfToday.toISOString());
+    if (!data || data.length === 0) {
+      setOnlineMinutesToday(null);
+      return;
+    }
+    let totalMs = 0;
+    for (const s of data) {
+      const start = new Date(s.went_online_at).getTime();
+      const end = s.went_offline_at ? new Date(s.went_offline_at).getTime() : Date.now();
+      totalMs += Math.max(0, end - start);
+    }
+    setOnlineMinutesToday(Math.round(totalMs / 60000));
+  }, [user]);
+  useEffect(() => {
+    loadOnlineTimeToday();
+    if (!isOnline) return;
+    const id = setInterval(loadOnlineTimeToday, 60_000);
+    return () => clearInterval(id);
+  }, [loadOnlineTimeToday, isOnline]);
 
   // ── Listen for "rider is on the way" broadcast from rider ──
   useEffect(() => {
@@ -201,21 +270,29 @@ export default function DriverDashboard() {
     return unsub;
   }, [activeTrip?.id]);
 
+  // Keep online/offline status in sync across devices/tabs — e.g. an admin
+  // force-offline, or the driver having the dashboard open on two devices.
+  useEffect(() => {
+    if (!user) return;
+    const channel = supabase
+      .channel(`driver-presence-${user.id}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "drivers", filter: `user_id=eq.${user.id}` },
+        (payload) => {
+          const next = (payload.new as { is_online?: boolean } | null)?.is_online;
+          if (typeof next === "boolean") {
+            setIsOnline(next);
+            setProfile((prev) => (prev ? { ...prev, is_online: next } : prev));
+          }
+        }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [user]);
+
   // Fatigue monitor
   const fatigueState = useFatigueMonitor(user?.id, isOnline);
-
-  // Nearby drivers for map
-  const nearbyDrivers = useNearbyDrivers(isOnline);
-
-  // OSRM routes for map polylines
-  const driverToPickupRoute = useOSRMRoute(
-    driverCoords && activeTrip ? { lat: driverCoords.lat, lng: driverCoords.lng } : null,
-    activeTrip ? { lat: activeTrip.pickup_lat, lng: activeTrip.pickup_lon } : null
-  );
-  const pickupToDropoffRoute = useOSRMRoute(
-    activeTrip ? { lat: activeTrip.pickup_lat, lng: activeTrip.pickup_lon } : null,
-    activeTrip ? { lat: activeTrip.dropoff_lat, lng: activeTrip.dropoff_lon } : null
-  );
 
   // WebRTC voice calling for active trip
 
@@ -298,8 +375,14 @@ export default function DriverDashboard() {
   const toggleOnline = async (online: boolean) => {
     if (!profile || togglingOnline) return;
 
+    // Local dev only: skip the selfie check and operability gate so going
+    // online doesn't require a camera/trial-status round trip while testing
+    // UI. import.meta.env.DEV is false in any real production build, so
+    // this never applies to real drivers.
+    const skipVerification = import.meta.env.DEV;
+
     // If going online, require selfie check first (once per session)
-    if (online && !pendingOnlineAfterSelfie) {
+    if (online && !pendingOnlineAfterSelfie && !skipVerification) {
       const lastSelfie = sessionStorage.getItem('pickme-selfie-verified');
       if (!lastSelfie) {
         setSelfieCheckOpen(true);
@@ -310,7 +393,7 @@ export default function DriverDashboard() {
 
     setTogglingOnline(true);
     try {
-      if (online) {
+      if (online && !skipVerification) {
         const canOperate = await canCurrentDriverOperate();
         if (!canOperate) {
           toast.error("Cannot go online", {
@@ -322,11 +405,11 @@ export default function DriverDashboard() {
         }
       }
 
-      const payload: GoDriverPresenceRequest = { is_online: online };
-      await goBackend.post("/api/drivers/me/presence", payload);
+      await setDriverOnline(online, driverCoords);
 
       setIsOnline(online);
       setProfile({ ...profile, is_online: online });
+      void refreshDriverProfile();
 
       if (online) {
         toast.success("You're now online!", { description: "You'll see new ride requests" });
@@ -369,15 +452,20 @@ export default function DriverDashboard() {
         return;
       }
 
-      // Fetch active trip (accepted/in_progress) assigned to this driver
-      const { data: activeTripData } = await supabase
+      // Fetch active trip (accepted/in_progress) assigned to this driver.
+      // `ride_status` isn't a real column on `rides` (only `status` is) —
+      // the old two-column .or() silently 400'd on every call since only
+      // `data` was destructured, so this always looked like "no active
+      // trip" even when one existed.
+      const { data: activeTripData, error: activeTripErr } = await supabase
         .from("rides")
         .select("*")
         .or(`driver_id.eq.${p.id},driver_id.eq.${user?.id}`)
-        .or("status.in.(accepted,enroute,enroute_pickup,in_progress,arrived),ride_status.in.(accepted,enroute,arrived,ongoing)")
+        .in("status", ["accepted", "enroute", "enroute_pickup", "in_progress", "arrived"])
         .order("updated_at", { ascending: false })
         .limit(1)
         .maybeSingle();
+      if (activeTripErr) console.warn("[DriverDashboard] active trip query failed:", activeTripErr.message);
       
       if (activeTripData) {
         const activeTripRow = activeTripData as unknown as Record<string, unknown>;
@@ -397,9 +485,29 @@ export default function DriverDashboard() {
           dropoff_lat: Number(activeTripRow.dropoff_lat ?? 0),
           dropoff_lon: Number(activeTripRow.dropoff_lon ?? 0),
           payment_method: String(activeTripRow.payment_method || 'cash'),
+          distance_km: activeTripRow.distance_km != null ? Number(activeTripRow.distance_km) : null,
+          passenger_count: activeTripRow.passenger_count != null ? Number(activeTripRow.passenger_count) : null,
           passenger_name: null,
           passenger_phone: null,
         });
+
+        // Rider's own profile (name/avatar/gender) + their completed-trip
+        // count — real data for the connected-trip screen's rider card, not
+        // the booking-contact override fetched separately below.
+        void (async () => {
+          const riderId = String(activeTripRow.user_id ?? activeTripRow.rider_id ?? '');
+          if (!riderId) return;
+          const [{ data: riderProfileRow }, { count }] = await Promise.all([
+            supabase.from('profiles').select('full_name, avatar_url, gender').eq('user_id', riderId).maybeSingle(),
+            supabase.from('rides').select('id', { count: 'exact', head: true }).eq('user_id', riderId).eq('status', 'completed'),
+          ]);
+          setRiderInfo({
+            full_name: riderProfileRow?.full_name ?? null,
+            avatar_url: riderProfileRow?.avatar_url ?? null,
+            gender: riderProfileRow?.gender ?? null,
+            completedTrips: count ?? null,
+          });
+        })();
 
         // Passenger contact details live in a protected table and are only
         // readable once this driver is actually assigned to the ride.
@@ -438,88 +546,85 @@ export default function DriverDashboard() {
         } else if (newStatus === 'in_progress' && prevStatus !== 'in_progress') {
           toast.info("Navigating to drop-off — follow in-app directions");
         }
-        // Fetch rider phone
-        const { data: riderProfile } = await supabase
+        // Fetch rider phone — fire-and-forget, only feeds the connected-trip
+        // card and shouldn't hold up the rest of the dashboard.
+        void supabase
           .from("profiles")
           .select("phone")
           .eq("user_id", String(activeTripRow.user_id ?? activeTripRow.rider_id ?? ''))
-          .maybeSingle();
-        setRiderPhone(riderProfile?.phone ?? null);
+          .maybeSingle()
+          .then(({ data: riderProfile }) => setRiderPhone(riderProfile?.phone ?? null));
 
         // Preferences are batch-fetched below with all ride IDs
       } else {
         setActiveTrip(null);
         setRiderPhone(null);
+        setRiderInfo(null);
       }
 
-      // Check if top driver for priority access
-      const topStatus = await isCurrentDriverTopDriver();
-      setIsTopDriver(topStatus);
+      // Everything the dashboard shell needs to decide what to render
+      // (profile, approval status, active trip) is in hand — unblock the
+      // page now. Top-driver status, and the open-rides list below, are
+      // non-critical/list-only and load in just after first paint instead
+      // of gating "interactive" on them.
+      setLoading(false);
+
+      // Check if top driver for priority access — non-critical (only
+      // affects priority-access UI), so a backend hiccup here shouldn't
+      // take down the rest of the dashboard the way an unhandled throw
+      // into this function's own catch block would.
+      void (async () => {
+        try {
+          setIsTopDriver(await isCurrentDriverTopDriver());
+        } catch {
+          setIsTopDriver(false);
+        }
+      })();
 
       // Only fetch rides if driver is online
       if (p.is_online) {
-        // Expire old rides server-side first
-        await expireOldRides();
-        const list = await fetchOpenRides(p.gender);
-        const activeList = filterActiveRides(list);
+        void (async () => {
+          try {
+            // Expire old rides server-side first
+            await expireOldRides();
+            const list = await fetchOpenRides(p.gender);
+            const activeList = filterActiveRides(list);
 
-        setRides(activeList as unknown as Ride[]);
+            setRides(activeList as unknown as Ride[]);
 
-        // Fetch preferences for all visible rides
-        const allRideIds = activeList.map(r => String(r.id));
-        if (activeTripData) allRideIds.push(String((activeTripData as unknown as Record<string, unknown>).id));
-        if (allRideIds.length > 0) {
-          const { data: allPrefs } = await supabase
-            .from("ride_preferences")
-            .select("ride_id, quiet_ride, cool_temperature, wav_required, hearing_impaired, gender_preference")
-            .in("ride_id", allRideIds);
-          if (allPrefs) {
-            const prefsMap: Record<string, { quiet_ride: boolean; cool_temperature: boolean; wav_required?: boolean; hearing_impaired?: boolean; gender_preference?: string }> = {};
-            for (const pref of allPrefs) {
-              const p = pref as Record<string, unknown>;
-              prefsMap[pref.ride_id] = { 
-                quiet_ride: pref.quiet_ride, 
-                cool_temperature: pref.cool_temperature,
-                wav_required: (p.wav_required as boolean) ?? false,
-                hearing_impaired: (p.hearing_impaired as boolean) ?? false,
-                gender_preference: (p.gender_preference as string) ?? 'any',
-              };
+            // Notify on new rides with LOUD sound and voice
+            const currentIds = new Set<string>(list.map((r) => String(r.id)));
+            let hasNewRide = false;
+            for (const id of currentIds) {
+              if (!lastRideIds.current.has(id)) {
+                hasNewRide = true;
+                break;
+              }
             }
-            setRidePreferences(prev => ({ ...prev, ...prefsMap }));
+
+            if (hasNewRide) {
+              // Simple beep for incoming rides
+              playNewRequestSound();
+              vibrateAlert();
+              showBrowserNotification(
+                "🚗 New Ride Request",
+                "A rider is looking for a driver near you",
+                "/driver"
+              );
+
+              toast.info("🚗 NEW RIDE REQUEST!", {
+                description: "A rider is looking for a driver - respond quickly!",
+                duration: 10000,
+              });
+            }
+            lastRideIds.current = currentIds;
+          } catch (e: unknown) {
+            console.warn("[DriverDashboard] open rides fetch failed:", (e as Error).message);
           }
-        }
-
-        // Notify on new rides with LOUD sound and voice
-        const currentIds = new Set<string>(list.map((r) => String(r.id)));
-        let hasNewRide = false;
-        for (const id of currentIds) {
-          if (!lastRideIds.current.has(id)) {
-            hasNewRide = true;
-            break;
-          }
-        }
-
-        if (hasNewRide) {
-          // Simple beep for incoming rides
-          playNewRequestSound();
-          vibrateAlert();
-          showBrowserNotification(
-            "🚗 New Ride Request",
-            "A rider is looking for a driver near you",
-            "/driver"
-          );
-
-          toast.info("🚗 NEW RIDE REQUEST!", {
-            description: "A rider is looking for a driver - respond quickly!",
-            duration: 10000,
-          });
-        }
-        lastRideIds.current = currentIds;
+        })();
       } else {
         setRides([]);
       }
-
-      setLoading(false);
     } catch (e: unknown) {
       setError((e as Error).message);
       setLoading(false);
@@ -560,124 +665,10 @@ export default function DriverDashboard() {
     return () => clearInterval(interval);
   }, [isOnline]);
 
-  const chooseRide = (r: Ride) => {
-    setSelectedRide(r);
-    const base = Math.max(0.50, Math.round(((r.fare || 5) * mult) * 2) / 2);
-    setOfferPrice(base);
-    setEta(Math.max(5, Math.round(r.duration_minutes / 2)));
-    setNote(isNightLocal() ? "Night service" : "");
-  };
-
-  const fareStep = 0.50;
-  const fareMin = 0.50;
-
-  const inc = () => setOfferPrice((p) => Math.round((p + 0.50) * 2) / 2);
-  const dec = () => setOfferPrice((p) => Math.max(0.50, Math.round((p - 0.50) * 2) / 2));
-
-  const sendOffer = async () => {
-    if (!selectedRide || submitting) return;
-
-    // Check if ride has expired before sending
-    if (selectedRide.expires_at && new Date(selectedRide.expires_at).getTime() < Date.now()) {
-      toast.error("This request has expired");
-      setSelectedRide(null);
-      return;
-    }
-
-    try {
-      setSubmitting(true);
-      setError(null);
-      await submitOffer({
-        ride_id: selectedRide.id,
-        price: offerPrice,
-        eta_minutes: eta,
-        message: note,
-      });
-      toast.success("Offer sent!", { description: `${fmtUSD(offerPrice)} for ${eta} min ETA` });
-      setSelectedRide(null);
-    } catch (e: unknown) {
-      setError((e as Error).message);
-      toast.error("Failed to send offer", { description: (e as Error).message });
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const updateTripStatus = async (
-    nextStatus: "enroute" | "arrived" | "in_progress",
-    expectedStatus: string,
-    successMessage: string,
-    options?: { openNavigation?: boolean; notifyArrived?: boolean }
-  ) => {
-    if (!activeTrip || statusUpdating) return;
-    if (!navigator.onLine) {
-      toast.error("You're offline", { description: "Reconnect before updating trip status." });
-      return;
-    }
-    if (activeTrip.status !== expectedStatus) {
-      toast.error("Trip status changed", { description: "Refreshing latest trip details…" });
-      refresh();
-      return;
-    }
-
-    setStatusUpdating(true);
-    try {
-      const payload: GoRideStatusRequest = {
-        status: nextStatus,
-        expected_status: expectedStatus,
-      };
-      await goBackend.post(`/api/rides/${activeTrip.id}/status`, payload);
-
-      setActiveTrip((prev) => prev?.id === activeTrip.id ? { ...prev, status: nextStatus } : prev);
-      toast.info(successMessage);
-      if (options?.openNavigation) setFullNavMode(true);
-
-      if (options?.notifyArrived) {
-        createNotification({
-          user_id: activeTrip.user_id,
-          title: "🚗 Your driver has arrived!",
-          body: "Your driver is at the pickup point. Please meet them now.",
-          notification_type: "driver_arrived",
-        }).catch(() => {});
-      }
-    } catch (e: unknown) {
-      toast.error("Failed to update trip", { description: (e as Error).message });
-      refresh();
-    } finally {
-      setStatusUpdating(false);
-    }
-  };
-
-  const handleCompleteTrip = async () => {
-    if (!activeTrip || completing) return;
-    if (!navigator.onLine) {
-      toast.error("You're offline", { description: "Reconnect before completing the trip." });
-      return;
-    }
-    if (activeTrip.status !== "in_progress") {
-      toast.error("Trip not started", { description: "Start the ride before completing it." });
-      return;
-    }
-    setCompleting(true);
-    try {
-      const result = await completeTrip(activeTrip.id);
-      if (!(result as Record<string, unknown>)?.ok) {
-        throw new Error(((result as Record<string, unknown>)?.reason as string) || "Failed to complete trip");
-      }
-      const r = result as Record<string, unknown>;
-      const payMethod = activeTrip.payment_method === 'ecocash' ? ' (Paid via EcoCash)' : activeTrip.payment_method === 'wallet' ? ' (Paid via Wallet)' : '';
-      toast.success("Trip completed!", {
-        description: `Fare: ${fmtUSD(Number(r.fare_usd ?? 0))}${payMethod} • Commission: ${fmtUSD(Number(r.commission_usd ?? 0))} • You earned: ${fmtUSD(Number(r.driver_earnings_usd ?? 0))}`,
-      });
-      setActiveTrip(null);
-      fetchDriverBalance();
-      refresh();
-    } catch (e: unknown) {
-      toast.error("Failed to complete trip", { description: (e as Error).message });
-    } finally {
-      setCompleting(false);
-    }
-  };
+  // Trip status transitions (enroute/arrived/in_progress/complete) all now
+  // happen inside FullScreenNavigation once the driver taps Navigate — it
+  // owns those goBackend calls itself and reports back via onTripUpdate/
+  // onTripComplete, so this page no longer needs its own copies.
 
   if (authLoading || loading) {
     return (
@@ -708,6 +699,11 @@ export default function DriverDashboard() {
         <Card>
           <CardContent className="pt-6">
             <p className="text-destructive">{error || "Driver profile not found."}</p>
+            {error && (
+              <Button variant="outline" onClick={() => { setLoading(true); refresh(); }} className="mt-4 mr-2">
+                Retry
+              </Button>
+            )}
             <Button onClick={() => nav("/drive")} className="mt-4">
               Complete Registration
             </Button>
@@ -764,6 +760,7 @@ export default function DriverDashboard() {
           driverCoords={driverCoords}
           userId={user!.id}
           riderPhone={riderPhone}
+          riderInfo={riderInfo}
           onTripUpdate={(trip) => {
             setActiveTrip(trip);
           }}
@@ -776,6 +773,59 @@ export default function DriverDashboard() {
           onExit={() => setFullNavMode(false)}
           onStartCall={startCall}
           callStatus={callStatus}
+        />
+      </>
+    );
+  }
+
+  // Connected trip, not yet navigating — full-screen map + bottom sheet
+  // (matches the reference "trip accepted, ready to navigate" screen).
+  // Everything from "Navigate" onward is FullScreenNavigation above, which
+  // already owns arrived/in_progress/complete via its own status-aware
+  // action button — so this screen only needs to get the driver there.
+  if (activeTrip) {
+    return (
+      <>
+        {callStatus !== "idle" && (
+          <ActiveCallOverlay
+            status={callStatus}
+            duration={callDuration}
+            isMuted={isMuted}
+            isSpeaker={isSpeaker}
+            onToggleMute={toggleMute}
+            onToggleSpeaker={toggleSpeaker}
+            onEndCall={endCall}
+            otherUserName="Rider"
+          />
+        )}
+        {incomingCall && (
+          <IncomingCallModal
+            callerId={incomingCall.callerId}
+            onAnswer={answerCall}
+            onDecline={declineIncomingCall}
+          />
+        )}
+        <DriverConnectedTrip
+          activeTrip={activeTrip}
+          riderInfo={riderInfo}
+          riderPhone={riderPhone}
+          driverCoords={driverCoords}
+          userId={user!.id}
+          onNavigate={() => setFullNavMode(true)}
+          onOpenSettings={() => setSettingsOpen(true)}
+        />
+        <DriverSettingsSheet
+          profile={profile}
+          isOnline={isOnline}
+          togglingOnline={togglingOnline}
+          voiceEnabled={voiceEnabled}
+          voiceSupported={voiceSupported}
+          onToggleOnline={toggleOnline}
+          onToggleVoice={setVoiceEnabled}
+          onProfileUpdate={setProfile}
+          open={settingsOpen}
+          onOpenChange={setSettingsOpen}
+          hideTrigger
         />
       </>
     );
@@ -839,388 +889,284 @@ export default function DriverDashboard() {
         subtitle="They've left and are heading to your location now"
       />
 
-      <div className="shrink-0 bg-background/95 backdrop-blur-lg border-b border-border/60 px-5 py-3.5 z-10">
+      {/* ── New ride request — realtime Supabase INSERT on rides, not a poll ── */}
+      <TopFlashBanner
+        open={!!newRideAlert.incoming}
+        onClose={newRideAlert.dismiss}
+        durationMs={15_000}
+        icon={<Car className="w-7 h-7" />}
+        title="New ride request"
+        subtitle={
+          newRideAlert.incoming
+            ? `${newRideAlert.incoming.pickup_address} → ${newRideAlert.incoming.dropoff_address}${newRideAlert.incoming.distance_km != null ? ` · ${newRideAlert.incoming.distance_km.toFixed(1)} km` : ""} · ${fmtUSD(newRideAlert.incoming.fare)}`
+            : undefined
+        }
+        actionLabel="View request"
+        onAction={() => { newRideAlert.clearBadge(); nav("/driver/requests"); }}
+      />
+
+      <div className="shrink-0 bg-background/95 backdrop-blur-lg border-b border-border/60 px-5 py-3 z-10">
         <div className="flex items-center justify-between max-w-lg mx-auto">
-          <Button variant="ghost" size="icon" onClick={() => nav(-1)} className="w-11 h-11 rounded-2xl active:scale-90 transition-all">
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <h1 className="font-extrabold tracking-tight text-base">Driver Dashboard</h1>
-          <div className="flex items-center gap-2.5">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setEarningsOpen(!earningsOpen)}
-              className="w-11 h-11 rounded-2xl text-muted-foreground active:scale-90 transition-all"
-              title="Earnings"
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setSettingsOpen(true)}
+              aria-label="Menu"
+              className="w-10 h-10 -ml-1.5 flex items-center justify-center rounded-2xl text-foreground active:scale-90 transition-transform"
             >
-              <BarChart3 className="h-5 w-5" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setTransactionsOpen(true)}
-              className="w-11 h-11 rounded-2xl text-muted-foreground active:scale-90 transition-all"
+              <Menu className="h-5 w-5" />
+            </button>
+            <PickMeLogo size="sm" />
+          </div>
+          <div className="flex items-center gap-2">
+            <NotificationBell />
+            <button
+              type="button"
+              onClick={() => nav("/driver/profile")}
+              aria-label="Profile"
+              className="relative w-10 h-10 rounded-full overflow-hidden ring-2 ring-border/60 active:scale-90 transition-transform"
             >
-              <History className="h-5 w-5" />
-            </Button>
-            <WalletBalance
-              balance={driverBalance}
-              onClick={() => nav("/driver/wallet")}
-              size="sm"
-            />
-            <DriverSettingsSheet
-              profile={profile}
-              isOnline={isOnline}
-              togglingOnline={togglingOnline}
-              voiceEnabled={voiceEnabled}
-              voiceSupported={voiceSupported}
-              onToggleOnline={toggleOnline}
-              onToggleVoice={setVoiceEnabled}
-              onProfileUpdate={setProfile}
-            />
+              <img src={profile.avatar_url || defaultDriverAvatar} alt={fullName || "Driver"} className="w-full h-full object-cover" />
+              <span
+                className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-background ${isOnline ? "bg-emerald-500" : "bg-muted-foreground/50"}`}
+              />
+            </button>
           </div>
         </div>
       </div>
 
       <div className="flex-1 overflow-y-auto overscroll-contain">
-      <div className="max-w-lg mx-auto p-5 space-y-5 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))]">
+      <div className="max-w-lg mx-auto p-5 space-y-4 pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))]">
 
-        <div className="rounded-2xl border border-border/50 bg-card/80 p-4 shadow-sm">
+        {/* Greeting */}
+        <div>
+          <h1 className="text-xl font-extrabold tracking-tight text-foreground">
+            {greeting}{fullName ? `, ${fullName.split(" ")[0]}` : ""} <span aria-hidden>👋</span>
+          </h1>
+          <p className="text-sm text-muted-foreground mt-0.5">Let's make it a great day!</p>
+        </div>
+
+        {/* Driver Status */}
+        <div className="rounded-2xl border border-border/60 bg-card p-4 shadow-sm">
           <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">Shift status</p>
-              <p className="mt-1 text-base font-bold text-foreground">{shiftSummary.title}</p>
-              <p className="text-sm text-muted-foreground">{shiftSummary.description}</p>
+            <div className="flex items-center gap-3 min-w-0">
+              <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 ${isOnline ? "bg-emerald-500/10" : "bg-muted"}`}>
+                <Radio className={`h-5 w-5 ${isOnline ? "text-emerald-600" : "text-muted-foreground"}`} />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Driver Status</p>
+                <p className={`mt-0.5 text-base font-extrabold flex items-center gap-1.5 ${isOnline ? "text-emerald-600" : "text-foreground"}`}>
+                  <span className={`w-2 h-2 rounded-full shrink-0 ${isOnline ? "bg-emerald-500" : "bg-muted-foreground/50"}`} />
+                  {isOnline ? "Online" : "Offline"}
+                </p>
+              </div>
             </div>
-            <div className={`rounded-full px-3 py-1 text-xs font-semibold ${shiftSummary.tone === 'emerald' ? 'bg-emerald-500/10 text-emerald-600' : 'bg-muted text-muted-foreground'}`}>
-              {isOnline ? 'Online' : 'Offline'}
-            </div>
+            <Button
+              size="sm"
+              disabled={togglingOnline}
+              onClick={() => toggleOnline(!isOnline)}
+              className={isOnline ? "shrink-0 rounded-full border border-border bg-transparent text-foreground hover:bg-muted" : "shrink-0 rounded-full bg-primary text-primary-foreground hover:brightness-110"}
+              variant={isOnline ? "outline" : "default"}
+            >
+              {togglingOnline ? "…" : isOnline ? "Go Offline" : "Go Online"}
+            </Button>
           </div>
-          <div className="mt-3 grid grid-cols-3 gap-2">
-            {quickStats.map((stat, i) => {
-              const Icon = stat.icon;
-              return (
-                <motion.div
-                  key={stat.label}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.05 }}
-                  className={`rounded-xl p-2.5 text-center ${stat.tone === 'gradient' ? 'bg-primary/10' : stat.tone === 'accent' ? 'bg-accent/10' : 'bg-muted/60'}`}
+          <p className="mt-2.5 text-xs text-muted-foreground">
+            {isOnline ? "You're ready to receive ride requests." : "Go online when you're ready to receive ride requests."}
+          </p>
+        </div>
+
+        {/* New Ride Requests — the hero action, always in brand red */}
+        <button
+          type="button"
+          onClick={() => { newRideAlert.clearBadge(); nav("/driver/requests"); }}
+          className="relative w-full overflow-hidden rounded-2xl p-5 text-left active:scale-[0.98] transition-transform"
+          style={{ background: "var(--gradient-primary)" }}
+        >
+          <div className="absolute -top-8 -right-8 w-36 h-36 rounded-full bg-white/10 blur-2xl pointer-events-none" />
+          {isOnline && rides.length > 0 ? (
+            <div className="relative flex items-center gap-4">
+              <div className="relative shrink-0">
+                <div className="w-14 h-14 rounded-full border border-white/30 flex items-center justify-center">
+                  <Car className="w-6 h-6 text-white" />
+                </div>
+                <span
+                  className="absolute -top-1.5 -right-1.5 min-w-[22px] h-[22px] px-1 rounded-full flex items-center justify-center text-[11px] font-black text-foreground"
+                  style={{ background: "#FFDD00" }}
                 >
-                  <Icon className={`mx-auto mb-1 h-3.5 w-3.5 ${stat.tone === 'gradient' ? 'text-primary' : stat.tone === 'accent' ? 'text-accent' : 'text-foreground'}`} />
-                  <p className="text-sm font-bold tabular-nums text-foreground">{stat.value}</p>
-                  <p className="text-[8px] font-medium uppercase tracking-[0.18em] text-muted-foreground">{stat.label}</p>
-                </motion.div>
-              );
-            })}
+                  {rides.length}
+                </span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-white font-black text-base tracking-tight">NEW RIDE REQUESTS</p>
+                <p className="text-[13px] font-bold mt-0.5" style={{ color: "#FFDD00" }}>{rides.length} request{rides.length !== 1 ? "s" : ""} waiting</p>
+                <p className="text-[12px] text-white/85 mt-0.5">Tap to view and accept rides</p>
+              </div>
+              <div className="w-8 h-8 rounded-full bg-white/95 flex items-center justify-center shrink-0">
+                <ChevronRight className="w-4 h-4 text-primary" />
+              </div>
+            </div>
+          ) : (
+            <div className="relative flex items-center gap-4">
+              <div className="w-14 h-14 rounded-full bg-white overflow-hidden shrink-0">
+                <img src={searchCarImage} alt="" className="w-full h-full object-cover" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-white font-black text-sm tracking-tight">NO NEW RIDE REQUESTS</p>
+                <p className="text-[12px] text-white/85 mt-0.5">
+                  {isOnline ? "We'll notify you when a passenger requests a ride." : "Go online to start receiving requests."}
+                </p>
+              </div>
+              <div className="w-8 h-8 rounded-full bg-white/95 flex items-center justify-center shrink-0">
+                <ChevronRight className="w-4 h-4 text-primary" />
+              </div>
+            </div>
+          )}
+        </button>
+
+        {/* Performance summary */}
+        <div className="grid grid-cols-3 gap-2.5">
+          <div className="rounded-2xl p-3 text-center" style={{ background: "#FFE8E6" }}>
+            <Car className="mx-auto mb-1 h-4 w-4" style={{ color: "#B81104" }} />
+            <p className="text-lg font-black tabular-nums text-foreground">{todayTrips}</p>
+            <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-muted-foreground">Trips Today</p>
+          </div>
+          <div className="rounded-2xl bg-accent/15 p-3 text-center">
+            <DollarSign className="mx-auto mb-1 h-4 w-4 text-accent-foreground" />
+            <p className="text-lg font-black tabular-nums text-foreground">{todayEarnings !== null ? fmtUSD(todayEarnings) : "—"}</p>
+            <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-muted-foreground">Earnings</p>
+          </div>
+          <div className="rounded-2xl bg-muted p-3 text-center">
+            <Star className="mx-auto mb-1 h-4 w-4 fill-accent text-accent" />
+            <p className="text-lg font-black tabular-nums text-foreground">{profile?.rating_avg ? profile.rating_avg.toFixed(1) : "New"}</p>
+            <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-muted-foreground">Rating</p>
           </div>
         </div>
 
+        {/* Today's Earnings + Wallet */}
+        <div className="grid grid-cols-2 gap-2.5">
+          <button
+            type="button"
+            onClick={() => setEarningsOpen(true)}
+            className="rounded-2xl border border-border/60 bg-card p-3.5 text-left active:bg-muted/40 transition-colors"
+          >
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">Today's Earnings</p>
+            <p className="text-lg font-black text-foreground mt-1">{todayEarnings !== null ? fmtUSD(todayEarnings) : "—"}</p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              {todayTrips} trip{todayTrips !== 1 ? "s" : ""}
+              {todayEarnings !== null && yesterdayEarnings !== null && yesterdayEarnings > 0 && (
+                <span className={todayEarnings >= yesterdayEarnings ? "text-emerald-600 font-semibold" : "text-destructive font-semibold"}>
+                  {" "}· {todayEarnings >= yesterdayEarnings ? "↑" : "↓"} {Math.abs(Math.round(((todayEarnings - yesterdayEarnings) / yesterdayEarnings) * 100))}% vs yesterday
+                </span>
+              )}
+            </p>
+            <p className="text-[12px] font-bold text-primary mt-2 flex items-center gap-1">View earnings <ChevronRight className="w-3 h-3" /></p>
+          </button>
 
-        {/* Earnings Dashboard (toggled via icon) */}
+          <button
+            type="button"
+            onClick={() => nav("/driver/wallet")}
+            className="rounded-2xl border border-border/60 bg-card p-3.5 text-left active:bg-muted/40 transition-colors"
+          >
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">Wallet</p>
+            <p className="text-lg font-black text-foreground mt-1">{fmtUSD(driverBalance)}</p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">Available balance</p>
+            <p className="text-[12px] font-bold text-primary mt-2 flex items-center gap-1">Open wallet <ChevronRight className="w-3 h-3" /></p>
+          </button>
+        </div>
+
+        {/* Today's Shift */}
+        {(onlineMinutesToday !== null || todayTrips > 0 || todayDistanceKm > 0) && (
+          <div className="rounded-2xl border border-border/60 bg-card p-4">
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground mb-3">Today's Shift</p>
+            <div className="grid grid-cols-3 gap-2 text-center">
+              {onlineMinutesToday !== null && (
+                <div>
+                  <p className="text-sm font-extrabold text-foreground tabular-nums">{Math.floor(onlineMinutesToday / 60)}h {onlineMinutesToday % 60}m</p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">Online time</p>
+                </div>
+              )}
+              <div>
+                <p className="text-sm font-extrabold text-foreground tabular-nums">{todayTrips}</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">Trips</p>
+              </div>
+              <div>
+                <p className="text-sm font-extrabold text-foreground tabular-nums">{todayDistanceKm.toFixed(1)} km</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">Distance</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Quick Actions */}
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground mb-2">Quick Actions</p>
+          <div className="grid grid-cols-4 gap-2">
+            {[
+              { label: "Earnings", icon: TrendingUp, bg: "#FFE8E6", fg: "#B81104", onClick: () => setEarningsOpen(true) },
+              { label: "Trips", icon: Clock, bg: "#FFF6D9", fg: "#8A6D00", onClick: () => nav("/driver/trips") },
+              { label: "Wallet", icon: Wallet, bg: "#E4F7EC", fg: "#0F9D58", onClick: () => nav("/driver/wallet") },
+              { label: "Vehicle", icon: Car, bg: "#E8F0FE", fg: "#1A56DB", onClick: () => nav("/driver/profile") },
+            ].map((action) => (
+              <button
+                key={action.label}
+                type="button"
+                onClick={action.onClick}
+                className="flex flex-col items-center gap-1.5 rounded-2xl py-3 active:scale-95 transition-transform"
+              >
+                <div className="w-11 h-11 rounded-2xl flex items-center justify-center" style={{ background: action.bg }}>
+                  <action.icon className="w-4.5 h-4.5" style={{ color: action.fg }} />
+                </div>
+                <span className="text-[11px] font-semibold text-foreground">{action.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Earnings Dashboard (toggled via quick action / bottom-nav Earnings tab) */}
         {earningsOpen && (
           <DriverEarningsDashboard />
         )}
 
-
-        {/* Trial Banner */}
+        {/* Free Trial — secondary, compact */}
         {profile && trialActive && (
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="rounded-2xl border border-accent/30 bg-accent/8 p-3.5"
+          <button
+            type="button"
+            onClick={() => nav("/driver/wallet")}
+            className="w-full flex items-center gap-3 rounded-2xl border border-accent/30 bg-accent/8 p-3.5 text-left active:opacity-80 transition-opacity"
           >
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-accent/15 flex items-center justify-center shrink-0">
-                <Clock className="h-4.5 w-4.5 text-accent" />
-              </div>
-              <div>
-                <p className="font-semibold text-sm text-foreground">Free Trial Active</p>
-                <p className="text-xs text-muted-foreground">
-                  {trialDaysLeft} day{trialDaysLeft !== 1 ? "s" : ""} remaining — no fees
-                </p>
-              </div>
+            <div className="w-9 h-9 rounded-xl bg-accent/20 flex items-center justify-center shrink-0">
+              <Clock className="h-4.5 w-4.5 text-accent-foreground" />
             </div>
-          </motion.div>
-        )}
-
-        {/* Available Rides — top priority */}
-        <div className="space-y-3">
-          <SectionHeader
-            title="Available Rides"
-            right={isOnline && rides.length > 0 ? (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Bell className="h-4 w-4" />
-                <span>{rides.length} request{rides.length !== 1 ? "s" : ""}</span>
-              </div>
-            ) : undefined}
-          />
-
-          {activeTrip && (
-            <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4 shadow-sm">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">Active trip</p>
-                  <p className="mt-1 text-sm font-bold text-foreground">{activeTrip.pickup_address}</p>
-                  <p className="text-sm text-muted-foreground">{activeTrip.dropoff_address}</p>
-                </div>
-                <div className="rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary">{activeTrip.status}</div>
-              </div>
-              <div className="mt-3 flex items-center justify-between gap-2">
-                <p className="text-sm font-semibold text-foreground">{fmtUSD(Number(activeTrip.fare))}</p>
-                <Button size="sm" variant="secondary" onClick={() => setFullNavMode(true)}>
-                  Open navigation
-                </Button>
-              </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-bold text-sm text-foreground">Free Trial Active</p>
+              <p className="text-xs text-muted-foreground">
+                {trialDaysLeft} day{trialDaysLeft !== 1 ? "s" : ""} remaining · No platform fees
+              </p>
             </div>
-          )}
-
-          {!isOnline ? (
-            <EmptyState
-              title="You're currently offline"
-              description="Switch online from the settings menu to start receiving ride requests."
-              className="py-8"
-            />
-          ) : rides.length === 0 ? (
-            <EmptyState title="No open ride requests right now" description="Stay online — new requests will appear automatically." className="py-8" />
-          ) : (
-            rides.map((r, i) => (
-                <RideRequestCard
-                  key={r.id}
-                  ride={r}
-                  preferences={ridePreferences[r.id] ?? null}
-                  secsLeft={getSecondsRemaining(r.expires_at ?? null)}
-                  index={i}
-                  onClick={() => chooseRide(r)}
-                  fmtUSD={fmtUSD}
-                />
-            ))
-          )}
-        </div>
-
-        {/* Offer Modal */}
-        {selectedRide && (
-          <DriverOfferModal
-            ride={selectedRide}
-            preferences={ridePreferences[selectedRide.id] ?? null}
-            offerPrice={offerPrice}
-            eta={eta}
-            note={note}
-            submitting={submitting}
-            onClose={() => setSelectedRide(null)}
-            onInc={inc}
-            onDec={dec}
-            onEtaChange={setEta}
-            onNoteChange={setNote}
-            onSubmit={sendOffer}
-            fmtUSD={fmtUSD}
-          />
-        )}
-
-        {/* Contact Rider — collapsed message panel */}
-        {activeTrip && (
-          <>
-            {/* Ride for Someone Else — passenger card */}
-            {activeTrip.passenger_name && activeTrip.passenger_phone && (
-              <PassengerInfoCard
-                passengerName={activeTrip.passenger_name}
-                passengerPhone={activeTrip.passenger_phone}
-                onMessage={() => setMessagesOpen(!messagesOpen)}
-              />
-            )}
-
-            <Card className="glass-card border-0">
-              <CardContent className="pt-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <p className="font-medium text-sm text-foreground flex items-center gap-2">
-                    <PhoneCall className="h-4 w-4 text-primary" /> Contact Rider
-                  </p>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setMessagesOpen(!messagesOpen)}
-                    className="w-9 h-9 rounded-xl"
-                    title="Messages"
-                  >
-                    <MessageCircle className={`h-4 w-4 ${messagesOpen ? 'text-primary' : 'text-muted-foreground'}`} />
-                  </Button>
-                </div>
-                {activeTrip.passenger_name && (
-                  <p className="text-xs text-muted-foreground">
-                    Booking contact: <span className="font-medium text-foreground">{activeTrip.passenger_name}</span>
-                  </p>
-                )}
-                <div className="grid grid-cols-3 gap-2">
-                  <VoiceCallButton
-                    onCall={startCall}
-                    disabled={callStatus !== "idle"}
-                    label="Data"
-                    className="w-full text-xs"
-                  />
-                  <a
-                    href={riderPhone ? `tel:${riderPhone.replace(/[^\d+]/g, "")}` : "#"}
-                    className="flex items-center justify-center gap-1 py-3 rounded-2xl font-medium text-xs text-center active:scale-95 transition-all"
-                    style={{ background: 'var(--gradient-primary)' }}
-                  >
-                    <Phone className="h-3.5 w-3.5 text-primary-foreground shrink-0" />
-                    <span className="text-primary-foreground">Phone</span>
-                  </a>
-                  <button
-                    onClick={() => setMessagesOpen(!messagesOpen)}
-                    className="flex items-center justify-center gap-1 py-3 rounded-2xl bg-accent/80 backdrop-blur-sm text-accent-foreground font-medium text-xs text-center active:scale-95 transition-all"
-                  >
-                    <MessageCircle className="h-3.5 w-3.5" /> <span>Message</span>
-                  </button>
-                </div>
-                {!riderPhone && (
-                  <p className="text-xs text-muted-foreground">Rider phone not available — use Call (Data) for in-app voice.</p>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Messages Panel — only when toggled */}
-            {messagesOpen && (
-              <Card className="glass-card border-0">
-                <CardContent className="pt-4">
-                  <RideCommunication
-                    rideId={activeTrip.id}
-                    currentUserId={user!.id}
-                    otherUserPhone={riderPhone}
-                    riderId={activeTrip.user_id}
-                  />
-                </CardContent>
-              </Card>
-            )}
-          </>
-        )}
-
-        {/* Map only shown when no active trip */}
-        {!activeTrip && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.98 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="rounded-2xl overflow-hidden border border-border/30 shadow-sm"
-          >
-            <div className="h-[45vh] min-h-[300px]">
-              <MapboxMap
-                driverLocation={driverCoords ? { lat: driverCoords.lat, lng: driverCoords.lng } : undefined}
-                drivers={nearbyDrivers}
-                defaultCenter={driverCoords ? { lat: driverCoords.lat, lng: driverCoords.lng } : undefined}
-                defaultZoom={15}
-                className="w-full h-full"
-              />
-            </div>
-          </motion.div>
-        )}
-
-        {/* Active Trip — fare + complete */}
-        {activeTrip && (
-          <Card className="border-accent/40 bg-accent/5 backdrop-blur-sm">
-            <CardContent className="pt-4">
-              <div className="flex items-start gap-3 mb-3">
-                <div className="flex flex-col items-center">
-                  <MapPin className="h-4 w-4 text-primary" />
-                  <div className="w-0.5 h-6 bg-border" />
-                  <Navigation className="h-4 w-4 text-destructive" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold truncate">{activeTrip.pickup_address}</p>
-                  <p className="text-sm text-muted-foreground truncate mt-5">{activeTrip.dropoff_address}</p>
-                  {/* Ride preferences tags */}
-                  {ridePreferences[activeTrip.id] && (
-                    <div className="mt-1.5">
-                      <RidePreferenceTags quietRide={ridePreferences[activeTrip.id]?.quiet_ride} coolTemperature={ridePreferences[activeTrip.id]?.cool_temperature} wavRequired={ridePreferences[activeTrip.id]?.wav_required} hearingImpaired={ridePreferences[activeTrip.id]?.hearing_impaired} genderPreference={ridePreferences[activeTrip.id]?.gender_preference} />
-                    </div>
-                  )}
-                </div>
-                <div className="text-right">
-                  <p className="font-black text-lg">{fmtUSD(Number(activeTrip.fare))}</p>
-                  {activeTrip.payment_method && activeTrip.payment_method !== 'cash' && (
-                    <div className="flex items-center gap-1 mt-1 justify-end">
-                      <CreditCard className="h-3 w-3 text-primary" />
-                      <span className="text-xs font-medium text-primary capitalize">{activeTrip.payment_method}</span>
-                    </div>
-                  )}
-                  {activeTrip.payment_method === 'cash' && (
-                    <span className="text-xs text-muted-foreground">Cash</span>
-                  )}
-                </div>
-              </div>
-              {activeTrip.status === 'accepted' && (
-                <Button
-                  className="w-full bg-primary text-primary-foreground hover:brightness-110 mb-2"
-                  size="lg"
-                  disabled={statusUpdating}
-                  onClick={() => updateTripStatus("enroute", "accepted", "Status: Enroute — heading to pickup", { openNavigation: true })}
-                >
-                  <Navigation className="h-4 w-4 mr-2" />
-                  Enroute to Pickup
-                </Button>
-              )}
-              {/* Navigate button for already-enroute trips */}
-              {['enroute', 'enroute_pickup', 'arrived', 'in_progress'].includes(activeTrip.status) && (
-                <Button
-                  className="w-full bg-blue-600 text-white hover:bg-blue-700 mb-2"
-                  size="lg"
-                  onClick={() => setFullNavMode(true)}
-                >
-                  <Navigation className="h-4 w-4 mr-2" />
-                  Open Navigation
-                </Button>
-              )}
-              {activeTrip.status === 'enroute' && (
-                <Button
-                  className="w-full bg-primary text-primary-foreground hover:brightness-105 mb-2"
-                  size="lg"
-                  disabled={statusUpdating}
-                  onClick={() => updateTripStatus("arrived", "enroute", "Status: Arrived — waiting for rider", { notifyArrived: true })}
-                >
-                  <MapPin className="h-4 w-4 mr-2" />
-                  I've Arrived
-                </Button>
-              )}
-              {activeTrip.status === 'arrived' && (
-                <Button
-                  className="w-full bg-primary text-primary-foreground hover:brightness-105 mb-2"
-                  size="lg"
-                  disabled={statusUpdating}
-                  onClick={() => updateTripStatus("in_progress", "arrived", "Rider picked up — navigating to dropoff", { openNavigation: true })}
-                >
-                  <CheckCircle2 className="h-4 w-4 mr-2" />
-                  Start Ride
-                </Button>
-              )}
-              <Button
-                className="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold"
-                size="lg"
-                onClick={handleCompleteTrip}
-                disabled={completing || statusUpdating || activeTrip.status !== "in_progress"}
-              >
-                <CheckCircle2 className="h-4 w-4 mr-2" />
-                {completing ? "Completing..." : "Complete Trip (15%)"}
-              </Button>
-            </CardContent>
-          </Card>
+            <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+          </button>
         )}
 
         {error && <p className="text-sm text-destructive text-center">{error}</p>}
         </div>
       </div>
 
-      {/* Deposit Modal */}
-      <DepositModal
-        isOpen={depositModalOpen}
-        onClose={() => { setDepositModalOpen(false); fetchDriverBalance(); }}
-        currentBalance={driverBalance}
+      <DriverSettingsSheet
+        profile={profile}
+        isOnline={isOnline}
+        togglingOnline={togglingOnline}
+        voiceEnabled={voiceEnabled}
+        voiceSupported={voiceSupported}
+        onToggleOnline={toggleOnline}
+        onToggleVoice={setVoiceEnabled}
+        onProfileUpdate={setProfile}
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
+        hideTrigger
       />
 
-      {/* Transactions Sheet */}
-      <TransactionsSheet
-        isOpen={transactionsOpen}
-        onClose={() => setTransactionsOpen(false)}
-        transactions={[]}
-        title="Wallet History"
-      />
+      <DriverBottomNav requestBadgeCount={newRideAlert.badgeCount} />
     </div>
   );
 }
