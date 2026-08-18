@@ -150,7 +150,8 @@ export default function App() {
           <Route path="/mapp/safety" element={<Navigate to="/safety" replace />} />
           <Route path="/mapp/*" element={<Navigate to="/ride" replace />} />
 
-          <Route path="/ride" element={<SuspenseWrap variant="ride"><AuthGuard><Ride /></AuthGuard></SuspenseWrap>} />
+          {/* Ride page is the landing experience — no sign-in required to browse/plan a ride */}
+          <Route path="/ride" element={<SuspenseWrap variant="ride"><Ride /></SuspenseWrap>} />
           <Route path="/ride/:rideId/matching" element={<SuspenseWrap variant="ride"><AuthGuard><RideMatching /></AuthGuard></SuspenseWrap>} />
           <Route path="/ride/:rideId" element={<SuspenseWrap><AuthGuard><RiderRideDetail /></AuthGuard></SuspenseWrap>} />
           <Route path="/rider/ride/:rideId" element={<SuspenseWrap><AuthGuard><RiderRideDetail /></AuthGuard></SuspenseWrap>} />
