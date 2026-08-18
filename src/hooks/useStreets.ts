@@ -74,9 +74,9 @@ export const useStreets = ({ searchQuery = '', townName = null, limit = 10 }: Us
             });
           };
           // Prefix beats contains beats keyword-only matches.
-          addRows(prefixRes.data as Street[] | null, 3);
-          addRows(containsRes.data as Street[] | null, 2);
-          addRows(keywordRes.data as Street[] | null, 1);
+          addRows(prefixRes.data as unknown as Street[] | null, 3);
+          addRows(containsRes.data as unknown as Street[] | null, 2);
+          addRows(keywordRes.data as unknown as Street[] | null, 1);
           merged.sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0));
           setStreets(merged.slice(0, limit));
         } catch (err) {
