@@ -45,8 +45,13 @@ export const useStreets = ({ searchQuery = '', townName = null, limit = 10 }: Us
       const controller = new AbortController();
       abortRef.current = controller;
 
+      // `streets` isn't in the generated DB types yet; untyped client avoids deep type instantiation.
+      const db = supabase as unknown as {
+        from: (t: string) => any;
+      };
       const scoped = () =>
-        supabase.from('streets').select('*').eq('is_active', true).eq('town', townName).abortSignal(controller.signal);
+        db.from('streets').select('*').eq('is_active', true).eq('town', townName).abortSignal(controller.signal);
+
 
       (async () => {
         try {
