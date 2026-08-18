@@ -45,8 +45,13 @@ export const useStreets = ({ searchQuery = '', townName = null, limit = 10 }: Us
       const controller = new AbortController();
       abortRef.current = controller;
 
+      // `streets` isn't in the generated DB types yet; untyped client avoids deep type instantiation.
+      const db = supabase as unknown as {
+        from: (t: string) => any;
+      };
       const scoped = () =>
-        supabase.from('streets').select('*').eq('is_active', true).eq('town', townName).abortSignal(controller.signal);
+        db.from('streets').select('*').eq('is_active', true).eq('town', townName).abortSignal(controller.signal);
+
 
       (async () => {
         try {
@@ -69,9 +74,9 @@ export const useStreets = ({ searchQuery = '', townName = null, limit = 10 }: Us
             });
           };
           // Prefix beats contains beats keyword-only matches.
-          addRows(prefixRes.data as Street[] | null, 3);
-          addRows(containsRes.data as Street[] | null, 2);
-          addRows(keywordRes.data as Street[] | null, 1);
+          addRows(prefixRes.data as unknown as Street[] | null, 3);
+          addRows(containsRes.data as unknown as Street[] | null, 2);
+          addRows(keywordRes.data as unknown as Street[] | null, 1);
           merged.sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0));
           setStreets(merged.slice(0, limit));
         } catch (err) {
