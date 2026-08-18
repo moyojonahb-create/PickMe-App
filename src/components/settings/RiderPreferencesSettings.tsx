@@ -187,7 +187,7 @@ function ArrivedSoundPicker() {
           previewArrivedSound(choice);
           toast.success(`Playing: ${ARRIVED_SOUND_OPTIONS.find((o) => o.value === choice)?.label}`);
         }}
-        className="w-full inline-flex items-center justify-center gap-2 h-11 rounded-xl bg-blue-600 text-white text-sm font-bold active:scale-[0.98] transition shadow-sm"
+        className="w-full inline-flex items-center justify-center gap-2 h-11 rounded-xl bg-primary hover:bg-primary/90 text-white text-sm font-bold active:scale-[0.98] transition shadow-sm"
       >
         <Play className="w-4 h-4" />
         Test sound

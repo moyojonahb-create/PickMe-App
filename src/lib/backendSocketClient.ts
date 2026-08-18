@@ -1,7 +1,12 @@
 import { getAuthToken, getFreshAuthToken } from "@/lib/backendClient";
 import { supabase } from "@/integrations/supabase/client";
 
-const WS_URL = import.meta.env.VITE_WS_URL || "";
+// Same dev-only proxy story as goBackendClient — the deployed backend
+// doesn't allow the localhost origin, so route the socket through Vite's
+// proxy in dev instead of connecting to it directly.
+const WS_URL = import.meta.env.DEV
+  ? `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/go-ws`
+  : (import.meta.env.VITE_WS_URL || "");
 const HEARTBEAT_MS = 25_000;
 const PONG_TIMEOUT_MS = 10_000;
 const MAX_BACKOFF_MS = 30_000;

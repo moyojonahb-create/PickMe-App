@@ -17,6 +17,14 @@ interface DriverSettingsSheetProps {
   onToggleOnline: (online: boolean) => void;
   onToggleVoice: (enabled: boolean) => void;
   onProfileUpdate: (updater: (prev: DriverProfile | null) => DriverProfile | null) => void;
+  /** Optional external control (e.g. opened from the Driver Profile screen's
+   * gear icon, or via router state) — falls back to its own internal state
+   * when omitted, so existing callers are unaffected. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  /** Hide the built-in gear trigger button when something else (like a
+   * header icon on another screen) is responsible for opening it. */
+  hideTrigger?: boolean;
 }
 
 export default function DriverSettingsSheet({
@@ -28,21 +36,28 @@ export default function DriverSettingsSheet({
   onToggleOnline,
   onToggleVoice,
   onProfileUpdate,
+  open: openProp,
+  onOpenChange,
+  hideTrigger,
 }: DriverSettingsSheetProps) {
-  const [open, setOpen] = useState(false);
+  const [openState, setOpenState] = useState(false);
+  const open = openProp ?? openState;
+  const setOpen = onOpenChange ?? setOpenState;
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
-      <SheetTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="w-11 h-11 rounded-2xl text-muted-foreground active:scale-90 transition-all"
-          title="Settings"
-        >
-          <Settings className="h-5 w-5" />
-        </Button>
-      </SheetTrigger>
+      {!hideTrigger && (
+        <SheetTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="w-11 h-11 rounded-2xl text-muted-foreground active:scale-90 transition-all"
+            title="Settings"
+          >
+            <Settings className="h-5 w-5" />
+          </Button>
+        </SheetTrigger>
+      )}
       <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto">
         <SheetHeader>
           <SheetTitle className="text-lg font-extrabold">Driver Settings</SheetTitle>

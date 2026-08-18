@@ -82,7 +82,7 @@ export default function DriverRatingModal({
 
   return (
     <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="w-full max-w-sm bg-background rounded-2xl p-6 space-y-5 animate-in zoom-in-95">
+      <div className="w-full max-w-sm bg-background rounded-3xl p-6 space-y-5 animate-in zoom-in-95">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-black text-foreground">Rate Your Driver</h2>
           <button

@@ -206,7 +206,7 @@ export default function TripReceipt({ ride, driverName, onRateDriver, hasRated, 
           <motion.span
             initial={{ scale: 0.8 }}
             animate={{ scale: 1 }}
-            className="text-2xl font-black text-primary"
+            className="text-2xl font-black text-primary tabular-nums"
           >
             ${Number(totalFare).toFixed(2)}
           </motion.span>
@@ -236,7 +236,7 @@ export default function TripReceipt({ ride, driverName, onRateDriver, hasRated, 
             variant="outline"
             className="h-11 rounded-2xl gap-1.5 text-xs font-semibold"
             onClick={() => {
-              const msg = encodeURIComponent(`🧾 Voyex Receipt ${receiptId}\nFrom: ${ride.pickup_address}\nTo: ${ride.dropoff_address}\nTotal: $${Number(totalFare).toFixed(2)}\nDate: ${format(new Date(ride.created_at), 'MMM d, h:mm a')}`);
+              const msg = encodeURIComponent(`🧾 PickMe Receipt ${receiptId}\nFrom: ${ride.pickup_address}\nTo: ${ride.dropoff_address}\nTotal: $${Number(totalFare).toFixed(2)}\nDate: ${format(new Date(ride.created_at), 'MMM d, h:mm a')}`);
               window.open(`https://wa.me/?text=${msg}`, '_blank');
             }}
           >
@@ -247,7 +247,7 @@ export default function TripReceipt({ ride, driverName, onRateDriver, hasRated, 
             variant="outline"
             className="h-11 rounded-2xl gap-1.5 text-xs font-semibold"
             onClick={() => {
-              const msg = encodeURIComponent(`Voyex Receipt ${receiptId}: $${Number(totalFare).toFixed(2)} from ${ride.pickup_address} to ${ride.dropoff_address}`);
+              const msg = encodeURIComponent(`PickMe Receipt ${receiptId}: $${Number(totalFare).toFixed(2)} from ${ride.pickup_address} to ${ride.dropoff_address}`);
               window.open(`sms:?body=${msg}`, '_self');
             }}
           >
@@ -260,7 +260,7 @@ export default function TripReceipt({ ride, driverName, onRateDriver, hasRated, 
             onClick={() => {
               if (navigator.share) {
                 navigator.share({
-                  title: `Voyex Receipt ${receiptId}`,
+                  title: `PickMe Receipt ${receiptId}`,
                   text: `Trip from ${ride.pickup_address} to ${ride.dropoff_address} — $${Number(totalFare).toFixed(2)}\nReceipt: ${receiptId}`,
                 });
               }
@@ -334,7 +334,7 @@ function FareSplitSection({ totalFare, receiptId }: { totalFare: number; receipt
 
       <div className="text-center pt-2 border-t border-border/30">
         <p className="text-xs text-muted-foreground">Each person pays</p>
-        <p className="text-2xl font-black text-primary">${perPerson.toFixed(2)}</p>
+        <p className="text-2xl font-black text-primary tabular-nums">${perPerson.toFixed(2)}</p>
       </div>
 
       {splitCount > 1 && (

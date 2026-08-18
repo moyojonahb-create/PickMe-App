@@ -39,7 +39,7 @@
  function getDriverMarkerColor(tripStatus?: string | null, isOnline?: boolean): { bg: string; border: string; label: string } {
    if (tripStatus === 'enroute' || tripStatus === 'in_progress') return { bg: '#ef4444', border: '#dc2626', label: 'bg-red-600' };
    if (tripStatus === 'accepted' || tripStatus === 'arrived') return { bg: '#f59e0b', border: '#d97706', label: 'bg-amber-500' };
-   if (isOnline) return { bg: '#1B3FA0', border: '#162F7A', label: 'bg-primary' };
+   if (isOnline) return { bg: '#B81104', border: '#7F0B02', label: 'bg-primary' };
    return { bg: '#6b7280', border: '#4b5563', label: 'bg-gray-500' };
  }
 
@@ -82,7 +82,7 @@
  const rideDropoffIcon = L.divIcon({
    html: `
      <div class="flex flex-col items-center">
-       <div class="w-7 h-7 rounded-full border-2 border-white shadow-md flex items-center justify-center" style="background:#1B3FA0">
+       <div class="w-7 h-7 rounded-full border-2 border-white shadow-md flex items-center justify-center" style="background:#B81104">
          <svg class="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24">
            <path d="M12 4l-8 8h5v8h6v-8h5z"/>
          </svg>

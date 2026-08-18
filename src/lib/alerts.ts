@@ -41,8 +41,8 @@ export function showBrowserNotification(title: string, body: string, url?: strin
     if (Notification.permission !== "granted") return;
     const notification = new Notification(title, {
       body,
-      icon: "/icons/voyex-icon-only.png",
-      badge: "/icons/voyex-icon-only.png",
+      icon: "/icons/pickme-app-icon.png",
+      badge: "/icons/pickme-app-icon.png",
       tag: "pickme-alert",
       requireInteraction: true,
     });

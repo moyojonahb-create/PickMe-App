@@ -10,7 +10,7 @@ import AppHeader from "./components/AppHeader";
 import RouteErrorBoundary from "./components/RouteErrorBoundary";
 import { prefetchPages } from "./lib/prefetchPages";
 import { recordPrefetched, warmFromCache } from "./lib/persistentPrefetch";
-import { supabase } from "./integrations/supabase/client";
+import { useAppBootstrap } from "./hooks/useAppBootstrap";
 
 // Warm chunk cache from previous session BEFORE React mounts —
 // keeps /ride, /wallet, /profile navigation instant after refresh.
@@ -22,6 +22,7 @@ import Ride from "./pages/Ride";
 // Marketing and secondary screens stay lazy.
 const Index = lazy(() => import("./pages/Index"));
 const Auth = lazy(() => import("./pages/Auth"));
+const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const Signup = lazy(() => import("./pages/Signup"));
 const RideDetail = lazy(() => import("./pages/RideDetail"));
 const DriverDashboard = lazy(() => import("./pages/DriverDashboard"));
@@ -46,6 +47,10 @@ const DriverLeaderboard = lazy(() => import("./pages/DriverLeaderboard"));
 const DriverModeLanding = lazy(() => import("./pages/DriverModeLanding"));
 const DriverRegistrationPage = lazy(() => import("./pages/DriverRegistrationPage"));
 const DriverWalletPage = lazy(() => import("./pages/DriverWalletPage"));
+const DriverProfile = lazy(() => import("./pages/driver/DriverProfile"));
+const DriverRideRequests = lazy(() => import("./pages/driver/DriverRideRequests"));
+const DriverRideDetails = lazy(() => import("./pages/driver/DriverRideDetails"));
+const DriverTrips = lazy(() => import("./pages/driver/DriverTrips"));
 const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard"));
 const AdminDrivers = lazy(() => import("./pages/admin/AdminDrivers"));
 const AdminDriverDetail = lazy(() => import("./pages/admin/AdminDriverDetail"));
@@ -92,8 +97,6 @@ function SuspenseWrap({
 // (prefetch is provided by ./lib/prefetchPages — it picks only the bundles
 //  the current user can actually reach.)
 
-const ADMIN_EMAIL = "moyojonahb@gmail.com";
-
 /** Tiny wrapper: shared white header above a Suspense'd page. */
 function MarketingShell({ children }: { children: React.ReactNode }) {
   return (
@@ -106,30 +109,17 @@ function MarketingShell({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   const Router = Capacitor.isNativePlatform() ? HashRouter : BrowserRouter;
-  // (no need to keep ctx in state — prefetch is fire-and-forget)
+  const { ready, role } = useAppBootstrap();
 
-  // Resolve auth/role context once, then kick off staggered idle-time prefetch.
-  // Anonymous landing visitors only get public + auth bundles — no driver/admin code.
+  // Splash dismissal is owned by AppBootstrapProvider (session, profile,
+  // favorites, recent trips, config and Mapbox all resolve, or its ~6s
+  // timeout elapses) — once that settles, kick off staggered idle-time
+  // prefetch using the role it already resolved, instead of re-fetching
+  // session/driver-status here too.
   useEffect(() => {
-    (window as any).__dismissSplash?.();
-    let cancelled = false;
-    (async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (cancelled) return;
-      const user = session?.user ?? null;
-      const isAdmin = user?.email?.toLowerCase() === ADMIN_EMAIL;
-      let isDriver = false;
-      if (user && !isAdmin) {
-        const { data: drv } = await supabase
-          .from("drivers").select("id").eq("user_id", user.id).maybeSingle();
-        isDriver = !!drv;
-      }
-      const ctx = { isAuthenticated: !!user, isDriver, isAdmin };
-      // ctx is fire-and-forget — pass directly to prefetch
-      prefetchPages(ctx);
-    })();
-    return () => { cancelled = true; };
-  }, []);
+    if (!ready) return;
+    prefetchPages({ isAuthenticated: role !== "guest", isDriver: role === "driver", isAdmin: role === "admin" });
+  }, [ready, role]);
 
   return (
     <Router>
@@ -142,6 +132,7 @@ export default function App() {
           <Route path="/" element={<Navigate to="/ride" replace />} />
           <Route path="/home" element={<SuspenseWrap><Index /></SuspenseWrap>} />
           <Route path="/auth" element={<MarketingShell><Auth /></MarketingShell>} />
+          <Route path="/reset-password" element={<MarketingShell><ResetPassword /></MarketingShell>} />
           <Route path="/login" element={<Navigate to="/auth" replace />} />
           <Route path="/signup" element={<MarketingShell><Signup /></MarketingShell>} />
 
@@ -177,6 +168,10 @@ export default function App() {
           <Route path="/driver/deposit" element={<SuspenseWrap><AuthGuard><DriverDepositPage /></AuthGuard></SuspenseWrap>} />
           <Route path="/driver/leaderboard" element={<SuspenseWrap><AuthGuard><DriverLeaderboard /></AuthGuard></SuspenseWrap>} />
           <Route path="/driver/wallet" element={<SuspenseWrap variant="wallet"><AuthGuard><DriverWalletPage /></AuthGuard></SuspenseWrap>} />
+          <Route path="/driver/profile" element={<SuspenseWrap><AuthGuard><DriverProfile /></AuthGuard></SuspenseWrap>} />
+          <Route path="/driver/requests" element={<SuspenseWrap><AuthGuard><DriverRideRequests /></AuthGuard></SuspenseWrap>} />
+          <Route path="/driver/ride/:rideId" element={<SuspenseWrap><AuthGuard><DriverRideDetails /></AuthGuard></SuspenseWrap>} />
+          <Route path="/driver/trips" element={<SuspenseWrap><AuthGuard><DriverTrips /></AuthGuard></SuspenseWrap>} />
 
           {/* Legacy negotiation screens are retired; Go Core V1 owns offers/lifecycle. */}
           <Route path="/negotiate/request" element={<Navigate to="/ride" replace />} />

@@ -71,13 +71,20 @@ function googleTypeToCategory(types: string[]): string {
 }
 
 // ── Search via Google Places Autocomplete ──
-async function searchGoogle(query: string, lat?: string, lng?: string, radiusKm?: number, viewbox?: string) {
-  if (!GOOGLE_API_KEY) return null;
+// Best-effort: the app runs on a rate-limited demo key, so any non-OK status
+// (OVER_QUERY_LIMIT, REQUEST_DENIED, missing key, network error, etc.) just
+// falls back to Nominatim below — it must never surface as a client error.
+async function searchGoogle(query: string, lat?: string, lng?: string, radiusKm?: number, viewbox?: string, sessionToken?: string) {
+  if (!GOOGLE_API_KEY) {
+    console.log('[google-places] skipped: GOOGLE_MAPS_API_KEY not set');
+    return null;
+  }
 
   const url = new URL('https://maps.googleapis.com/maps/api/place/autocomplete/json');
   url.searchParams.set('input', query);
   url.searchParams.set('key', GOOGLE_API_KEY);
   url.searchParams.set('components', 'country:zw');
+  if (sessionToken) url.searchParams.set('sessiontoken', sessionToken);
 
   // Location bias
   if (lat && lng) {
@@ -93,6 +100,10 @@ async function searchGoogle(query: string, lat?: string, lng?: string, radiusKm?
       return null;
     }
     const data = await res.json();
+    if (data.status === 'OVER_QUERY_LIMIT') {
+      console.warn('[google-places] daily/rate quota exhausted — falling back to Nominatim');
+      return null;
+    }
     if (data.status !== 'OK' || !data.predictions?.length) {
       console.log('[google-places] autocomplete status:', data.status, 'count:', data.predictions?.length || 0);
       return null;
@@ -112,12 +123,13 @@ async function searchGoogle(query: string, lat?: string, lng?: string, radiusKm?
 }
 
 // ── Get Google Place Details ──
-async function getGooglePlaceDetails(placeId: string) {
+async function getGooglePlaceDetails(placeId: string, sessionToken?: string) {
   if (!GOOGLE_API_KEY) return null;
   const url = new URL('https://maps.googleapis.com/maps/api/place/details/json');
   url.searchParams.set('place_id', placeId);
   url.searchParams.set('key', GOOGLE_API_KEY);
   url.searchParams.set('fields', 'geometry,name,formatted_address,types');
+  if (sessionToken) url.searchParams.set('sessiontoken', sessionToken);
 
   try {
     const res = await fetch(url.toString());
@@ -193,10 +205,11 @@ serve(async (req: Request) => {
 
     // ═══ PLACE DETAILS ═══
     const placeId = url.searchParams.get('placeId');
+    const sessionToken = url.searchParams.get('sessionToken') || undefined;
     if (placeId) {
       // Google place ID (starts with "Ch" typically)
       if (placeId.startsWith('Ch') || placeId.startsWith('Ei')) {
-        const details = await getGooglePlaceDetails(placeId);
+        const details = await getGooglePlaceDetails(placeId, sessionToken);
         if (details) {
           return new Response(JSON.stringify(details), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -233,8 +246,8 @@ serve(async (req: Request) => {
       });
     }
 
-    // 1️⃣ Try Google Places first
-    const googleResults = await searchGoogle(q, lat || undefined, lng || undefined, radiusKm, viewbox || undefined);
+    // 1️⃣ Try Google Places first (best-effort; see searchGoogle for fallback behavior)
+    const googleResults = await searchGoogle(q, lat || undefined, lng || undefined, radiusKm, viewbox || undefined, sessionToken);
 
     if (googleResults && googleResults.length > 0) {
       return new Response(JSON.stringify(googleResults.slice(0, 7)), {

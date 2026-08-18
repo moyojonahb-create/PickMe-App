@@ -9,12 +9,12 @@ export const PrimaryButton = React.forwardRef<HTMLButtonElement, PrimaryButtonPr
       <button
         ref={ref}
         className={cn(
-          "relative h-[52px] rounded-2xl px-6 text-[15px] font-bold text-primary-foreground active:scale-[0.97] transition-all duration-150 overflow-hidden",
+          "relative h-12 rounded-2xl px-6 text-[15px] font-bold text-primary-foreground active:scale-[0.97] transition-all duration-150 overflow-hidden",
           "disabled:opacity-50",
           className,
         )}
         style={{
-          background: 'linear-gradient(135deg, hsl(224 71% 37%), hsl(225 65% 48%))',
+          background: 'var(--gradient-primary)',
           boxShadow: 'var(--shadow-btn-primary)',
         }}
         {...props}

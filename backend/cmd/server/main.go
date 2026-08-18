@@ -230,20 +230,20 @@ func main() {
 	}
 
 	wsManager := websocket.NewManager().WithPubSub(redisClient)
-	wsManager.StartPubSub(context.Background())
-	// driverRegistry/riderRegistry are per-process only (see
-	// websocket.ConnectionRegistry doc comment). The direct offer notifier
-	// below looks drivers up by ID rather than broadcasting through
-	// wsManager's Redis pub/sub, so it only reaches a driver connected to
-	// this exact instance. Single backend replica only; see
+	// driverRegistry/riderRegistry are per-process connection caches (see
+	// websocket.ConnectionRegistry doc comment): looking a user up here only
+	// finds them if they're connected to this exact instance. wsManager's
+	// SendToUser covers that gap for the offer notifier below — it attempts
+	// local delivery via these registries first, then always also publishes
+	// over Redis pub/sub so an instance that actually holds the driver's
+	// connection delivers it too. That pub/sub fallback requires
+	// REDIS_ENABLED=true and a reachable Redis; see
 	// docs/deployment/websocket-scaling.md.
 	driverRegistry := websocket.NewConnectionRegistry()
 	riderRegistry := websocket.NewConnectionRegistry()
+	wsManager.WithUserRegistries(riderRegistry, driverRegistry)
+	wsManager.StartPubSub(context.Background())
 	dispatchService.WithOfferNotifier(dispatch.OfferNotifierFunc(func(ctx context.Context, offer dispatch.DriverOffer, ride dispatch.RideContext, expiresAt time.Time) {
-		driverSocket, exists := driverRegistry.Get(offer.DriverID)
-		if !exists {
-			return
-		}
 		payload, err := json.Marshal(fiber.Map{
 			"event":                "ride_offer",
 			"offer_id":             offer.OfferID,
@@ -261,9 +261,7 @@ func main() {
 			log.Println("Authoritative dispatch offer marshal warning:", err)
 			return
 		}
-		if !wsManager.Send(driverSocket, payload) {
-			driverRegistry.Delete(offer.DriverID)
-		}
+		wsManager.SendToUser(websocket.RoleDriver, offer.DriverID, payload)
 	}))
 
 	driverService := drivers.NewService(dbpool)

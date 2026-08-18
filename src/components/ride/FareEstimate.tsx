@@ -64,7 +64,7 @@ export default function FareEstimate({
             key={fareR}
             initial={{ scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            className="text-3xl font-bold text-foreground"
+            className="text-2xl font-black text-primary tabular-nums"
           >
             ${fareR.toFixed(2)}
           </motion.p>

@@ -5,16 +5,14 @@ import {
   ArrowUp,
   CheckCircle2,
   ChevronDown,
-  Clock,
+  ChevronUp,
   CornerUpLeft,
   CornerUpRight,
-  Gauge,
   MapPin,
   MessageCircle,
-  Navigation,
+  Navigation as NavigationIcon,
   Phone,
   RotateCw,
-  Route,
   Undo2,
   Volume2,
   VolumeX,
@@ -30,7 +28,10 @@ import { RideCommunication } from "@/components/ride/RideCommunication";
 import { goBackend } from "@/lib/goBackendClient";
 import { createNotification } from "@/lib/businessApi";
 import type { Coordinates } from "@/lib/osrm";
+import { getDetailedRoute, findCurrentStep, getManeuverInstruction, getVoiceInstruction, type RouteStep } from "@/lib/osrmSteps";
 import MapboxMap from "@/components/map/LazyMapboxMap";
+import type { MapEtaCard } from "@/components/MapboxMap";
+import type { RiderInfo } from "@/components/driver/DriverConnectedTrip";
 
 interface ActiveTrip {
   id: string;
@@ -44,6 +45,8 @@ interface ActiveTrip {
   dropoff_lat: number;
   dropoff_lon: number;
   payment_method: string;
+  distance_km?: number | null;
+  passenger_count?: number | null;
   passenger_name?: string | null;
   passenger_phone?: string | null;
 }
@@ -53,6 +56,7 @@ interface FullScreenNavigationProps {
   driverCoords: Coordinates | null;
   userId: string;
   riderPhone: string | null;
+  riderInfo?: RiderInfo | null;
   onTripUpdate: (trip: ActiveTrip) => void;
   onTripComplete: () => void;
   onExit: () => void;
@@ -60,18 +64,8 @@ interface FullScreenNavigationProps {
   callStatus: string;
 }
 
-interface NavigationStep {
-  instruction: string;
-  distance: number;
-  duration: number;
-  maneuver: string;
-  startLocation: Coordinates;
-  endLocation: Coordinates;
-}
-
 const ROUTE_REFETCH_INTERVAL = 30_000;
 const MIN_MOVE_M = 50;
-const ASSUMED_CITY_SPEED_MPS = 9.7;
 
 function fmtUSD(n: number): string {
   return n % 1 === 0 ? `$${n}` : `$${n.toFixed(2)}`;
@@ -154,14 +148,42 @@ function useSpeed(coords: Coordinates | null): number {
   return speed;
 }
 
-function ManeuverIcon({ maneuver, size = "lg" }: { maneuver: string; size?: "lg" | "sm" }) {
-  const cls = size === "lg" ? "h-10 w-10" : "h-5 w-5";
-  if (maneuver.includes("left") && maneuver.includes("u-turn")) return <Undo2 className={cls} />;
-  if (maneuver.includes("left")) return <CornerUpLeft className={cls} />;
-  if (maneuver.includes("right") && maneuver.includes("u-turn")) return <Undo2 className={`${cls} scale-x-[-1]`} />;
-  if (maneuver.includes("right")) return <CornerUpRight className={cls} />;
-  if (maneuver.includes("roundabout")) return <RotateCw className={cls} />;
+/** Short imperative headline matching the reference's "TURN LEFT" style —
+ * derived from the real OSRM maneuver, not guessed. */
+function maneuverHeadline(step: RouteStep): string {
+  const { type, modifier } = step.maneuver;
+  if (type === "arrive") return "ARRIVE";
+  if (type === "roundabout" || type === "rotary") return "ENTER ROUNDABOUT";
+  if (type === "depart") return "HEAD OUT";
+  if (type === "fork") return modifier === "left" ? "KEEP LEFT" : "KEEP RIGHT";
+  if (type === "merge") return "MERGE";
+  switch (modifier) {
+    case "left": return "TURN LEFT";
+    case "right": return "TURN RIGHT";
+    case "slight left": return "KEEP LEFT";
+    case "slight right": return "KEEP RIGHT";
+    case "sharp left": return "SHARP LEFT";
+    case "sharp right": return "SHARP RIGHT";
+    case "uturn": return "MAKE A U-TURN";
+    default: return "CONTINUE STRAIGHT";
+  }
+}
+
+function ManeuverIcon({ step, size = "lg" }: { step: RouteStep | null; size?: "lg" | "sm" }) {
+  const cls = size === "lg" ? "h-8 w-8" : "h-4 w-4";
+  if (!step) return <NavigationIcon className={cls} />;
+  const { type, modifier } = step.maneuver;
+  if (type === "arrive") return <CheckCircle2 className={cls} />;
+  if (type === "roundabout" || type === "rotary") return <RotateCw className={cls} />;
+  if (modifier === "uturn") return <Undo2 className={cls} />;
+  if (modifier?.includes("left")) return <CornerUpLeft className={cls} />;
+  if (modifier?.includes("right")) return <CornerUpRight className={cls} />;
   return <ArrowUp className={cls} />;
+}
+
+function fmtDistance(m: number): string {
+  if (m >= 1000) return `${(m / 1000).toFixed(1)} km`;
+  return `${Math.round(m / 10) * 10} m`;
 }
 
 export default function FullScreenNavigation({
@@ -169,21 +191,21 @@ export default function FullScreenNavigation({
   driverCoords,
   userId,
   riderPhone,
+  riderInfo,
   onTripUpdate,
   onTripComplete,
   onExit,
   onStartCall,
   callStatus,
 }: FullScreenNavigationProps) {
-  const [steps, setSteps] = useState<NavigationStep[]>([]);
-  const [routePath, setRoutePath] = useState<Coordinates[]>([]);
-  const [currentStepIndex, setCurrentStepIndex] = useState(0);
-  const [totalDistanceM, setTotalDistanceM] = useState(0);
-  const [totalDurationS, setTotalDurationS] = useState(0);
+  const [route, setRoute] = useState<{ geometry: string; steps: RouteStep[]; distanceKm: number; durationMinutes: number } | null>(null);
+  const [routeFailed, setRouteFailed] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
-  const [lastSpokenStep, setLastSpokenStep] = useState(-1);
+  const [lastSpokenStepIndex, setLastSpokenStepIndex] = useState(-1);
   const [chatOpen, setChatOpen] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const [completing, setCompleting] = useState(false);
+  const [recenterSignal, setRecenterSignal] = useState(0);
   const lastFetchPhase = useRef("");
   const lastFetchPos = useRef<Coordinates | null>(null);
   const lastFetchTime = useRef(0);
@@ -221,54 +243,73 @@ export default function FullScreenNavigation({
   });
 
   const isPickupPhase = ["accepted", "enroute", "enroute_pickup"].includes(activeTrip.status);
+  const origin = driverCoords;
   const destination = isPickupPhase
     ? { lat: activeTrip.pickup_lat, lng: activeTrip.pickup_lon }
     : { lat: activeTrip.dropoff_lat, lng: activeTrip.dropoff_lon };
   const phaseKey = isPickupPhase ? "pickup" : "dropoff";
 
-  const updateRouteEstimate = useCallback(() => {
-    if (!driverCoords) return;
-
+  const fetchRoute = useCallback(async () => {
+    if (!origin) return;
     const now = Date.now();
     const phaseChanged = lastFetchPhase.current !== phaseKey;
-    const moved = !lastFetchPos.current || haversineM(lastFetchPos.current, driverCoords) >= MIN_MOVE_M;
+    const moved = !lastFetchPos.current || haversineM(lastFetchPos.current, origin) >= MIN_MOVE_M;
     const elapsed = now - lastFetchTime.current >= ROUTE_REFETCH_INTERVAL;
     if (!phaseChanged && !moved && !elapsed) return;
 
-    const distanceM = haversineM(driverCoords, destination);
-    const durationS = Math.max(60, Math.round(distanceM / ASSUMED_CITY_SPEED_MPS));
-    const instruction = isPickupPhase ? "Head to the pickup point" : "Continue to the destination";
-
     lastFetchPhase.current = phaseKey;
-    lastFetchPos.current = { ...driverCoords };
+    lastFetchPos.current = { ...origin };
     lastFetchTime.current = now;
-    setSteps([{ instruction, distance: distanceM, duration: durationS, maneuver: "straight", startLocation: driverCoords, endLocation: destination }]);
-    setCurrentStepIndex(0);
-    if (phaseChanged) setLastSpokenStep(-1);
-    setTotalDistanceM(distanceM);
-    setTotalDurationS(durationS);
-    setRoutePath([driverCoords, destination]);
-  }, [driverCoords?.lat, driverCoords?.lng, destination.lat, destination.lng, phaseKey, isPickupPhase]);
+    if (phaseChanged) setLastSpokenStepIndex(-1);
 
-  useEffect(() => {
-    updateRouteEstimate();
-  }, [updateRouteEstimate]);
-
-  useEffect(() => {
-    lastFetchPhase.current = "";
-  }, [phaseKey]);
-
-  useEffect(() => {
-    if (!steps.length || !driverCoords) return;
-    const step = steps[0];
-    setCurrentStepIndex(0);
-    if (voiceEnabled && lastSpokenStep !== 0) {
-      const distToStep = haversineM(driverCoords, step.startLocation);
-      const distText = distToStep >= 1000 ? `In ${(distToStep / 1000).toFixed(1)} kilometers` : `In ${Math.round(distToStep / 10) * 10} meters`;
-      speak(`${distText}, ${step.instruction}`);
-      setLastSpokenStep(0);
+    const detailed = await getDetailedRoute(origin, destination);
+    if (detailed) {
+      setRoute({ geometry: detailed.geometry, steps: detailed.steps, distanceKm: detailed.distanceKm, durationMinutes: detailed.durationMinutes });
+      setRouteFailed(false);
+    } else {
+      // OSRM unreachable — fall back to a straight-line estimate rather than
+      // leaving the driver with no guidance at all.
+      setRoute(null);
+      setRouteFailed(true);
     }
-  }, [driverCoords, steps, voiceEnabled, lastSpokenStep, speak]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [origin?.lat, origin?.lng, destination.lat, destination.lng, phaseKey]);
+
+  useEffect(() => { fetchRoute(); }, [fetchRoute]);
+
+  const { currentStep, currentStepIndex, distToManeuverM } = (() => {
+    if (!route?.steps.length || !driverCoords) return { currentStep: null as RouteStep | null, currentStepIndex: 0, distToManeuverM: 0 };
+    const { stepIndex } = findCurrentStep(route.steps, driverCoords);
+    const step = route.steps[stepIndex];
+    const dist = haversineM(driverCoords, { lat: step.maneuver.location[1], lng: step.maneuver.location[0] });
+    return { currentStep: step, currentStepIndex: stepIndex, distToManeuverM: dist };
+  })();
+
+  const nextStep = route?.steps[currentStepIndex + 1] ?? null;
+
+  useEffect(() => {
+    if (!currentStep || !voiceEnabled || lastSpokenStepIndex === currentStepIndex) return;
+    speak(getVoiceInstruction(currentStep, distToManeuverM));
+    setLastSpokenStepIndex(currentStepIndex);
+  }, [currentStep, currentStepIndex, voiceEnabled, lastSpokenStepIndex, distToManeuverM, speak]);
+
+  // Straight-line fallback distance/ETA when OSRM couldn't be reached.
+  const straightDistanceM = driverCoords ? haversineM(driverCoords, destination) : 0;
+  const totalDistanceKm = route ? route.distanceKm : straightDistanceM / 1000;
+  const remainingDistanceKm = driverCoords ? haversineM(driverCoords, destination) / 1000 : totalDistanceKm;
+  const etaMinutes = route
+    ? Math.max(1, Math.round(route.durationMinutes * (remainingDistanceKm / Math.max(0.1, route.distanceKm))))
+    : Math.max(1, Math.round((straightDistanceM / 1000 / 25) * 60));
+
+  // Progress dots — how far along the whole route the driver has come.
+  const progressFraction = totalDistanceKm > 0 ? Math.min(1, Math.max(0, 1 - remainingDistanceKm / totalDistanceKm)) : 0;
+  const DOT_COUNT = 8;
+  const litDots = Math.round(progressFraction * DOT_COUNT);
+  const dotColors = ["#FFDD00", "#FFDD00", "#FF9A1A", "#FF7A1A", "#F0501F", "#D93010", "#C21C08", "#B81104"];
+
+  const mapCards: MapEtaCard[] = driverCoords
+    ? [{ id: phaseKey, at: destination, label: isPickupPhase ? "Pickup" : "Drop-off", value: `${etaMinutes} min`, subvalue: `${remainingDistanceKm.toFixed(1)} km` }]
+    : [];
 
   const handleStatusUpdate = async (newStatus: string, message: string, voiceMsg?: string) => {
     try {
@@ -311,12 +352,6 @@ export default function FullScreenNavigation({
     }
   };
 
-  const currentStep = steps[currentStepIndex];
-  const nextStep = steps[currentStepIndex + 1];
-  const etaMinutes = Math.round(totalDurationS / 60);
-  const distanceKm = (totalDistanceM / 1000).toFixed(1);
-  const distToCurrentStep = currentStep && driverCoords ? haversineM(driverCoords, currentStep.endLocation) : 0;
-
   const actionButton = (() => {
     switch (activeTrip.status) {
       case "accepted":
@@ -324,23 +359,17 @@ export default function FullScreenNavigation({
       case "enroute_pickup":
         return {
           label: "Arrived at Pickup",
-          icon: <MapPin className="h-5 w-5" />,
-          color: "bg-blue-600 hover:bg-blue-700",
           action: () => handleStatusUpdate("arrived", "Status: Arrived - waiting for rider", "You have arrived at the pickup point"),
         };
       case "arrived":
         return {
           label: "Start Ride",
-          icon: <CheckCircle2 className="h-5 w-5" />,
-          color: "bg-emerald-600 hover:bg-emerald-700",
           action: () => handleStatusUpdate("in_progress", "Rider picked up - navigating to dropoff", "Rider picked up. Navigating to destination."),
         };
       case "in_progress":
       case "ongoing":
         return {
-          label: completing ? "Completing..." : "Complete Trip",
-          icon: <CheckCircle2 className="h-5 w-5" />,
-          color: "bg-yellow-500 hover:bg-yellow-600",
+          label: completing ? "Completing…" : "Complete Trip",
           action: handleComplete,
         };
       default:
@@ -355,73 +384,95 @@ export default function FullScreenNavigation({
           pickup={{ lat: activeTrip.pickup_lat, lng: activeTrip.pickup_lon }}
           dropoff={{ lat: activeTrip.dropoff_lat, lng: activeTrip.dropoff_lon }}
           driverLocation={smoothPos}
-          routeCoordinates={routePath.length > 1 ? routePath : ([smoothPos, destination].filter(Boolean) as Coordinates[])}
-          defaultCenter={smoothPos ?? { lat: activeTrip.pickup_lat, lng: activeTrip.pickup_lon }}
-          defaultZoom={16}
+          routeGeometry={route?.geometry ?? null}
+          routeCoordinates={!route ? ([smoothPos, destination].filter(Boolean) as Coordinates[]) : undefined}
+          routeGradient
+          mapCards={mapCards}
+          navigationFollow
+          followZoom={17}
+          recenterSignal={recenterSignal}
           className="h-full w-full"
           height="100%"
         />
       </div>
 
-      <div className="absolute left-0 right-0 top-0 z-10 px-4" style={{ paddingTop: "calc(env(safe-area-inset-top, 12px) + 12px)" }}>
-        <motion.div initial={{ y: -40, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ type: "spring", stiffness: 300, damping: 30 }} className="overflow-hidden rounded-2xl border border-border/40 bg-card/95 shadow-[0_8px_32px_rgba(0,0,0,0.12)] backdrop-blur-xl">
-          <div className={`h-1.5 ${isPickupPhase ? "bg-blue-500" : "bg-emerald-500"}`} />
-          <div className="p-4">
-            {currentStep ? (
-              <div className="flex items-start gap-4">
-                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent">
-                  <ManeuverIcon maneuver={currentStep.maneuver || currentStep.instruction} />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-2xl font-black leading-none tracking-tight">
-                    {distToCurrentStep > 50 ? (distToCurrentStep >= 1000 ? `${(distToCurrentStep / 1000).toFixed(1)} km` : `${Math.round(distToCurrentStep / 10) * 10} m`) : "Now"}
-                  </p>
-                  <p className="mt-1 line-clamp-2 text-sm leading-snug text-muted-foreground">{currentStep.instruction}</p>
-                  {nextStep && (
-                    <div className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground/70">
-                      <span className="text-[10px] font-semibold uppercase tracking-wider">Then</span>
-                      <ManeuverIcon maneuver={nextStep.maneuver || nextStep.instruction} size="sm" />
-                      <span className="truncate">{nextStep.instruction}</span>
-                    </div>
-                  )}
-                </div>
-                <button onClick={() => setVoiceEnabled(!voiceEnabled)} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-secondary/80 transition-transform active:scale-90">
-                  {voiceEnabled && voiceSupported ? <Volume2 className="h-4 w-4 text-foreground" /> : <VolumeX className="h-4 w-4 text-muted-foreground" />}
-                </button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-3">
-                <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${isPickupPhase ? "bg-blue-500/15 text-blue-600" : "bg-emerald-500/15 text-emerald-600"}`}>
-                  <Navigation className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="text-sm font-bold">{isPickupPhase ? "Heading to pickup" : "Heading to destination"}</p>
-                  <p className="text-xs text-muted-foreground">Waiting for location...</p>
-                </div>
-              </div>
-            )}
+      {/* ═══ Turn-by-turn instruction card ═══ */}
+      <div className="absolute left-0 right-0 top-0 z-10 px-3" style={{ paddingTop: "calc(env(safe-area-inset-top, 12px) + 12px)" }}>
+        <motion.div
+          initial={{ y: -40, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ type: "spring", stiffness: 300, damping: 30 }}
+          className="overflow-hidden rounded-3xl bg-[#151515] text-white shadow-[0_12px_36px_rgba(0,0,0,0.35)] p-4"
+        >
+          <div className="flex items-start gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/15">
+              <ManeuverIcon step={currentStep} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-lg font-black leading-tight tracking-tight truncate">
+                {currentStep ? maneuverHeadline(currentStep) : isPickupPhase ? "HEAD TO PICKUP" : "HEAD TO DESTINATION"}
+              </p>
+              <p className="text-sm text-white/70 truncate mt-0.5">
+                {currentStep?.name || (isPickupPhase ? activeTrip.pickup_address : activeTrip.dropoff_address)}
+              </p>
+              <p className="text-xs font-bold text-white/90 mt-1">
+                {fmtDistance(currentStep ? distToManeuverM : straightDistanceM)}
+              </p>
+            </div>
+            <button onClick={() => setVoiceEnabled(!voiceEnabled)} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/10 transition-transform active:scale-90">
+              {voiceEnabled && voiceSupported ? <Volume2 className="h-4 w-4 text-white" /> : <VolumeX className="h-4 w-4 text-white/60" />}
+            </button>
           </div>
+
+          {/* Progress dots */}
+          <div className="flex items-center gap-1.5 mt-3">
+            {Array.from({ length: DOT_COUNT }).map((_, i) => (
+              <span
+                key={i}
+                className="h-1.5 flex-1 rounded-full"
+                style={{ background: i < litDots ? dotColors[i] : "rgba(255,255,255,0.2)" }}
+              />
+            ))}
+          </div>
+          {nextStep && (
+            <div className="mt-2 flex items-center gap-1.5 text-[11px] text-white/50">
+              <span className="font-semibold uppercase tracking-wider">Then</span>
+              <ManeuverIcon step={nextStep} size="sm" />
+              <span className="truncate">{getManeuverInstruction(nextStep)}</span>
+            </div>
+          )}
         </motion.div>
       </div>
 
-      <div className="absolute right-4 z-10 flex flex-col gap-3" style={{ top: "calc(env(safe-area-inset-top, 12px) + 130px)" }}>
-        <motion.button initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.2 }} onClick={onExit} className="flex h-12 w-12 items-center justify-center rounded-full border border-border/40 bg-card/90 shadow-lg backdrop-blur-xl transition-transform active:scale-90">
+      {/* ═══ Speed badge ═══ */}
+      <div className="absolute left-4 z-10" style={{ bottom: "calc(env(safe-area-inset-bottom, 8px) + 220px)" }}>
+        <motion.div
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          className="flex h-16 w-16 flex-col items-center justify-center rounded-full bg-white shadow-lg border-4"
+          style={{ borderColor: "#B81104" }}
+        >
+          <span className="text-lg font-black leading-none text-foreground">{speed}</span>
+          <span className="text-[9px] font-bold text-muted-foreground leading-none mt-0.5">km/h</span>
+        </motion.div>
+      </div>
+
+      {/* ═══ Right-side controls ═══ */}
+      <div className="absolute right-4 z-10 flex flex-col gap-3" style={{ top: "calc(env(safe-area-inset-top, 12px) + 190px)" }}>
+        <motion.button initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.1 }} onClick={onExit} aria-label="Minimize" className="flex h-12 w-12 items-center justify-center rounded-full border border-border/40 bg-card/90 shadow-lg backdrop-blur-xl transition-transform active:scale-90">
           <ChevronDown className="h-5 w-5 text-foreground" />
         </motion.button>
-        <motion.button initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.3 }} onClick={onStartCall} disabled={callStatus !== "idle"} className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-600 shadow-lg transition-transform active:scale-90 disabled:opacity-50">
-          <Phone className="h-5 w-5 text-white" />
+        <motion.button initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.15 }} onClick={() => setVoiceEnabled(!voiceEnabled)} aria-label="Toggle voice" className="flex h-12 w-12 items-center justify-center rounded-full border border-border/40 bg-card/90 shadow-lg backdrop-blur-xl transition-transform active:scale-90">
+          {voiceEnabled ? <Volume2 className="h-5 w-5 text-foreground" /> : <VolumeX className="h-5 w-5 text-muted-foreground" />}
         </motion.button>
-        <motion.button initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.4 }} onClick={() => setChatOpen(!chatOpen)} className={`flex h-12 w-12 items-center justify-center rounded-full shadow-lg transition-transform active:scale-90 ${chatOpen ? "bg-primary text-primary-foreground" : "border border-border/40 bg-card/90 text-foreground backdrop-blur-xl"}`}>
-          <MessageCircle className="h-5 w-5" />
-        </motion.button>
-        <motion.button initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.5 }} onClick={() => toast.info("Mapbox follows the active route automatically")} className="flex h-12 w-12 items-center justify-center rounded-full border border-border/40 bg-card/90 shadow-lg backdrop-blur-xl transition-transform active:scale-90">
-          <Navigation className="h-5 w-5 text-foreground" />
+        <motion.button initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.2 }} onClick={() => setRecenterSignal((s) => s + 1)} aria-label="Recenter" className="flex h-12 w-12 items-center justify-center rounded-full border border-border/40 bg-card/90 shadow-lg backdrop-blur-xl transition-transform active:scale-90">
+          <NavigationIcon className="h-5 w-5 text-foreground" />
         </motion.button>
       </div>
 
       <AnimatePresence>
         {chatOpen && (
-          <motion.div initial={{ opacity: 0, x: 100 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 100 }} className="absolute right-4 z-10 w-[calc(100%-2rem)] max-w-sm overflow-hidden rounded-2xl border border-border/40 bg-card/95 shadow-2xl backdrop-blur-xl" style={{ top: "calc(env(safe-area-inset-top, 12px) + 300px)" }}>
+          <motion.div initial={{ opacity: 0, x: 100 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 100 }} className="absolute right-4 z-10 w-[calc(100%-2rem)] max-w-sm overflow-hidden rounded-2xl border border-border/40 bg-card/95 shadow-2xl backdrop-blur-xl" style={{ top: "calc(env(safe-area-inset-top, 12px) + 350px)" }}>
             <div className="flex items-center justify-between border-b border-border/30 px-4 py-3">
               <p className="text-sm font-bold">Chat with Rider</p>
               <button onClick={() => setChatOpen(false)} className="flex h-7 w-7 items-center justify-center rounded-full bg-secondary">
@@ -435,46 +486,80 @@ export default function FullScreenNavigation({
         )}
       </AnimatePresence>
 
+      {/* ═══ Bottom card — PickMe red bar + rider info + arrival ═══ */}
       <div className="absolute bottom-0 left-0 right-0 z-10" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 8px) + 8px)" }}>
-        <motion.div initial={{ y: 60, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ type: "spring", stiffness: 300, damping: 30, delay: 0.1 }} className="mx-3 overflow-hidden rounded-3xl border border-border/40 bg-card/95 shadow-[0_-8px_40px_rgba(0,0,0,0.15)] backdrop-blur-xl">
-          <div className="bg-blue-500/10 px-4 py-2 text-center text-xs font-bold uppercase tracking-wider text-blue-600">
-            {isPickupPhase ? "Heading to Pickup" : "En route to Destination"}
+        <motion.div initial={{ y: 60, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ type: "spring", stiffness: 300, damping: 30, delay: 0.1 }} className="mx-3 overflow-hidden rounded-3xl bg-card shadow-[0_-8px_40px_rgba(0,0,0,0.15)]">
+          <div className="flex flex-col items-center py-2" style={{ background: "var(--gradient-primary)" }}>
+            <div className="w-9 h-1 bg-white/90 rounded-full" />
           </div>
-          <div className="grid grid-cols-3 divide-x divide-border/30 px-2 py-3">
-            <Metric icon={<Clock className="h-3 w-3" />} label="ETA" value={etaMinutes} unit="min" />
-            <Metric icon={<Route className="h-3 w-3" />} label="Distance" value={distanceKm} unit="km" />
-            <Metric icon={<Gauge className="h-3 w-3" />} label="Speed" value={speed} unit="km/h" />
-          </div>
-          <div className="border-t border-border/20 px-4 py-2">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              {isPickupPhase ? <MapPin className="h-3.5 w-3.5 shrink-0 text-blue-500" /> : <Navigation className="h-3.5 w-3.5 shrink-0 text-emerald-500" />}
-              <p className="truncate font-medium">{isPickupPhase ? activeTrip.pickup_address : activeTrip.dropoff_address}</p>
-              <span className="ml-auto whitespace-nowrap text-sm font-black text-foreground">{fmtUSD(activeTrip.fare)}</span>
+
+          <div className="px-4 pt-3 flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full overflow-hidden shrink-0 bg-muted flex items-center justify-center">
+              {riderInfo?.avatar_url ? (
+                <img src={riderInfo.avatar_url} alt={riderInfo.full_name ?? "Rider"} className="w-full h-full object-cover" />
+              ) : (
+                <span className={`text-sm font-bold ${riderInfo?.gender === "female" ? "text-pink-600" : "text-primary"}`}>
+                  {riderInfo?.gender === "female" ? "♀" : "♂"}
+                </span>
+              )}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="font-bold text-sm text-foreground truncate">{riderInfo?.full_name || "Rider"}</p>
+              {riderInfo?.completedTrips !== null && riderInfo?.completedTrips !== undefined && (
+                <p className="text-xs text-muted-foreground">{riderInfo.completedTrips} trip{riderInfo.completedTrips !== 1 ? "s" : ""}</p>
+              )}
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              {riderPhone && (
+                <a href={`tel:${riderPhone.replace(/[^\d+]/g, "")}`} aria-label="Call rider" className="w-9 h-9 rounded-full flex items-center justify-center active:scale-90 transition-transform" style={{ background: "var(--gradient-primary)" }}>
+                  <Phone className="h-3.5 w-3.5 text-white" />
+                </a>
+              )}
+              <button onClick={() => setChatOpen(!chatOpen)} aria-label="Message rider" className={`w-9 h-9 rounded-full flex items-center justify-center transition-transform active:scale-90 ${chatOpen ? "bg-primary text-primary-foreground" : "bg-muted text-foreground"}`}>
+                <MessageCircle className="h-3.5 w-3.5" />
+              </button>
             </div>
           </div>
+
+          <div className="px-4 pt-3">
+            <div className="rounded-2xl px-3.5 py-3" style={{ background: "#FFE6E6" }}>
+              <p className="text-xs font-semibold text-muted-foreground">{isPickupPhase ? "Pickup in" : "Arriving in"}</p>
+              <p className="text-lg font-black text-primary">
+                {etaMinutes} min <span className="text-sm font-semibold text-primary/70">({remainingDistanceKm.toFixed(1)} km)</span>
+              </p>
+              <p className="flex items-center gap-1.5 text-xs text-foreground mt-1">
+                <MapPin className="h-3.5 w-3.5 shrink-0 text-primary" />
+                <span className="truncate">{isPickupPhase ? activeTrip.pickup_address : activeTrip.dropoff_address}</span>
+              </p>
+            </div>
+          </div>
+
           {actionButton && (
-            <div className="px-4 pb-3 pt-1">
-              <Button className={`h-14 w-full rounded-2xl text-base font-bold text-white shadow-lg transition-all active:scale-[0.97] ${actionButton.color}`} onClick={actionButton.action} disabled={completing}>
-                {actionButton.icon}
-                <span className="ml-2">{actionButton.label}</span>
+            <div className="px-4 py-3 flex items-center gap-2">
+              <Button className="h-13 flex-1 rounded-2xl text-base font-bold bg-primary text-primary-foreground hover:brightness-110 shadow-lg" onClick={actionButton.action} disabled={completing}>
+                {actionButton.label}
               </Button>
+              <button
+                onClick={() => setExpanded((v) => !v)}
+                aria-label="More details"
+                className="h-13 w-13 shrink-0 rounded-2xl bg-primary text-primary-foreground flex items-center justify-center active:scale-95 transition-transform"
+              >
+                {expanded ? <ChevronDown className="h-5 w-5" /> : <ChevronUp className="h-5 w-5" />}
+              </button>
+            </div>
+          )}
+
+          {expanded && (
+            <div className="px-4 pb-4 pt-1 border-t border-border/20 space-y-1.5">
+              <p className="text-xs text-muted-foreground">Fare</p>
+              <p className="text-base font-bold text-foreground">{fmtUSD(activeTrip.fare)}</p>
+              {routeFailed && (
+                <p className="text-[11px] text-muted-foreground">Live turn-by-turn directions are temporarily unavailable — showing a direct-line estimate instead.</p>
+              )}
             </div>
           )}
         </motion.div>
       </div>
     </motion.div>
-  );
-}
-
-function Metric({ icon, label, value, unit }: { icon: React.ReactNode; label: string; value: string | number; unit: string }) {
-  return (
-    <div className="flex flex-col items-center justify-center px-2">
-      <div className="mb-0.5 flex items-center gap-1 text-muted-foreground">
-        {icon}
-        <span className="text-[10px] font-semibold uppercase tracking-wider">{label}</span>
-      </div>
-      <p className="text-xl font-black tabular-nums">{value}</p>
-      <p className="text-[10px] text-muted-foreground">{unit}</p>
-    </div>
   );
 }

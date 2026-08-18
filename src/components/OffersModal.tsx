@@ -294,14 +294,14 @@ export default function OffersModal({
                     <button
                   onClick={() => handleAccept(o.offerId, o.expired)}
                   disabled={o.expired || busyOfferId !== null}
-                  className="flex-1 border border-white/30 rounded-xl px-4 py-3.5 font-semibold cursor-pointer bg-primary/20 backdrop-blur-xl text-primary disabled:opacity-50 transition-all hover:opacity-90 shadow-[0_4px_16px_hsl(var(--primary)/0.2)]">
+                  className="flex-1 h-14 inline-flex items-center justify-center border border-white/30 rounded-xl px-4 font-semibold cursor-pointer bg-primary/20 backdrop-blur-xl text-primary disabled:opacity-50 transition-all hover:opacity-90 shadow-[0_4px_16px_hsl(var(--primary)/0.2)]">
                   
                       {busyOfferId === o.offerId ? "Accepting..." : "Accept"}
                     </button>
                     <button
                   onClick={() => handleDecline(o.offerId)}
                   disabled={busyOfferId !== null}
-                  className="flex-1 border border-slate-200 rounded-xl px-4 py-3.5 font-semibold cursor-pointer bg-slate-100 text-slate-700 disabled:opacity-50 transition-all hover:bg-slate-200">
+                  className="flex-1 border border-slate-200 rounded-xl px-4 py-3.5 font-semibold cursor-pointer bg-slate-100 text-foreground disabled:opacity-50 transition-all hover:bg-slate-200">
                   
                       Decline
                     </button>

@@ -314,17 +314,17 @@ const LocationPanel = ({
           className={cn(
             "w-full flex items-center gap-3 p-3 rounded-lg border transition-colors text-left",
             activeSelector === 'dropoff'
-              ? "border-blue-500 bg-blue-500/5"
+              ? "border-primary bg-primary/5"
               : "border-border hover:bg-secondary/50"
           )}
         >
           <div className={cn(
             "w-10 h-10 rounded-full flex items-center justify-center shrink-0",
-            dropoffLocation ? "bg-blue-100" : "bg-secondary"
+            dropoffLocation ? "bg-primary/10" : "bg-secondary"
           )}>
             <div className={cn(
               "w-3 h-3 rounded-full",
-              dropoffLocation ? "bg-blue-500" : "bg-muted-foreground"
+              dropoffLocation ? "bg-primary" : "bg-muted-foreground"
             )} />
           </div>
           <div className="min-w-0 flex-1">
@@ -337,7 +337,7 @@ const LocationPanel = ({
             </p>
           </div>
           {activeSelector === 'dropoff' && (
-            <span className="text-xs text-blue-600 font-medium shrink-0">Selecting</span>
+            <span className="text-xs text-primary font-medium shrink-0">Selecting</span>
           )}
         </button>
       </div>

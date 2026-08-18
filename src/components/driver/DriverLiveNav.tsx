@@ -263,7 +263,7 @@ export default function DriverLiveNav({
                 <button
                   onClick={handleComplete}
                   disabled={completing}
-                  className="w-full rounded-2xl py-5 font-black text-xl bg-gradient-to-br from-blue-600 to-blue-800 text-white shadow-lg hover:brightness-110 active:scale-[0.98] transition-all"
+                  className="w-full rounded-2xl py-5 font-black text-xl bg-gradient-to-br from-accent to-[#E6C700] text-accent-foreground shadow-lg hover:brightness-105 active:scale-[0.98] transition-all"
                 >
                   {completing ? <Loader2 className="w-6 h-6 animate-spin mx-auto" /> : (
                     <span className="flex items-center justify-center gap-2">

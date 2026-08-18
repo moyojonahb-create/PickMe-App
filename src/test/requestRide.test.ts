@@ -13,7 +13,7 @@ const goBackendMock = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/supabaseClient", () => ({ supabase: supabaseMock }));
-vi.mock("@/lib/goBackendClient", () => ({ goBackend: goBackendMock }));
+vi.mock("@/lib/goBackendClient", () => ({ goBackend: goBackendMock, getGoBackendBaseUrl: () => "https://backend.test" }));
 vi.mock("@/lib/offlineQueue", () => ({ queueOfflineRide: vi.fn() }));
 vi.mock("@/lib/fraudDetection", () => ({
   detectSuspiciousPatterns: vi.fn(() => Promise.resolve([])),

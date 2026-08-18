@@ -5,10 +5,23 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { createPickupPinElement, type RiderGender } from "@/lib/pickupPin";
 import { getMapboxToken, loadMapbox, resetMapboxLoader, type MapboxGL, type MapboxMapInstance } from "@/lib/mapboxLoader";
+import { splitRouteAtProgress } from "@/lib/routeProgress";
+import carTopWhite from "@/assets/cars/car-top-white.png";
+import carTopBlack from "@/assets/cars/car-top-black.png";
 
 export interface Coords {
   lat: number;
   lng: number;
+}
+
+export interface MapEtaCard {
+  id: string;
+  at: Coords;
+  label: string;
+  value: string;
+  subvalue?: string;
+  /** Offsets the card away from the pin it's anchored to, in px. */
+  offset?: { x: number; y: number };
 }
 
 interface MapboxMapProps {
@@ -23,10 +36,29 @@ interface MapboxMapProps {
   height?: string;
   drivers?: Array<{ id: string; lat: number; lng: number; isOnline?: boolean; white?: boolean }>;
   defaultCenter?: Coords;
+  // An explicit recenter request (e.g. manually selecting a town) — takes
+  // priority over the pickup/dropoff/driver point-fitting logic below, so a
+  // stray GPS/driver update can't silently pan the camera back.
+  preferredCenter?: Coords | null;
   defaultZoom?: number;
   etaMinutes?: number;
   stops?: Array<{ id: string; address: string; lat: number; lng: number }>;
   riderGender?: RiderGender;
+  /** Renders the primary route as a single yellow→orange→red gradient line
+   * (PickMe brand route styling) instead of the default traveled/upcoming
+   * two-tone split. Used by the connected-ride and navigation screens. */
+  routeGradient?: boolean;
+  /** Small compact cards anchored to a map point (e.g. "Pickup · 4 min · 1.2 km"
+   * beside the pickup pin) — positioned in screen space and kept in sync as
+   * the map moves. */
+  mapCards?: MapEtaCard[];
+  /** Keeps the camera tightly centered on driverLocation at closeZoom instead
+   * of running the multi-point fitBounds framing — for turn-by-turn nav. */
+  navigationFollow?: boolean;
+  followZoom?: number;
+  /** Bump to force an immediate re-center on driverLocation even when the
+   * coordinates haven't changed (a manual "recenter" tap). */
+  recenterSignal?: number;
 }
 
 const ZW_CENTER: Coords = { lat: -19.015, lng: 29.155 };
@@ -127,26 +159,26 @@ function markerElement(label: string, color: string, textColor = "#fff", size = 
   return el;
 }
 
-function carElement(isOnline = true, white = false) {
-  if (white) {
-    const el = document.createElement("div");
-    el.className = "pickme-mapbox-marker";
-    el.style.width = "30px";
-    el.style.height = "30px";
-    el.style.borderRadius = "999px";
-    el.style.background = "#ffffff";
-    el.style.border = "2px solid #1B3FA0";
-    el.style.boxShadow = "0 6px 16px rgba(15,23,42,0.22)";
-    el.style.display = "flex";
-    el.style.alignItems = "center";
-    el.style.justifyContent = "center";
-    el.innerHTML =
-      '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1B3FA0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17h14M6 17V9l2-4h8l2 4v8"/><circle cx="8" cy="17" r="1.6"/><circle cx="16" cy="17" r="1.6"/></svg>';
-    return el;
-  }
-  const el = markerElement(">", isOnline ? "#22c55e" : "#9ca3af", "#fff", isOnline ? 34 : 30);
-  el.style.fontSize = "16px";
+// Top-down car photo marker — white car for idle/nearby drivers, black car
+// for the assigned driver on an in-progress ride.
+function carImageElement(src: string, width: number, opacity = 1) {
+  const el = document.createElement("div");
+  el.className = "pickme-mapbox-marker";
+  el.style.width = `${width}px`;
+  el.style.filter = "drop-shadow(0 6px 10px rgba(15,23,42,0.35))";
+  el.style.opacity = String(opacity);
+  const img = document.createElement("img");
+  img.src = src;
+  img.alt = "";
+  img.style.width = "100%";
+  img.style.height = "auto";
+  img.style.display = "block";
+  el.appendChild(img);
   return el;
+}
+
+function carElement(isOnline = true) {
+  return carImageElement(carTopWhite, 34, isOnline ? 1 : 0.6);
 }
 
 function routeFeature(points: Coords[]) {
@@ -189,6 +221,94 @@ function updateRoute(map: MapboxMapInstance, id: string, points: Coords[], color
   });
 }
 
+// The streets-v12 basemap renders motorways/trunk roads in yellow-orange by
+// default, which reads as the same signal as our own route-progress yellow —
+// force them black so only our route lines carry that meaning.
+const YELLOW_ROAD_LAYER_IDS = [
+  "road-motorway", "road-motorway-case", "road-motorway-link", "road-motorway-link-case",
+  "road-trunk", "road-trunk-case", "road-trunk-link", "road-trunk-link-case",
+];
+
+function blackenHighwayRoads(map: MapboxMapInstance) {
+  YELLOW_ROAD_LAYER_IDS.forEach((id) => {
+    if (map.getLayer(id)) {
+      try {
+        map.setPaintProperty(id, "line-color", "#1a1a1a");
+      } catch {
+        // layer exists but doesn't support line-color (unlikely) — skip it
+      }
+    }
+  });
+}
+
+const ROUTE_TRAVELED_COLOR = "#B81104";
+const ROUTE_UPCOMING_COLOR = "#FFDD00";
+// Secondary route is the driver's path to pickup, not the trip itself — green
+// keeps it visually distinct from the primary route's yellow-turning-red.
+const SECONDARY_ROUTE_TRAVELED_COLOR = "#15803d";
+const SECONDARY_ROUTE_UPCOMING_COLOR = "#22c55e";
+
+// Renders a route as two segments — traveled behind the vehicle's current
+// progress point, upcoming ahead of it — instead of a single solid color.
+function updateProgressRoute(
+  map: MapboxMapInstance,
+  id: string,
+  points: Coords[],
+  progress: Coords | null | undefined,
+  traveledColor: string = ROUTE_TRAVELED_COLOR,
+  upcomingColor: string = ROUTE_UPCOMING_COLOR,
+) {
+  const { traveled, upcoming } = splitRouteAtProgress(points, progress);
+  updateRoute(map, `${id}-traveled`, traveled, traveledColor);
+  updateRoute(map, `${id}-upcoming`, upcoming, upcomingColor);
+  clearRoute(map, `${id}-gradient`);
+}
+
+// PickMe brand route line: a single smooth yellow → orange → red gradient
+// along the whole route (start to destination), via Mapbox's line-gradient
+// paint property. Requires `lineMetrics: true` on the source, which is why
+// this uses its own source/layer id rather than reusing updateRoute().
+function updateGradientRoute(map: MapboxMapInstance, id: string, points: Coords[]) {
+  clearRoute(map, `${id}-traveled`);
+  clearRoute(map, `${id}-upcoming`);
+
+  if (points.length < 2) {
+    clearRoute(map, `${id}-gradient`);
+    return;
+  }
+
+  const gradientId = `${id}-gradient`;
+  const data = routeFeature(points);
+  const source = map.getSource(gradientId);
+  if (source?.setData) {
+    source.setData(data);
+    return;
+  }
+
+  map.addSource(gradientId, { type: "geojson", lineMetrics: true, data });
+  map.addLayer({
+    id: gradientId,
+    type: "line",
+    source: gradientId,
+    layout: { "line-cap": "round", "line-join": "round" },
+    paint: {
+      "line-width": 5,
+      "line-opacity": 0.95,
+      "line-gradient": [
+        "interpolate", ["linear"], ["line-progress"],
+        0, "#FFDD00",
+        0.35, "#FF7A1A",
+        1, "#B81104",
+      ],
+    },
+  });
+}
+
+function clearRoute(map: MapboxMapInstance, id: string) {
+  if (map.getLayer(id)) map.removeLayer(id);
+  if (map.getSource(id)) map.removeSource(id);
+}
+
 function MapboxFailure({ message, className, height, onRetry }: { message: string; className?: string; height?: string; onRetry?: () => void }) {
   return (
     <div className={`flex items-center justify-center bg-muted ${className ?? ""}`} style={{ height, minHeight: 260 }}>
@@ -221,14 +341,21 @@ function InnerMapboxMap({
   height = "100%",
   drivers,
   defaultCenter,
+  preferredCenter,
   defaultZoom = 13,
   stops,
   riderGender,
+  routeGradient,
+  mapCards,
+  navigationFollow,
+  followZoom = 17,
+  recenterSignal,
 }: MapboxMapProps & { mapboxgl: MapboxGL }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapboxMapInstance | null>(null);
   const markersRef = useRef<Array<{ remove: () => void }>>([]);
   const [loaded, setLoaded] = useState(false);
+  const [cardPositions, setCardPositions] = useState<Record<string, { x: number; y: number }>>({});
   const smoothDrivers = useSmoothDrivers(drivers);
 
   const primaryRoute = useMemo(() => {
@@ -270,7 +397,10 @@ function InnerMapboxMap({
     });
 
     mapRef.current = map;
-    map.on("load", () => setLoaded(true));
+    map.on("load", () => {
+      blackenHighwayRoads(map);
+      setLoaded(true);
+    });
     return () => {
       markersRef.current.forEach((marker) => marker.remove());
       markersRef.current = [];
@@ -278,6 +408,16 @@ function InnerMapboxMap({
       mapRef.current = null;
     };
   }, []);
+
+  // Explicit recenter override — always wins, independent of pickup/dropoff/
+  // driver points. Re-fires whenever preferredCenter changes (e.g. a new
+  // town is picked), flying the camera there regardless of what else is on
+  // the map.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !loaded || !preferredCenter) return;
+    map.flyTo({ center: [preferredCenter.lng, preferredCenter.lat], zoom: 13, essential: true });
+  }, [loaded, preferredCenter?.lat, preferredCenter?.lng]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -303,15 +443,28 @@ function InnerMapboxMap({
     };
 
     if (pickup) addMarker(pickup, createPickupPinElement(riderGender), "bottom");
-    if (dropoff) addMarker(dropoff, markerElement("D", "#1B3FA0"));
-    if (driverLocation) addMarker(driverLocation, markerElement("D", "#2563eb"));
+    if (dropoff) addMarker(dropoff, markerElement("D", "#B81104"));
+    if (driverLocation) addMarker(driverLocation, carImageElement(carTopBlack, 38));
     stops?.forEach((stop, index) => {
       if (stop.lat && stop.lng) addMarker({ lat: stop.lat, lng: stop.lng }, markerElement(String(index + 1), "#f59e0b", "#111827"));
     });
-    smoothDrivers.forEach((driver) => addMarker(driver, carElement(driver.isOnline, driver.white)));
+    smoothDrivers.forEach((driver) => addMarker(driver, carElement(driver.isOnline)));
 
-    updateRoute(map, "primary-route", primaryRoute, "#1B3FA0");
-    updateRoute(map, "secondary-route", secondaryRoute, "#60a5fa", true);
+    if (routeGradient) {
+      updateGradientRoute(map, "primary-route", primaryRoute);
+    } else {
+      updateProgressRoute(map, "primary-route", primaryRoute, driverLocation);
+    }
+    updateProgressRoute(map, "secondary-route", secondaryRoute, driverLocation, SECONDARY_ROUTE_TRAVELED_COLOR, SECONDARY_ROUTE_UPCOMING_COLOR);
+
+    // While an explicit recenter override or navigation-follow mode is
+    // active, a dedicated effect owns the camera — don't let pickup/dropoff/
+    // driver points (which can update passively, e.g. a delayed GPS fix)
+    // pan it back via the multi-point fitBounds logic below.
+    if (preferredCenter || navigationFollow) {
+      map.resize();
+      return;
+    }
 
     const points = [
       pickup,
@@ -348,13 +501,74 @@ function InnerMapboxMap({
     smoothDrivers,
     stops,
     riderGender,
+    preferredCenter?.lat,
+    preferredCenter?.lng,
     defaultCenter?.lat,
     defaultCenter?.lng,
+    routeGradient,
+    navigationFollow,
   ]);
 
+  // Navigation-follow camera — keeps the view tightly centered on the
+  // driver at a close, driving-appropriate zoom instead of the general
+  // multi-point framing above. Re-fires on every driver move, and can also
+  // be forced via recenterSignal (a manual "recenter" tap) even when the
+  // coordinates haven't changed.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !loaded || !navigationFollow || !driverLocation) return;
+    map.easeTo({ center: [driverLocation.lng, driverLocation.lat], zoom: followZoom, duration: 700 });
+  }, [loaded, navigationFollow, driverLocation?.lat, driverLocation?.lng, followZoom, recenterSignal]);
+
+  // Anchored ETA cards — kept in sync with the map's screen-space projection
+  // of their target point as the camera moves.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !loaded || !mapCards?.length) {
+      setCardPositions({});
+      return;
+    }
+
+    const recompute = () => {
+      const next: Record<string, { x: number; y: number }> = {};
+      for (const card of mapCards) {
+        const p = map.project([card.at.lng, card.at.lat]);
+        next[card.id] = p;
+      }
+      setCardPositions(next);
+    };
+
+    recompute();
+    map.on("move", recompute);
+    map.on("zoom", recompute);
+    map.on("resize", recompute);
+    return () => {
+      map.off("move", recompute);
+      map.off("zoom", recompute);
+      map.off("resize", recompute);
+    };
+  }, [loaded, JSON.stringify(mapCards?.map((c) => [c.id, c.at.lat, c.at.lng]))]);
+
   return (
-    <div className={className} style={{ height, minHeight: height === "100%" ? undefined : 260 }}>
+    <div className={`relative ${className}`} style={{ height, minHeight: height === "100%" ? undefined : 260 }}>
       <div ref={containerRef} className="h-full w-full" />
+      {mapCards?.map((card) => {
+        const pos = cardPositions[card.id];
+        if (!pos) return null;
+        const offsetX = card.offset?.x ?? 14;
+        const offsetY = card.offset?.y ?? -14;
+        return (
+          <div
+            key={card.id}
+            className="absolute z-10 pointer-events-none rounded-xl bg-white px-3 py-2 shadow-[0_6px_20px_rgba(15,23,42,0.18)]"
+            style={{ left: pos.x + offsetX, top: pos.y + offsetY, transform: "translateY(-100%)" }}
+          >
+            <p className="text-[10px] font-semibold text-muted-foreground leading-none">{card.label}</p>
+            <p className="text-[13px] font-black text-foreground leading-tight mt-0.5">{card.value}</p>
+            {card.subvalue && <p className="text-[10px] text-muted-foreground leading-none mt-0.5">{card.subvalue}</p>}
+          </div>
+        );
+      })}
     </div>
   );
 }

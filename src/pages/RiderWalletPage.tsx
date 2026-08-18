@@ -178,38 +178,37 @@ export default function RiderWalletPage() {
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div className="flex-1">
-            <h1 className="text-[17px] font-bold tracking-tight text-slate-900">My Wallet</h1>
-            <p className="text-[11px] text-slate-500 -mt-0.5">Manage your PickMe balance</p>
+            <h1 className="text-[17px] font-bold tracking-tight text-foreground">My Wallet</h1>
+            <p className="text-[11px] text-muted-foreground -mt-0.5">Manage your PickMe balance</p>
           </div>
           <Button variant="ghost" size="icon" onClick={() => setShowSettings((v) => !v)} className="rounded-full">
-            <Settings className="h-4 w-4 text-slate-600" />
+            <Settings className="h-4 w-4 text-foreground" />
           </Button>
           <Button variant="ghost" size="icon" onClick={handleRefresh} disabled={walletLoading} className="rounded-full">
-            <RefreshCw className={`h-4 w-4 text-slate-600 ${walletLoading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`h-4 w-4 text-foreground ${walletLoading ? 'animate-spin' : ''}`} />
           </Button>
         </div>
       </div>
 
       <div className="px-4 pt-4 space-y-5 max-w-lg mx-auto pb-28">
-        {/* ===== Glass Blue Balance Card ===== */}
+        {/* ===== Glass Balance Card ===== */}
         <section
           className="relative overflow-hidden rounded-[28px] p-5 text-white"
           style={{
-            background:
-              'linear-gradient(135deg, #1D4ED8 0%, #2563EB 50%, #3B82F6 100%)',
+            background: 'var(--gradient-primary)',
             boxShadow:
-              '0 20px 40px -16px rgba(29,78,216,0.45), 0 8px 16px -8px rgba(37,99,235,0.35)',
+              '0 20px 40px -16px hsl(var(--primary)/0.45), 0 8px 16px -8px hsl(var(--primary)/0.35)',
           }}
         >
           {/* Glass orbs */}
           <div className="absolute -top-16 -right-12 w-56 h-56 rounded-full bg-white/15 blur-3xl" />
-          <div className="absolute -bottom-20 -left-10 w-52 h-52 rounded-full bg-cyan-300/20 blur-3xl" />
+          <div className="absolute -bottom-20 -left-10 w-52 h-52 rounded-full bg-accent/20 blur-3xl" />
           <div className="absolute top-0 left-0 right-0 h-px bg-white/30" />
 
           <div className="relative z-10">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-[10px] uppercase tracking-[0.2em] text-blue-100/90 font-semibold">
+                <p className="text-[10px] uppercase tracking-[0.2em] text-white/90 font-semibold">
                   Welcome back
                 </p>
                 <p className="text-[15px] font-bold mt-0.5 truncate max-w-[180px]">{displayName}</p>
@@ -222,12 +221,12 @@ export default function RiderWalletPage() {
 
             <div className="mt-5">
               <div className="flex items-center gap-2">
-                <p className="text-[11px] uppercase tracking-[0.18em] text-blue-100/90 font-semibold">
+                <p className="text-[11px] uppercase tracking-[0.18em] text-white/90 font-semibold">
                   Available Balance
                 </p>
                 <button
                   onClick={() => setHideBalance((v) => !v)}
-                  className="text-blue-100/80 hover:text-white"
+                  className="text-white/80 hover:text-white"
                   aria-label="Toggle balance visibility"
                 >
                   {hideBalance ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
@@ -236,7 +235,7 @@ export default function RiderWalletPage() {
               <p className="text-[40px] leading-none font-black tracking-tight mt-2">
                 {hideBalance ? <span className="tracking-[0.3em]">••••••</span> : `$${balance.toFixed(2)}`}
               </p>
-              <p className="text-[11px] text-blue-100/80 mt-2">
+              <p className="text-[11px] text-white/80 mt-2">
                 Last updated {formatDistanceToNow(lastUpdated, { addSuffix: true })}
               </p>
             </div>
@@ -244,7 +243,7 @@ export default function RiderWalletPage() {
             {/* Sub-stats */}
             <div className="mt-5 grid grid-cols-2 gap-2.5">
               <div className="rounded-2xl bg-white/10 backdrop-blur-md border border-white/15 px-3 py-2.5">
-                <p className="text-[10px] uppercase tracking-wider text-blue-100/90 font-semibold">Pending</p>
+                <p className="text-[10px] uppercase tracking-wider text-white/90 font-semibold">Pending</p>
                 <p className="text-[15px] font-extrabold mt-0.5">
                   {hideBalance ? '••••' : `$${pendingBalance.toFixed(2)}`}
                 </p>
@@ -254,7 +253,7 @@ export default function RiderWalletPage() {
                 disabled={!pickme_account}
                 className="rounded-2xl bg-white/10 backdrop-blur-md border border-white/15 px-3 py-2.5 text-left active:scale-[0.98] transition-transform"
               >
-                <p className="text-[10px] uppercase tracking-wider text-blue-100/90 font-semibold flex items-center gap-1">
+                <p className="text-[10px] uppercase tracking-wider text-white/90 font-semibold flex items-center gap-1">
                   Account
                   {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
                 </p>
@@ -284,7 +283,7 @@ export default function RiderWalletPage() {
               <span className={`h-10 w-10 rounded-2xl ${tint} ring-4 ${ring} flex items-center justify-center`}>
                 <Icon className="h-5 w-5" />
               </span>
-              <span className="text-[11px] font-semibold text-slate-700">{label}</span>
+              <span className="text-[11px] font-semibold text-foreground">{label}</span>
             </button>
           ))}
         </section>
@@ -292,8 +291,8 @@ export default function RiderWalletPage() {
         {/* ===== Payment Providers ===== */}
         <section>
           <div className="flex items-center justify-between mb-2.5">
-            <h2 className="text-[13px] font-bold text-slate-900">Payment Methods</h2>
-            <span className="text-[11px] text-slate-500">Top up & cash out</span>
+            <h2 className="text-[13px] font-bold text-foreground">Payment Methods</h2>
+            <span className="text-[11px] text-muted-foreground">Top up & cash out</span>
           </div>
           <div className="grid grid-cols-3 gap-2.5">
             {PAYMENT_PROVIDERS.map((p) => (
@@ -326,10 +325,10 @@ export default function RiderWalletPage() {
         {/* ===== Recent Transactions ===== */}
         <section>
           <div className="flex items-center justify-between mb-2.5">
-            <h2 className="text-[13px] font-bold text-slate-900">Recent Transactions</h2>
+            <h2 className="text-[13px] font-bold text-foreground">Recent Transactions</h2>
             <button
               onClick={() => setShowTransactions(true)}
-              className="text-[11px] font-semibold text-blue-600"
+              className="text-[11px] font-semibold text-primary"
             >
               View all
             </button>
@@ -340,10 +339,10 @@ export default function RiderWalletPage() {
             {transactions.length === 0 ? (
               <div className="px-4 py-8 text-center">
                 <div className="h-12 w-12 mx-auto rounded-2xl bg-slate-100 flex items-center justify-center">
-                  <History className="h-5 w-5 text-slate-400" />
+                  <History className="h-5 w-5 text-muted-foreground" />
                 </div>
-                <p className="text-[13px] font-semibold text-slate-700 mt-3">No transactions yet</p>
-                <p className="text-[11px] text-slate-500 mt-0.5">Top up your wallet to get started</p>
+                <p className="text-[13px] font-semibold text-foreground mt-3">No transactions yet</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">Top up your wallet to get started</p>
               </div>
             ) : (
               transactions.slice(0, 5).map((tx, i) => {
@@ -359,14 +358,14 @@ export default function RiderWalletPage() {
                       {isPositive ? <ArrowDownLeft className="h-4 w-4" /> : <ArrowUpRight className="h-4 w-4" />}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-[13px] font-semibold text-slate-900 truncate capitalize">
+                      <p className="text-[13px] font-semibold text-foreground truncate capitalize">
                         {tx.description || tx.transaction_type.replace('_', ' ')}
                       </p>
-                      <p className="text-[11px] text-slate-500">
+                      <p className="text-[11px] text-muted-foreground">
                         {format(new Date(tx.created_at), 'dd MMM, HH:mm')} · <span className="text-emerald-600 font-medium">Completed</span>
                       </p>
                     </div>
-                    <span className={`text-[14px] font-extrabold ${isPositive ? 'text-emerald-600' : 'text-slate-900'}`}>
+                    <span className={`text-[14px] font-extrabold ${isPositive ? 'text-emerald-600' : 'text-foreground'}`}>
                       {isPositive ? '+' : '-'}${Math.abs(Number(tx.amount)).toFixed(2)}
                     </span>
                   </div>
@@ -379,7 +378,7 @@ export default function RiderWalletPage() {
         {/* ===== Deposit History ===== */}
         {(deposits.length > 0 || loadingDeposits) && (
           <section>
-            <h2 className="text-[13px] font-bold text-slate-900 mb-2.5">Deposit Requests</h2>
+            <h2 className="text-[13px] font-bold text-foreground mb-2.5">Deposit Requests</h2>
             <div className="space-y-2">
               {deposits.map((d) => (
                 <div
@@ -390,12 +389,12 @@ export default function RiderWalletPage() {
                   {statusIcon(d.status)}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="font-bold text-[13px] text-slate-900">${Number(d.amount_usd).toFixed(2)}</span>
-                      <span className="text-[10px] bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded-full font-semibold">
+                      <span className="font-bold text-[13px] text-foreground">${Number(d.amount_usd).toFixed(2)}</span>
+                      <span className="text-[10px] bg-slate-100 text-foreground px-1.5 py-0.5 rounded-full font-semibold">
                         {METHOD_LABELS[d.payment_method] || d.payment_method}
                       </span>
                     </div>
-                    <div className="text-[11px] text-slate-500 truncate">
+                    <div className="text-[11px] text-muted-foreground truncate">
                       Ref: {d.reference} · {format(new Date(d.created_at), 'dd MMM, HH:mm')}
                     </div>
                   </div>
@@ -408,7 +407,7 @@ export default function RiderWalletPage() {
                   </span>
                 </div>
               ))}
-              {loadingDeposits && <div className="text-center text-slate-500 text-[12px] py-3">Loading…</div>}
+              {loadingDeposits && <div className="text-center text-muted-foreground text-[12px] py-3">Loading…</div>}
             </div>
           </section>
         )}
@@ -416,7 +415,7 @@ export default function RiderWalletPage() {
         {/* ===== Trust Section ===== */}
         <section className="rounded-2xl bg-white border border-slate-100 p-4"
                  style={{ boxShadow: '0 1px 2px rgba(15,23,42,0.04), 0 4px 12px -4px rgba(15,23,42,0.05)' }}>
-          <p className="text-[11px] uppercase tracking-wider text-slate-500 font-bold mb-3">Your money is safe</p>
+          <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-bold mb-3">Your money is safe</p>
           <div className="grid grid-cols-3 gap-2">
             {[
               { icon: ShieldCheck, label: 'Wallet Protected', tint: 'bg-blue-50 text-blue-700' },
@@ -427,19 +426,19 @@ export default function RiderWalletPage() {
                 <span className={`h-9 w-9 rounded-xl ${tint} flex items-center justify-center`}>
                   <Icon className="h-4 w-4" />
                 </span>
-                <span className="text-[10.5px] font-semibold text-slate-700 leading-tight">{label}</span>
+                <span className="text-[10.5px] font-semibold text-foreground leading-tight">{label}</span>
               </div>
             ))}
           </div>
           {referralEarnings > 0 && (
             <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between">
-              <span className="text-[11px] text-slate-600">Referral earnings</span>
+              <span className="text-[11px] text-foreground">Referral earnings</span>
               <span className="text-[12px] font-bold text-emerald-600">+${referralEarnings.toFixed(2)}</span>
             </div>
           )}
         </section>
 
-        <p className="text-center text-[10px] text-slate-400 pt-2">
+        <p className="text-center text-[10px] text-muted-foreground pt-2">
           PickMe Wallet · Secured by 256-bit encryption
         </p>
       </div>

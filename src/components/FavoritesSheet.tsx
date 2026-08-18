@@ -4,8 +4,9 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL, supabase } from '@/lib/supabaseClient';
+import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from '@/lib/supabaseClient';
 import { useAuth } from '@/hooks/useAuth';
+import { useAppBootstrap } from '@/hooks/useAppBootstrap';
 import { toast } from 'sonner';
 import { createFavoriteLocation, deleteFavoriteLocation } from '@/lib/businessApi';
 
@@ -67,8 +68,10 @@ const geocodeAddress = async (address: string): Promise<{ latitude: number; long
 
 const FavoritesSheet = forwardRef<HTMLDivElement, FavoritesSheetProps>(({ isOpen, onClose, onSelectLocation }, ref) => {
   const { user } = useAuth();
-  const [favorites, setFavorites] = useState<FavoriteLocation[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Favorites are preloaded into the splash-time cache — mirror it locally
+  // so add/delete can update optimistically without waiting on a refetch.
+  const { favorites: cachedFavorites, refreshFavorites } = useAppBootstrap();
+  const [favorites, setFavorites] = useState<FavoriteLocation[]>(cachedFavorites as FavoriteLocation[]);
   const [showAddForm, setShowAddForm] = useState(false);
   const [newName, setNewName] = useState('');
   const [newAddress, setNewAddress] = useState('');
@@ -76,32 +79,15 @@ const FavoritesSheet = forwardRef<HTMLDivElement, FavoritesSheetProps>(({ isOpen
   const [geocodeError, setGeocodeError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (isOpen && user) {
-      fetchFavorites();
-    }
-  }, [isOpen, user]);
-
-  const fetchFavorites = async () => {
-    setLoading(true);
-    const { data, error } = await supabase
-      .from('favorite_locations')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      toast.error('Failed to load favorites');
-      console.error(error);
-    } else {
-      setFavorites(data || []);
-    }
-    setLoading(false);
-  };
+    setFavorites(cachedFavorites as FavoriteLocation[]);
+  }, [cachedFavorites]);
 
   const handleDelete = async (id: string) => {
     try {
       await deleteFavoriteLocation(id);
       setFavorites(prev => prev.filter(f => f.id !== id));
       toast.success('Location removed');
+      void refreshFavorites();
     } catch {
       toast.error('Failed to delete location');
     }
@@ -137,6 +123,7 @@ const FavoritesSheet = forwardRef<HTMLDivElement, FavoritesSheetProps>(({ isOpen
       setNewAddress('');
       setShowAddForm(false);
       toast.success('Location saved!');
+      void refreshFavorites();
     } catch {
       toast.error('Failed to add location');
     }
@@ -223,11 +210,7 @@ const FavoritesSheet = forwardRef<HTMLDivElement, FavoritesSheetProps>(({ isOpen
             </form>
           )}
 
-          {loading ? (
-            <div className="flex justify-center py-8">
-              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-            </div>
-          ) : favorites.length === 0 ? (
+          {favorites.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <MapPin className="w-12 h-12 mx-auto mb-3 opacity-50" />
               <p>No favorite locations yet</p>

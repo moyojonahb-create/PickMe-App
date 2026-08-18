@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { completeTrip } from "@/lib/completeTrip";
 import { useParams, useNavigate } from "react-router-dom";
@@ -8,11 +8,13 @@ import { useAuth } from "@/hooks/useAuth";
 import { useRideRealtime } from "@/hooks/useRideRealtime";
 import { useDriverTracking } from "@/hooks/useDriverTracking";
 import { useNearbyDrivers } from "@/hooks/useNearbyDrivers";
+import { useRideViewerCount } from "@/lib/rideViewerPresence";
 import { useAgoraCall } from "@/hooks/useAgoraCall";
 import { getSecondsRemaining } from "@/lib/rideExpiry";
 import { goBackend } from "@/lib/goBackendClient";
 import { decimalToMinor } from "@/lib/money";
 import { isRequestedRideStatus, normalizeRideRow } from "@/lib/rideContract";
+import { isGoBackendConfigured } from "@/lib/rideMatching";
 import {
   fetchPendingOffers,
   fetchDriversByIds,
@@ -27,7 +29,7 @@ import MapboxMap from "@/components/MapboxMap";
 import TripMapboxMap from "@/components/TripMapboxMap";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { ArrowLeft, MapPin, Users, Eye, Minus, Plus, MessageCircle, Phone, Clock, Star, Shield, Navigation, Car, ChevronUp, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, MapPin, Users, Eye, Minus, Plus, MessageCircle, Phone, Clock, Star, Navigation, Car, ChevronUp, LifeBuoy } from "lucide-react";
 import CancellationPolicy from "@/components/ride/CancellationPolicy";
 import EmergencyButton from "@/components/ride/EmergencyButton";
 import DriverRatingModal from "@/components/ride/DriverRatingModal";
@@ -42,6 +44,8 @@ import IncomingCallModal from "@/components/ride/IncomingCallModal";
 import ActiveCallOverlay from "@/components/ride/ActiveCallOverlay";
 import VoiceCallButton from "@/components/ride/VoiceCallButton";
 import ShareTripButton from "@/components/ride/ShareTripButton";
+import DriverBidAcceptedModal from "@/components/ride/DriverBidAcceptedModal";
+import { requestRide } from "@/lib/requestRide";
 import EcoCashPaymentModal from "@/components/wallet/EcoCashPaymentModal";
 import PayRideButton from "@/components/ride/PayRideButton";
 import PaymentStatusBadge from "@/components/ride/PaymentStatusBadge";
@@ -87,6 +91,7 @@ export default function RiderRideDetail() {
   const [driversById, setDriversById] = useState<Record<string, DriverProfile>>({});
   const [driverProfile, setDriverProfile] = useState<DriverProfile | null>(null);
   const [driverPhone, setDriverPhone] = useState<string | null>(null);
+  const [driverName, setDriverName] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -99,6 +104,8 @@ export default function RiderRideDetail() {
   const [showEcoCashPay, setShowEcoCashPay] = useState(false);
   const [sheetState, setSheetState] = useState<SheetState>('half');
   const [showAcceptedOverlay, setShowAcceptedOverlay] = useState(false);
+  const showAcceptedOverlayRef = useRef(showAcceptedOverlay);
+  useEffect(() => { showAcceptedOverlayRef.current = showAcceptedOverlay; }, [showAcceptedOverlay]);
 
   // Rider wallet removed — direct payment to driver
   const walletPin: string | null = null;
@@ -117,28 +124,47 @@ export default function RiderRideDetail() {
     if (!rideId) return;
     let data: Ride;
     try {
+      if (!isGoBackendConfigured()) throw new Error("backend not configured");
       data = normalizeRideRow(await goBackend.get<Record<string, unknown>>(`/api/rides/${rideId}`)) as unknown as Ride;
     } catch (error) {
-      setError((error as Error).message);
-      return;
+      // Same fallback pattern used throughout offerHelpers/rideMatching —
+      // read the ride straight from Supabase when the Go backend call
+      // fails for any reason, instead of leaving the rider stuck on
+      // "ride not found". Unlike isBackendUnavailable()'s narrower check
+      // (used where a real 401 should prompt re-login), a rider's own ride
+      // is safe to read directly regardless of why the backend rejected
+      // the request — if their session is genuinely invalid, this read
+      // fails the same way and surfaces the same error.
+      const { data: rideRow, error: rideErr } = await supabase.from("rides").select("*").eq("id", rideId).maybeSingle();
+      if (rideErr || !rideRow) {
+        setError(rideErr?.message ?? (error as Error).message ?? "Ride not found");
+        return;
+      }
+      data = normalizeRideRow(rideRow as unknown as Record<string, unknown>) as unknown as Ride;
     }
 
     const wasAccepted = ride?.status !== "accepted" && data.status === "accepted";
     const wasArrived = ride?.status !== "driver_arrived" && ride?.status !== "arrived" && (data.status === "driver_arrived" || data.status === "arrived");
     const wasCompleted = ride?.status !== "completed" && data.status === "completed";
+    const cancelledWhileConfirming = showAcceptedOverlayRef.current && data.status === "cancelled";
     setRide(data);
 
     if (wasAccepted) {
-      playAcceptedSound();
-      haptic('heavy');
+      // Sound/haptic fire from DriverBidAcceptedModal itself when it opens —
+      // it owns the full "driver accepted" moment (50s confirm/decline),
+      // replacing the old auto-dismissing celebration overlay.
       setShowAcceptedOverlay(true);
       setModalOpen(false);
-      setTimeout(() => setShowAcceptedOverlay(false), 4000);
       try {
         if (typeof globalThis.Notification !== "undefined" && Notification.permission === "granted") {
           new Notification("🎉 Driver Accepted!", { body: "Your ride has been confirmed. Driver is on the way!", icon: "/icons/icon-192x192.png" });
         }
       } catch (_) {}
+    }
+
+    if (cancelledWhileConfirming) {
+      setShowAcceptedOverlay(false);
+      toast.info("This driver cancelled the ride", { description: "Please request a new ride." });
     }
 
     if (wasArrived) {
@@ -165,6 +191,7 @@ export default function RiderRideDetail() {
           setDriverProfile({ ...driverData, avatar_url: resolvedAvatar });
           const { data: profileData } = await supabase.from("profiles").select("full_name, phone").eq("user_id", driverData.user_id).maybeSingle();
           if (profileData?.phone) setDriverPhone(profileData.phone);
+          if (profileData?.full_name) setDriverName(profileData.full_name);
         }
       } catch (e: unknown) { console.warn("Error fetching driver details:", (e as Error).message); }
     }
@@ -214,6 +241,7 @@ export default function RiderRideDetail() {
 
   const isPendingStatus = isRequestedRideStatus(ride?.status, ride?.ride_status);
   const nearbyDrivers = useNearbyDrivers(isPendingStatus);
+  const viewerCount = useRideViewerCount(isPendingStatus ? rideId : null);
 
   useEffect(() => {
     if (!ride || !isRequestedRideStatus(ride.status, ride.ride_status) || !ride.expires_at) return;
@@ -291,6 +319,42 @@ export default function RiderRideDetail() {
     } catch (e: unknown) { toast.error("Failed to cancel ride", { description: (e as Error).message }); }
   };
 
+  // Rider declined the driver who accepted their bid (or the 50s confirm
+  // window ran out) — release this ride and re-request an equivalent one so
+  // it re-enters the open pool for other drivers, using the same cancel +
+  // request-ride primitives as everywhere else in the app rather than a new
+  // "reopen for other drivers" backend transition.
+  const handleDeclineDriver = async () => {
+    setShowAcceptedOverlay(false);
+    if (!ride) { nav("/ride"); return; }
+    const declined = ride;
+    try {
+      await goBackend.post(`/api/rides/${declined.id}/status`, { status: "cancelled" });
+      const result = await requestRide({
+        pickup_address: declined.pickup_address,
+        dropoff_address: declined.dropoff_address,
+        fare: declined.fare,
+        distance_km: declined.distance_km,
+        duration_minutes: declined.duration_minutes,
+        pickup_lat: declined.pickup_lat,
+        pickup_lng: declined.pickup_lon,
+        dropoff_lat: declined.dropoff_lat,
+        dropoff_lng: declined.dropoff_lon,
+        payment_method: declined.payment_method,
+      });
+      if (result.ok) {
+        toast.info("Looking for another driver…");
+        nav(`/ride/${result.ride.id}/matching`, { replace: true });
+      } else {
+        toast.error("Could not release this ride", { description: result.error });
+        nav("/ride");
+      }
+    } catch (e: unknown) {
+      toast.error("Failed to decline driver", { description: (e as Error).message });
+      nav("/ride");
+    }
+  };
+
   const modalViewing = offers.map((o) => {
     const d = driversById[o.driver_id];
     return {
@@ -353,6 +417,19 @@ export default function RiderRideDetail() {
 
   const etaMinutes = tripMetrics?.etaMinutes ?? null;
   const distanceLeftKm = tripMetrics?.distanceKm ?? null;
+
+  // Compact map-anchored "Arrival" card — PickMe route styling shows the
+  // whole route as a single gradient, so the ETA lives beside the relevant
+  // pin instead of as a floating overlay.
+  const arrivalMapCards = useMemo(() => {
+    if (!isAccepted || !ride || etaMinutes === null) return undefined;
+    const target = isInProgress ? dropoffCoords : pickupCoords;
+    if (!target) return undefined;
+    const arrivalTime = new Date(Date.now() + etaMinutes * 60_000);
+    const timeLabel = arrivalTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    const km = distanceLeftKm !== null ? `${distanceLeftKm.toFixed(1)} km` : undefined;
+    return [{ id: 'arrival', at: target, label: 'Arrival', value: timeLabel, subvalue: km }];
+  }, [isAccepted, isInProgress, ride, etaMinutes, distanceLeftKm, pickupCoords?.lat, pickupCoords?.lng, dropoffCoords?.lat, dropoffCoords?.lng]);
 
   // Ultra-compact collapsed content — thin floating bar
   const collapsedContent = (
@@ -422,6 +499,8 @@ export default function RiderRideDetail() {
             tripStatus={ride!.status}
             height="100%"
             className="w-full h-full"
+            routeGradient
+            mapCards={arrivalMapCards}
           />
         ) : pickupCoords ? (
           <MapboxMap
@@ -445,7 +524,7 @@ export default function RiderRideDetail() {
 
       {/* ═══ TOP BAR (floating) ═══ */}
       <div className="absolute top-0 left-0 right-0 z-40 flex items-center justify-between px-4" style={{ paddingTop: 'calc(env(safe-area-inset-top) + 12px)' }}>
-        <button onClick={() => nav("/ride")} className="w-10 h-10 flex items-center justify-center rounded-full bg-card/90 backdrop-blur-sm shadow-md active:scale-95 transition-transform">
+        <button onClick={() => nav("/ride")} aria-label="Back" className="w-10 h-10 flex items-center justify-center rounded-full bg-card/90 backdrop-blur-sm shadow-md active:scale-95 transition-transform">
           <ArrowLeft className="w-5 h-5 text-foreground" />
         </button>
 
@@ -498,7 +577,13 @@ export default function RiderRideDetail() {
           )}
         </AnimatePresence>
 
-        <EmergencyButton />
+        <button
+          onClick={() => nav("/safety")}
+          className="flex items-center gap-1.5 h-10 px-4 rounded-full bg-card/90 backdrop-blur-sm shadow-md active:scale-95 transition-transform"
+        >
+          <LifeBuoy className="w-4 h-4 text-primary" />
+          <span className="text-sm font-bold text-foreground">Help</span>
+        </button>
       </div>
 
       {/* ═══ "BOOKED FOR YOU" BANNER ═══ */}
@@ -519,164 +604,24 @@ export default function RiderRideDetail() {
         </motion.div>
       )}
 
-      {/* ═══ DRIVER ACCEPTED FULL-SCREEN OVERLAY ═══ */}
-      <AnimatePresence>
-        {showAcceptedOverlay && (
-          <motion.div
-            key="accepted-overlay"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.3 }}
-            className="fixed inset-0 z-[9999] bg-primary/95 backdrop-blur-md flex flex-col items-center justify-center text-primary-foreground"
-            onClick={() => setShowAcceptedOverlay(false)}
-          >
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: [0, 1.3, 1] }}
-              transition={{ duration: 0.6, ease: 'easeOut' }}
-              className="w-24 h-24 rounded-full bg-primary-foreground/20 flex items-center justify-center mb-6"
-            >
-              <CheckCircle2 className="w-14 h-14 text-primary-foreground" />
-            </motion.div>
-            <motion.p
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-              className="text-3xl font-black mb-2"
-            >
-              Driver Accepted!
-            </motion.p>
-            <motion.p
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.5 }}
-              className="text-lg opacity-90 text-center px-8"
-            >
-              Your driver is on the way to pick you up
-            </motion.p>
-            {driverProfile && (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.7 }}
-                className="mt-6 bg-primary-foreground/15 rounded-2xl px-6 py-4 flex items-center gap-4"
-              >
-                <Avatar className="h-14 w-14 border-2 border-primary-foreground/30">
-                  {driverProfile.avatar_url && <AvatarImage src={driverProfile.avatar_url} />}
-                  <AvatarFallback className="bg-primary-foreground/20 text-primary-foreground font-bold">
-                    <Car className="w-6 h-6" />
-                  </AvatarFallback>
-                </Avatar>
-                <div>
-                  <p className="font-bold text-lg">
-                    {driverProfile.vehicle_make} {driverProfile.vehicle_model}
-                  </p>
-                  <p className="text-sm opacity-80">{driverProfile.plate_number}</p>
-                </div>
-              </motion.div>
-            )}
-            <motion.p
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 0.6 }}
-              transition={{ delay: 1.2 }}
-              className="mt-8 text-xs"
-            >
-              Tap anywhere to dismiss
-            </motion.p>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* ═══ DRIVER STATUS POPUP BANNERS ═══ */}
-      <AnimatePresence>
-        {isAccepted && !isArrived && !isInProgress && ride?.status === 'accepted' && (
-          <motion.div
-            key="driver-on-way"
-            initial={{ y: -60, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: -60, opacity: 0 }}
-            transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-            className="absolute top-24 left-4 right-4 z-30 bg-primary text-primary-foreground rounded-2xl px-5 py-4 shadow-lg flex items-center gap-3"
-          >
-            <motion.div
-              animate={{ x: [0, 6, 0] }}
-              transition={{ repeat: Infinity, duration: 1.5, ease: 'easeInOut' }}
-            >
-              <Car className="w-6 h-6" />
-            </motion.div>
-            <div>
-              <p className="font-bold text-sm">Driver is on the way!</p>
-              <p className="text-xs opacity-80">Your driver has accepted and is heading to your pickup point.</p>
-            </div>
-          </motion.div>
-        )}
-        {(ride?.status === 'enroute' || ride?.status === 'enroute_pickup') && (
-          <motion.div
-            key="driver-enroute"
-            initial={{ y: -60, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: -60, opacity: 0 }}
-            transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-            className="absolute top-24 left-4 right-4 z-30 bg-primary text-primary-foreground rounded-2xl px-5 py-4 shadow-lg flex items-center gap-3"
-          >
-            <motion.div
-              animate={{ x: [0, 8, 0] }}
-              transition={{ repeat: Infinity, duration: 1.2, ease: 'easeInOut' }}
-            >
-              <Navigation className="w-6 h-6" />
-            </motion.div>
-            <div>
-              <p className="font-bold text-sm">Driver is coming to you!</p>
-              <p className="text-xs opacity-80">{etaMinutes ? `Estimated arrival in ${etaMinutes} min` : 'Almost there...'}</p>
-            </div>
-          </motion.div>
-        )}
-        {isArrived && (
-          <motion.div
-            key="driver-waiting"
-            initial={{ y: -60, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: -60, opacity: 0 }}
-            transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-            className="absolute top-24 left-4 right-4 z-30 bg-blue-600 text-white rounded-2xl px-5 py-4 shadow-lg flex items-center gap-3"
-          >
-            <motion.div
-              animate={{ scale: [1, 1.2, 1] }}
-              transition={{ repeat: Infinity, duration: 1.5 }}
-            >
-              <Car className="w-6 h-6" />
-            </motion.div>
-            <div>
-              <p className="font-bold text-sm">🚗 Your driver has arrived</p>
-              <p className="text-xs opacity-90">Head to your pickup point now — your driver is waiting.</p>
-            </div>
-          </motion.div>
-        )}
-        {isInProgress && (
-          <motion.div
-            key="trip-in-progress"
-            initial={{ y: -60, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: -60, opacity: 0 }}
-            transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-            className="absolute top-24 left-4 right-4 z-30 bg-emerald-600 text-white rounded-2xl px-5 py-4 shadow-lg flex items-center gap-3"
-          >
-            <motion.div
-              animate={{ x: [0, 6, 0] }}
-              transition={{ repeat: Infinity, duration: 1.5, ease: 'easeInOut' }}
-            >
-              <Navigation className="w-6 h-6" />
-            </motion.div>
-            <div>
-              <p className="font-bold text-sm">Trip in progress</p>
-              <p className="text-xs opacity-90">
-                {etaMinutes ? `${etaMinutes} min • ${distanceLeftKm ? distanceLeftKm.toFixed(1) + ' km left' : 'calculating...'}` : 'On your way to destination'}
-              </p>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* ═══ DRIVER ACCEPTED YOUR RIDE — 50s confirm popup ═══ */}
+      <DriverBidAcceptedModal
+        open={showAcceptedOverlay}
+        driver={driverProfile ? {
+          name: driverName || 'Your Driver',
+          avatarUrl: (driverProfile as Record<string, unknown>).avatar_url as string ?? null,
+          gender: (driverProfile as Record<string, unknown>).gender as string ?? null,
+          ratingAvg: (driverProfile as Record<string, unknown>).rating_avg as number ?? null,
+          vehicleMake: driverProfile.vehicle_make,
+          vehicleModel: driverProfile.vehicle_model,
+          vehicleColor: driverProfile.vehicle_color,
+          plateNumber: driverProfile.plate_number,
+        } : null}
+        fare={ride?.fare ?? 0}
+        etaMinutes={etaMinutes}
+        onConfirm={() => setShowAcceptedOverlay(false)}
+        onDecline={handleDeclineDriver}
+      />
 
       {/* ═══ ON-MAP LIVE TRIP INFO ═══ */}
       {isInProgress && sheetState === 'collapsed' && (
@@ -688,8 +633,8 @@ export default function RiderRideDetail() {
         >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-full bg-emerald-500/10 flex items-center justify-center">
-                <Navigation className="w-4 h-4 text-emerald-600" />
+              <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center">
+                <Navigation className="w-4 h-4 text-primary" />
               </div>
               <div>
                 <p className="text-lg font-black text-foreground tabular-nums leading-none">{etaMinutes ?? '—'} min</p>
@@ -704,51 +649,6 @@ export default function RiderRideDetail() {
             </div>
           </div>
         </motion.div>
-      )}
-
-      {/* ═══ ON-MAP ETA OVERLAY (pre-pickup) ═══ */}
-      {isAccepted && etaMinutes && !isArrived && !isInProgress && sheetState === 'collapsed' && (
-        <motion.div
-          initial={{ scale: 0.8, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          className="absolute left-4 z-30 bg-card/95 backdrop-blur-sm rounded-2xl px-4 py-2.5 shadow-lg border border-border/30"
-          style={{ bottom: 100 }}
-        >
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-              <Car className="w-4 h-4 text-primary" />
-            </div>
-            <div>
-              <p className="text-xl font-black text-foreground tabular-nums leading-none">{etaMinutes} min</p>
-              <p className="text-[10px] text-muted-foreground font-medium">to pickup</p>
-            </div>
-          </div>
-        </motion.div>
-      )}
-
-      {/* ═══ FLOATING ACTION BUTTONS (on map, right side) ═══ */}
-      {isAccepted && driverPhone && (
-        <div className="absolute right-4 z-30 flex flex-col gap-3" style={{ bottom: 100 }}>
-          <motion.button
-            initial={{ scale: 0, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ delay: 0.1 }}
-            onClick={() => startCall()}
-            disabled={callStatus !== "idle"}
-            className="w-12 h-12 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center active:scale-90 transition-transform disabled:opacity-50"
-          >
-            <Phone className="w-5 h-5" />
-          </motion.button>
-          <motion.button
-            initial={{ scale: 0, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ delay: 0.2 }}
-            onClick={() => { setShowCommunication(!showCommunication); setSheetState('half'); }}
-            className="w-12 h-12 rounded-full bg-card text-foreground shadow-lg border border-border/40 flex items-center justify-center active:scale-90 transition-transform"
-          >
-            <MessageCircle className="w-5 h-5" />
-          </motion.button>
-        </div>
       )}
 
       {/* ═══ DRAGGABLE BOTTOM SHEET ═══ */}
@@ -860,7 +760,7 @@ export default function RiderRideDetail() {
                   initial={{ opacity: 0, scale: 0.95, y: -10 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-                  className="rounded-2xl bg-blue-600 text-white p-5 shadow-lg"
+                  className="rounded-2xl bg-primary text-white p-5 shadow-lg"
                 >
                   <div className="flex items-center gap-4">
                     <motion.div
@@ -884,7 +784,7 @@ export default function RiderRideDetail() {
                   initial={{ opacity: 0, scale: 0.95, y: -10 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-                  className="rounded-2xl bg-emerald-600 text-white p-5 shadow-lg"
+                  className="rounded-2xl bg-primary text-white p-5 shadow-lg"
                 >
                   <div className="flex items-center gap-3 mb-3">
                     <motion.div
@@ -908,13 +808,18 @@ export default function RiderRideDetail() {
                 </motion.div>
               )}
 
+              {/* "Your driver is on the way" — the pre-pickup hero moment */}
+              {!isArrived && !isInProgress && (
+                <p className="text-lg font-extrabold text-foreground">Your driver is on the way</p>
+              )}
+
               {/* Driver info card */}
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 className="flex items-center gap-3"
               >
-                <Avatar className="h-16 w-16 shrink-0 ring-2 ring-primary/20">
+                <Avatar className="h-14 w-14 shrink-0 ring-2 ring-primary/20">
                   {(driverProfile as Record<string, unknown>).avatar_url ? (
                     <AvatarImage
                       src={(driverProfile as Record<string, unknown>).avatar_url as string}
@@ -929,33 +834,35 @@ export default function RiderRideDetail() {
                   </AvatarFallback>
                 </Avatar>
                 <div className="min-w-0 flex-1">
-                  <p className="font-bold text-foreground text-base">Your Driver</p>
-                  <p className="text-sm text-muted-foreground truncate">
-                    {String((driverProfile as Record<string, unknown>).vehicle_make || '')} {String((driverProfile as Record<string, unknown>).vehicle_model || '')}
-                  </p>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="bg-muted rounded-lg px-2.5 py-1 text-xs font-bold text-foreground">
-                      {String((driverProfile as Record<string, unknown>).plate_number || '')}
-                    </span>
+                  <div className="flex items-center gap-2">
+                    <p className="font-bold text-foreground text-base truncate">{driverName || 'Your Driver'}</p>
                     {((driverProfile as Record<string, unknown>).rating_avg as number) > 0 && (
-                      <span className="flex items-center gap-0.5 text-xs font-semibold text-muted-foreground">
+                      <span className="flex items-center gap-0.5 text-xs font-semibold text-muted-foreground shrink-0">
                         <Star className="h-3 w-3 fill-accent text-accent" />
                         {Number((driverProfile as Record<string, unknown>).rating_avg).toFixed(1)}
                       </span>
                     )}
                   </div>
-                  {(driverProfile as Record<string, unknown>).vehicle_color && (
-                    <div className="flex items-center gap-1.5 mt-1">
-                      <div className="w-3 h-3 rounded-full border border-border/50" style={{ backgroundColor: String((driverProfile as Record<string, unknown>).vehicle_color).toLowerCase() }} />
-                      <span className="text-xs text-muted-foreground capitalize">{String((driverProfile as Record<string, unknown>).vehicle_color)}</span>
-                    </div>
+                  <p className="text-sm text-muted-foreground truncate">
+                    {(driverProfile as Record<string, unknown>).gender === 'female' ? 'Female' : 'Male'}
+                    {" • "}
+                    {String((driverProfile as Record<string, unknown>).vehicle_make || '')} {String((driverProfile as Record<string, unknown>).vehicle_model || '')}
+                  </p>
+                  {(driverProfile as Record<string, unknown>).plate_number && (
+                    <span className="inline-block mt-1 bg-muted rounded-lg px-2.5 py-1 text-xs font-bold text-foreground">
+                      {String((driverProfile as Record<string, unknown>).plate_number)}
+                    </span>
                   )}
                 </div>
-                {etaMinutes && !isArrived && (
-                  <div className="text-center shrink-0 bg-primary/10 rounded-2xl px-4 py-2">
-                    <p className="text-2xl font-black text-primary tabular-nums">{etaMinutes}</p>
-                    <p className="text-[10px] font-semibold text-primary/70 uppercase">min</p>
-                  </div>
+                {driverPhone && (
+                  <a
+                    href={`tel:${driverPhone}`}
+                    aria-label="Call driver"
+                    className="w-11 h-11 rounded-full flex items-center justify-center shrink-0 active:scale-90 transition-transform"
+                    style={{ background: 'var(--gradient-primary)' }}
+                  >
+                    <Phone className="h-4.5 w-4.5 text-white" />
+                  </a>
                 )}
               </motion.div>
 
@@ -968,8 +875,10 @@ export default function RiderRideDetail() {
                     <div className="w-2.5 h-2.5 rounded-full bg-primary" />
                   </div>
                   <div className="flex-1 min-w-0">
+                    <p className="text-[11px] font-semibold text-muted-foreground">Pickup</p>
                     <p className="text-sm font-medium text-foreground truncate">{ride.pickup_address}</p>
-                    <p className="text-sm text-muted-foreground truncate mt-4">{ride.dropoff_address}</p>
+                    <p className="text-[11px] font-semibold text-muted-foreground mt-3">Drop off</p>
+                    <p className="text-sm text-muted-foreground truncate">{ride.dropoff_address}</p>
                   </div>
                 </div>
                 <div className="flex items-center justify-between mt-3 pt-3 border-t border-border/30">
@@ -978,18 +887,19 @@ export default function RiderRideDetail() {
                 </div>
               </div>
 
-              {/* Quick actions row (inside sheet for expanded state) */}
+              {/* Quick actions row — Call, Message, Share, Safety */}
               {driverPhone && (
-                <div className="grid grid-cols-3 gap-2">
-                  <a href={`tel:${driverPhone}`} className="flex flex-col items-center gap-1.5 py-3 rounded-2xl bg-muted/50 active:scale-95 transition-transform">
-                    <Phone className="h-5 w-5 text-primary" />
-                    <span className="text-[11px] font-medium text-muted-foreground">Call</span>
+                <div className="grid grid-cols-4 gap-2">
+                  <a href={`tel:${driverPhone}`} className="flex flex-col items-center gap-1.5 py-3 rounded-2xl border border-border active:scale-95 transition-transform">
+                    <Phone className="h-5 w-5 text-foreground" />
+                    <span className="text-[11px] font-medium text-foreground">Call</span>
                   </a>
-                  <button onClick={() => setShowCommunication(!showCommunication)} className="flex flex-col items-center gap-1.5 py-3 rounded-2xl bg-muted/50 active:scale-95 transition-transform">
-                    <MessageCircle className="h-5 w-5 text-primary" />
-                    <span className="text-[11px] font-medium text-muted-foreground">Message</span>
+                  <button onClick={() => { setShowCommunication(!showCommunication); setSheetState('half'); }} className="flex flex-col items-center gap-1.5 py-3 rounded-2xl border border-border active:scale-95 transition-transform">
+                    <MessageCircle className="h-5 w-5 text-foreground" />
+                    <span className="text-[11px] font-medium text-foreground">Message</span>
                   </button>
-                  <ShareTripButton rideId={ride.id} pickupAddress={ride.pickup_address} dropoffAddress={ride.dropoff_address} />
+                  <ShareTripButton rideId={ride.id} pickupAddress={ride.pickup_address} dropoffAddress={ride.dropoff_address} driverName={driverName ?? undefined} variant="square" />
+                  <EmergencyButton rideId={ride.id} pickupAddress={ride.pickup_address} dropoffAddress={ride.dropoff_address} driverName={driverName ?? undefined} variant="square" />
                 </div>
               )}
 
@@ -1050,7 +960,7 @@ export default function RiderRideDetail() {
               {/* Complete trip */}
               {isInProgress && (
                 <Button
-                  className="w-full h-[52px] rounded-2xl font-bold text-base bg-amber-500 hover:bg-amber-600 text-white"
+                  className="w-full h-12 rounded-2xl font-bold text-base bg-amber-500 hover:bg-amber-600 text-white"
                   onClick={async () => {
                     try {
                       const result = await completeTrip(ride.id);
@@ -1114,13 +1024,13 @@ export default function RiderRideDetail() {
                       <Button variant="outline" size="icon" className="h-8 w-8 rounded-xl" onClick={() => updateFare(ride.fare - 5)} disabled={updatingFare || ride.fare <= 10}>
                         <Minus className="h-4 w-4" />
                       </Button>
-                      <span className="font-black text-xl min-w-[60px] text-center text-foreground tabular-nums">${ride.fare.toFixed(2)}</span>
+                      <span className="text-2xl font-black min-w-[60px] text-center text-primary tabular-nums">${ride.fare.toFixed(2)}</span>
                       <Button variant="outline" size="icon" className="h-8 w-8 rounded-xl" onClick={() => updateFare(ride.fare + 5)} disabled={updatingFare}>
                         <Plus className="h-4 w-4" />
                       </Button>
                     </div>
                   ) : (
-                    <span className="font-black text-xl text-foreground">${ride.fare.toFixed(2)}</span>
+                    <span className="text-2xl font-black text-primary tabular-nums">${ride.fare.toFixed(2)}</span>
                   )}
                 </div>
               </motion.div>
@@ -1131,6 +1041,7 @@ export default function RiderRideDetail() {
                   secondsLeft={secondsLeft}
                   driversNearby={nearbyDrivers.length}
                   offersCount={offers.length}
+                  viewingCount={viewerCount}
                   onCancel={handleCancelRide}
                 />
               )}
@@ -1156,7 +1067,7 @@ export default function RiderRideDetail() {
 
           {/* Rate driver button */}
           {ride?.status === "completed" && !hasRated && !showRating && ride.driver_id && user && (
-            <Button className="w-full h-[52px] gap-2 rounded-2xl bg-primary hover:brightness-110 text-primary-foreground font-bold" onClick={() => setShowRating(true)}>
+            <Button className="w-full h-12 gap-2 rounded-2xl bg-primary hover:brightness-110 text-primary-foreground font-bold" onClick={() => setShowRating(true)}>
               <Star className="h-4 w-4" /> Rate Your Driver
             </Button>
           )}

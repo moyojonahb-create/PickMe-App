@@ -1,11 +1,16 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { Car, Shield, Clock, Radio, Zap } from 'lucide-react';
+import { Car, Shield, Clock, Radio, Zap, Users } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 interface SearchingOverlayProps {
   secondsLeft: number;
   driversNearby?: number;
   offersCount?: number;
+  /** Live count of drivers currently viewing this specific request (Supabase
+   * Realtime Presence, see useRideViewerCount) — distinct from driversNearby,
+   * which is just geographic proximity. Drives the searching → viewing →
+   * accepted status progression. */
+  viewingCount?: number;
   onCancel?: () => void;
 }
 
@@ -17,7 +22,7 @@ const SEARCHING_MESSAGES = [
   { text: "Your safety is our priority", icon: Shield },
 ];
 
-export default function SearchingOverlay({ secondsLeft, driversNearby = 0, offersCount = 0, onCancel }: SearchingOverlayProps) {
+export default function SearchingOverlay({ secondsLeft, driversNearby = 0, offersCount = 0, viewingCount = 0, onCancel }: SearchingOverlayProps) {
   const [msgIndex, setMsgIndex] = useState(0);
 
   useEffect(() => {
@@ -28,7 +33,12 @@ export default function SearchingOverlay({ secondsLeft, driversNearby = 0, offer
   }, []);
 
   const current = SEARCHING_MESSAGES[msgIndex];
-  const Icon = current.icon;
+  // Once a driver is actually looking at this request, that's more useful
+  // than the generic rotating copy — searching → X viewing → accepted.
+  const statusText = viewingCount > 0
+    ? `${viewingCount} driver${viewingCount > 1 ? 's' : ''} viewing your request`
+    : current.text;
+  const StatusIcon = viewingCount > 0 ? Users : current.icon;
   const progress = Math.min(100, (secondsLeft / 300) * 100);
 
   return (
@@ -66,7 +76,7 @@ export default function SearchingOverlay({ secondsLeft, driversNearby = 0, offer
         {/* Dynamic message */}
         <AnimatePresence mode="wait">
           <motion.div
-            key={msgIndex}
+            key={viewingCount > 0 ? 'viewing' : msgIndex}
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -6 }}
@@ -74,8 +84,8 @@ export default function SearchingOverlay({ secondsLeft, driversNearby = 0, offer
             className="text-center"
           >
             <div className="flex items-center justify-center gap-2">
-              <Icon className="w-4 h-4 text-primary" />
-              <p className="text-sm font-semibold text-foreground">{current.text}</p>
+              <StatusIcon className="w-4 h-4 text-primary" />
+              <p className="text-sm font-semibold text-foreground">{statusText}</p>
             </div>
           </motion.div>
         </AnimatePresence>

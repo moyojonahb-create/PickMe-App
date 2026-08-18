@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
-import { MapPin, Navigation, Clock, Car, Shield, Phone, MessageCircle, AlertCircle, Radio, ChevronRight } from "lucide-react";
+import { MapPin, Navigation, Clock, Car, Shield, Phone, AlertCircle, Radio, ChevronRight } from "lucide-react";
 import { motion } from "framer-motion";
 import TripMapboxMap from "@/components/TripMapboxMap";
 
@@ -174,8 +174,8 @@ export default function LiveTrackingPage() {
     : null;
 
   const statusLabels: Record<string, { label: string; color: string; bg: string }> = {
-    pending: { label: "Waiting for driver", color: "text-yellow-600", bg: "bg-yellow-500" },
-    searching: { label: "Searching for driver", color: "text-yellow-600", bg: "bg-yellow-500" },
+    pending: { label: "Waiting for driver", color: "text-amber-600", bg: "bg-amber-500" },
+    searching: { label: "Searching for driver", color: "text-amber-600", bg: "bg-amber-500" },
     accepted: { label: "Driver en route to pickup", color: "text-primary", bg: "bg-primary" },
     driver_arriving: { label: "Driver on the way", color: "text-primary", bg: "bg-primary" },
     driver_arrived: { label: "Driver has arrived", color: "text-primary", bg: "bg-primary" },
@@ -206,7 +206,7 @@ export default function LiveTrackingPage() {
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-bold text-foreground">Live Trip Tracking</p>
-            <p className="text-[10px] text-muted-foreground">Shared via Voyex</p>
+            <p className="text-[10px] text-muted-foreground">Shared via PickMe</p>
           </div>
           {etaMinutes && isActive && (
             <motion.div
@@ -223,7 +223,7 @@ export default function LiveTrackingPage() {
       </div>
 
       {/* Bottom panel */}
-      <div className="absolute bottom-0 left-0 right-0 z-50 bg-card rounded-t-[28px] shadow-[0_-8px_40px_rgba(0,0,0,0.12)]"
+      <div className="absolute bottom-0 left-0 right-0 z-50 bg-card rounded-t-3xl shadow-[0_-8px_40px_rgba(0,0,0,0.12)]"
         style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 12px)' }}>
         <div className="flex justify-center pt-3 pb-2"><div className="w-10 h-1 rounded-full bg-border" /></div>
 
@@ -321,12 +321,9 @@ export default function LiveTrackingPage() {
             </div>
           )}
 
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2">
             <a href="tel:995" className="flex items-center justify-center gap-1 rounded-2xl border border-border/40 bg-background/70 px-2 py-2.5 text-[11px] font-semibold text-foreground">
               <Phone className="h-3.5 w-3.5" /> Help
-            </a>
-            <a href="sms:" className="flex items-center justify-center gap-1 rounded-2xl border border-border/40 bg-background/70 px-2 py-2.5 text-[11px] font-semibold text-foreground">
-              <MessageCircle className="h-3.5 w-3.5" /> Chat
             </a>
             <a href="tel:995" className="flex items-center justify-center gap-1 rounded-2xl bg-destructive px-2 py-2.5 text-[11px] font-semibold text-destructive-foreground">
               <AlertCircle className="h-3.5 w-3.5" /> SOS
@@ -337,7 +334,7 @@ export default function LiveTrackingPage() {
             href="/"
             className="block w-full py-3 rounded-2xl bg-primary text-primary-foreground font-semibold text-sm text-center active:scale-[0.98] transition-all"
           >
-            Get Voyex — Ride with Confidence
+            Get PickMe — Ride with Confidence
           </a>
         </div>
       </div>

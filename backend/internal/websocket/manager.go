@@ -20,6 +20,20 @@ const (
 	defaultPingInterval  = 25 * time.Second
 	defaultPongWait      = 60 * time.Second
 	defaultPubSubChannel = "pickme:ws:rooms"
+
+	RoleRider  = "rider"
+	RoleDriver = "driver"
+
+	envelopeKindRoom = "room"
+	envelopeKindUser = "user"
+
+	// DriverRoleRoom is the implicit room every driver connection joins on
+	// connect (see websocket/handler.go). It lets legacy marketplace-style
+	// broadcasts (e.g. an open ride offer to every online driver) reach
+	// drivers on any instance via the same cross-instance-safe BroadcastRoom
+	// path room messages already use, instead of requiring the sender to
+	// know each driver's ID and instance up front.
+	DriverRoleRoom = "role:drivers"
 )
 
 type Manager struct {
@@ -30,6 +44,8 @@ type Manager struct {
 	nodeID     string
 	pubsub     PubSub
 	pubsubChan string
+	riders     *ConnectionRegistry
+	drivers    *ConnectionRegistry
 	seqMu      sync.Mutex
 	sequences  map[string]uint64
 	seenSeq    map[string]uint64
@@ -48,9 +64,15 @@ type PubSub interface {
 	Subscribe(ctx context.Context, channel string, handler func([]byte)) error
 }
 
-type roomEnvelope struct {
+// wsEnvelope is the single pub/sub message shape for both room broadcasts
+// and direct-to-user sends, sharing one channel/subscribe loop. Kind
+// discriminates which fields apply: "room" uses RoomID, "user" uses Role+UserID.
+type wsEnvelope struct {
+	Kind    string          `json:"kind"`
 	NodeID  string          `json:"node_id"`
-	RoomID  string          `json:"room_id"`
+	RoomID  string          `json:"room_id,omitempty"`
+	Role    string          `json:"role,omitempty"`
+	UserID  string          `json:"user_id,omitempty"`
 	Seq     uint64          `json:"seq"`
 	SentAt  time.Time       `json:"sent_at"`
 	Payload json.RawMessage `json:"payload"`
@@ -74,6 +96,26 @@ func NewManager() *Manager {
 func (m *Manager) WithPubSub(pubsub PubSub) *Manager {
 	m.pubsub = pubsub
 	return m
+}
+
+// WithUserRegistries gives the Manager the rider/driver connection
+// registries it needs for SendToUser to attempt local delivery before
+// falling back to pub/sub.
+func (m *Manager) WithUserRegistries(riders, drivers *ConnectionRegistry) *Manager {
+	m.riders = riders
+	m.drivers = drivers
+	return m
+}
+
+func (m *Manager) registryForRole(role string) *ConnectionRegistry {
+	switch role {
+	case RoleDriver:
+		return m.drivers
+	case RoleRider:
+		return m.riders
+	default:
+		return nil
+	}
 }
 
 func (m *Manager) StartPubSub(ctx context.Context) {
@@ -207,6 +249,26 @@ func (m *Manager) BroadcastRoom(roomID string, payload []byte) {
 	m.publishRoom(roomID, payload)
 }
 
+// SendToUser delivers payload to the given role's ("rider" or "driver")
+// live connection for userID. It always attempts local delivery first via
+// the matching registry, and always also publishes to pub/sub — mirroring
+// BroadcastRoom's unconditional local-then-publish pattern. The publish
+// step must never be skipped just because local delivery appeared to
+// succeed: a registry entry can be stale (not yet cleaned up) and pass Get
+// while Send still fails, so the pub/sub fallback is the only reliable path
+// regardless of what the local attempt reports. Returns whether local
+// delivery on this instance succeeded.
+func (m *Manager) SendToUser(role string, userID string, payload []byte) bool {
+	delivered := false
+	if registry := m.registryForRole(role); registry != nil {
+		if conn, ok := registry.Get(userID); ok {
+			delivered = m.Send(conn, payload)
+		}
+	}
+	m.publishUser(role, userID, payload)
+	return delivered
+}
+
 func (m *Manager) BroadcastRoomLocal(roomID string, payload []byte) {
 	m.roomsMu.Lock()
 	roomClients, exists := m.rooms[roomID]
@@ -297,13 +359,36 @@ func (m *Manager) publishRoom(roomID string, payload []byte) {
 	if m.pubsub == nil || roomID == "" {
 		return
 	}
-	env := roomEnvelope{
+	scope := "room:" + roomID
+	env := wsEnvelope{
+		Kind:    envelopeKindRoom,
 		NodeID:  m.nodeID,
 		RoomID:  roomID,
-		Seq:     m.nextSequence(roomID),
+		Seq:     m.nextSequence(scope),
 		SentAt:  time.Now().UTC(),
 		Payload: append([]byte(nil), payload...),
 	}
+	m.publishEnvelope(env)
+}
+
+func (m *Manager) publishUser(role string, userID string, payload []byte) {
+	if m.pubsub == nil || role == "" || userID == "" {
+		return
+	}
+	scope := "user:" + role + ":" + userID
+	env := wsEnvelope{
+		Kind:    envelopeKindUser,
+		NodeID:  m.nodeID,
+		Role:    role,
+		UserID:  userID,
+		Seq:     m.nextSequence(scope),
+		SentAt:  time.Now().UTC(),
+		Payload: append([]byte(nil), payload...),
+	}
+	m.publishEnvelope(env)
+}
+
+func (m *Manager) publishEnvelope(env wsEnvelope) {
 	raw, err := json.Marshal(env)
 	if err != nil {
 		observability.CaptureError(err)
@@ -319,33 +404,53 @@ func (m *Manager) publishRoom(roomID string, payload []byte) {
 }
 
 func (m *Manager) handlePubSubMessage(payload []byte) {
-	var env roomEnvelope
+	var env wsEnvelope
 	if err := json.Unmarshal(payload, &env); err != nil {
 		observability.CaptureError(err)
 		log.Println("WebSocket pubsub decode error:", err)
 		return
 	}
-	if env.NodeID == "" || env.NodeID == m.nodeID || env.RoomID == "" || len(env.Payload) == 0 {
+	if env.NodeID == "" || env.NodeID == m.nodeID || len(env.Payload) == 0 {
 		return
 	}
-	if !m.acceptSequence(env.NodeID, env.RoomID, env.Seq) {
-		return
+	switch env.Kind {
+	case envelopeKindRoom:
+		if env.RoomID == "" {
+			return
+		}
+		if !m.acceptSequence(env.NodeID, "room:"+env.RoomID, env.Seq) {
+			return
+		}
+		m.BroadcastRoomLocal(env.RoomID, env.Payload)
+	case envelopeKindUser:
+		if env.Role == "" || env.UserID == "" {
+			return
+		}
+		if !m.acceptSequence(env.NodeID, "user:"+env.Role+":"+env.UserID, env.Seq) {
+			return
+		}
+		registry := m.registryForRole(env.Role)
+		if registry == nil {
+			return
+		}
+		if conn, ok := registry.Get(env.UserID); ok {
+			m.Send(conn, env.Payload)
+		}
 	}
-	m.BroadcastRoomLocal(env.RoomID, env.Payload)
 }
 
-func (m *Manager) nextSequence(roomID string) uint64 {
+func (m *Manager) nextSequence(scope string) uint64 {
 	m.seqMu.Lock()
 	defer m.seqMu.Unlock()
-	m.sequences[roomID]++
-	return m.sequences[roomID]
+	m.sequences[scope]++
+	return m.sequences[scope]
 }
 
-func (m *Manager) acceptSequence(nodeID string, roomID string, seq uint64) bool {
+func (m *Manager) acceptSequence(nodeID string, scope string, seq uint64) bool {
 	if seq == 0 {
 		return true
 	}
-	key := nodeID + ":" + roomID
+	key := nodeID + ":" + scope
 	m.seqMu.Lock()
 	defer m.seqMu.Unlock()
 	if seq <= m.seenSeq[key] {

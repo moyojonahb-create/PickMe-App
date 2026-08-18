@@ -517,6 +517,7 @@ export type Database = {
           vehicle_color: string | null
           vehicle_make: string | null
           vehicle_model: string | null
+          vehicle_photo_url: string | null
           vehicle_type: string
           vehicle_year: number | null
         }
@@ -541,6 +542,7 @@ export type Database = {
           vehicle_color?: string | null
           vehicle_make?: string | null
           vehicle_model?: string | null
+          vehicle_photo_url?: string | null
           vehicle_type?: string
           vehicle_year?: number | null
         }
@@ -565,6 +567,7 @@ export type Database = {
           vehicle_color?: string | null
           vehicle_make?: string | null
           vehicle_model?: string | null
+          vehicle_photo_url?: string | null
           vehicle_type?: string
           vehicle_year?: number | null
         }

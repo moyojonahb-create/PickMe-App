@@ -7,7 +7,7 @@ export function GlassSheet({ className, ...props }: GlassSheetProps) {
   return (
     <div
       className={cn(
-        "rounded-t-[28px] bg-background border-t border-border/40 shadow-[0_-4px_24px_rgba(0,0,0,0.08)]",
+        "rounded-t-3xl bg-background border-t border-border/40 shadow-[0_-4px_24px_rgba(0,0,0,0.08)]",
         className,
       )}
       {...props}

@@ -166,14 +166,14 @@ export default function AdminStudents() {
     <AdminLayout>
       <div className="p-4 max-w-6xl mx-auto">
         <div className="flex items-center gap-2 mb-4">
-          <GraduationCap className="w-5 h-5 text-blue-600" />
+          <GraduationCap className="w-5 h-5 text-primary" />
           <h1 className="text-2xl font-bold">Student Verifications</h1>
         </div>
 
         <div className="flex gap-1.5 mb-3 overflow-x-auto">
           {(['pending', 'approved', 'rejected', 'locked', 'all'] as const).map(f => (
             <button key={f} onClick={() => setFilter(f)}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold capitalize border ${filter === f ? 'bg-blue-600 text-white border-blue-600' : 'bg-card border-border'}`}>
+              className={`px-3 py-1.5 rounded-full text-xs font-semibold capitalize border ${filter === f ? 'bg-primary text-white border-primary' : 'bg-card border-border'}`}>
               {f}
             </button>
           ))}
@@ -201,7 +201,7 @@ export default function AdminStudents() {
               role="tab"
               aria-selected={sortBy === key}
               onClick={() => setSortBy(key)}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold border whitespace-nowrap ${sortBy === key ? 'bg-blue-600 text-white border-blue-600' : 'bg-card border-border'}`}
+              className={`px-3 py-1.5 rounded-full text-xs font-semibold border whitespace-nowrap ${sortBy === key ? 'bg-primary text-white border-primary' : 'bg-card border-border'}`}
             >
               {label}
             </button>

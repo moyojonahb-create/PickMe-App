@@ -7,14 +7,18 @@ interface ShareTripProps {
   pickupAddress: string;
   dropoffAddress: string;
   driverName?: string;
+  /** 'pill' (default) is the existing compact inline pill. 'square' matches
+   * the bordered icon-over-label action-grid style used on the redesigned
+   * connected-ride screens. */
+  variant?: 'pill' | 'square';
 }
 
-export default function ShareTripButton({ rideId, pickupAddress, dropoffAddress, driverName }: ShareTripProps) {
+export default function ShareTripButton({ rideId, pickupAddress, dropoffAddress, driverName, variant = 'pill' }: ShareTripProps) {
   const [copied, setCopied] = useState(false);
 
   const shareUrl = `${window.location.origin}/track/${rideId}`;
   const text = [
-    `🚗 Track my Voyex ride live!`,
+    `🚗 Track my PickMe ride live!`,
     driverName ? `Driver: ${driverName}` : '',
     `From: ${pickupAddress}`,
     `To: ${dropoffAddress}`,
@@ -36,7 +40,7 @@ export default function ShareTripButton({ rideId, pickupAddress, dropoffAddress,
   const handleShare = async () => {
     try {
       if (navigator.share) {
-        await navigator.share({ title: 'My Voyex Trip', text, url: shareUrl });
+        await navigator.share({ title: 'My PickMe Trip', text, url: shareUrl });
         return;
       }
     } catch {
@@ -62,6 +66,22 @@ export default function ShareTripButton({ rideId, pickupAddress, dropoffAddress,
       setTimeout(() => setCopied(false), 3000);
     }
   };
+
+  if (variant === 'square') {
+    return (
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          handleShare();
+        }}
+        className="flex flex-col items-center gap-1.5 py-3 rounded-2xl border border-border active:scale-95 transition-transform"
+        title="Share Trip"
+      >
+        {copied ? <Check className="w-5 h-5 text-primary" /> : <Share2 className="w-5 h-5 text-foreground" />}
+        <span className="text-[11px] font-medium text-foreground">{copied ? 'Copied' : 'Share trip'}</span>
+      </button>
+    );
+  }
 
   return (
     <button

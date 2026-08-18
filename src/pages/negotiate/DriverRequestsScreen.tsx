@@ -6,10 +6,8 @@ import { toast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ArrowLeft, MapPin, Navigation, RefreshCw } from 'lucide-react';
-import { goBackend } from '@/lib/goBackendClient';
-import { decimalToMinor } from '@/lib/money';
 import { isCurrentDriverTopDriver } from '@/lib/businessApi';
-import { fetchOpenRides } from '@/lib/offerHelpers';
+import { fetchOpenRides, submitOffer } from '@/lib/offerHelpers';
 
 type RideRequest = {
   id: string;
@@ -94,11 +92,11 @@ export default function DriverRequestsScreen() {
 
     setSending(requestId);
     try {
-      await goBackend.post(`/api/rides/${requestId}/offers`, {
-        offer_fare_minor: decimalToMinor(fare),
-        price_minor: decimalToMinor(fare),
-        status: 'pending',
-      });
+      // submitOffer() falls back to a direct Supabase insert if the Go
+      // backend is unreachable, matching DriverDashboard.tsx's offer flow —
+      // this screen used to call goBackend directly with no fallback, so an
+      // unreachable backend meant "Send Offer" failed outright every time.
+      await submitOffer({ ride_id: requestId, price: fare, eta_minutes: 0 });
       toast({ title: 'Offer sent!', description: `Your offer of $${fare} was submitted.` });
       setOfferFares(prev => ({ ...prev, [requestId]: '' }));
     } catch (e: unknown) {

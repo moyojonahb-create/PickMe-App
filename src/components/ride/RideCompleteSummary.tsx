@@ -86,7 +86,7 @@ export default function RideCompleteSummary({
             <div className="flex items-center justify-center gap-1 text-muted-foreground mb-1">
               <DollarSign className="w-3.5 h-3.5" />
             </div>
-            <p className="text-lg font-bold text-foreground">${fare.toFixed(2)}</p>
+            <p className="text-2xl font-black text-primary tabular-nums">${fare.toFixed(2)}</p>
             <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Total Fare</p>
           </div>
           <div className="text-center">
@@ -115,17 +115,17 @@ export default function RideCompleteSummary({
         className="space-y-2"
       >
         {!hasRated && (
-          <PrimaryButton onClick={onRate} className="w-full h-[48px] rounded-2xl text-[15px] font-semibold gap-2">
+          <PrimaryButton onClick={onRate} className="w-full h-12 rounded-2xl text-[15px] font-semibold gap-2">
             <Star className="w-4 h-4" /> Rate Your Driver
           </PrimaryButton>
         )}
 
         <div className="grid grid-cols-2 gap-2">
-          <SecondaryButton onClick={onBookAgain} className="h-12 rounded-2xl gap-2 text-sm font-medium">
+          <SecondaryButton onClick={onBookAgain} className="rounded-2xl gap-2 text-sm font-medium">
             <RotateCcw className="w-4 h-4" /> Book Again
           </SecondaryButton>
           {onSaveLocation && (
-            <SecondaryButton onClick={onSaveLocation} className="h-12 rounded-2xl gap-2 text-sm font-medium">
+            <SecondaryButton onClick={onSaveLocation} className="rounded-2xl gap-2 text-sm font-medium">
               <BookmarkPlus className="w-4 h-4" /> Save Place
             </SecondaryButton>
           )}
@@ -135,19 +135,19 @@ export default function RideCompleteSummary({
         <div className="flex gap-2">
           <SecondaryButton
             onClick={() => {
-              const msg = encodeURIComponent(`🚗 Just completed a Voyex ride!\nFrom: ${pickupAddress}\nTo: ${dropoffAddress}\nFare: $${fare.toFixed(2)}`);
+              const msg = encodeURIComponent(`🚗 Just completed a PickMe ride!\nFrom: ${pickupAddress}\nTo: ${dropoffAddress}\nFare: $${fare.toFixed(2)}`);
               window.open(`https://wa.me/?text=${msg}`, '_blank');
             }}
-            className="flex-1 h-10 rounded-2xl gap-1.5 text-xs font-medium"
+            className="flex-1 rounded-2xl gap-1.5 text-xs font-medium"
           >
             <MessageCircle className="w-3.5 h-3.5" /> Share on WhatsApp
           </SecondaryButton>
           <SecondaryButton
             onClick={() => {
-              const msg = encodeURIComponent(`Voyex ride: $${fare.toFixed(2)} from ${pickupAddress} to ${dropoffAddress}`);
+              const msg = encodeURIComponent(`PickMe ride: $${fare.toFixed(2)} from ${pickupAddress} to ${dropoffAddress}`);
               window.open(`sms:?body=${msg}`, '_self');
             }}
-            className="h-10 rounded-2xl gap-1.5 text-xs font-medium px-4"
+            className="rounded-2xl gap-1.5 text-xs font-medium px-4"
           >
             <Share2 className="w-3.5 h-3.5" /> SMS
           </SecondaryButton>

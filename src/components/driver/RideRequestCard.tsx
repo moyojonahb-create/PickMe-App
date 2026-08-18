@@ -4,6 +4,7 @@ import { Navigation, Clock, CreditCard, Users, ChevronRight, Briefcase } from 'l
 import RidePreferenceTags from '@/components/ride/RidePreferenceTags';
 import LuggagePreviewSheet from '@/components/luggage/LuggagePreviewSheet';
 import { supabase } from '@/integrations/supabase/client';
+import { useTrackRideViewer } from '@/lib/rideViewerPresence';
 
 interface RidePrefs {
   quiet_ride: boolean;
@@ -37,6 +38,11 @@ interface RideRequestCardProps {
 export default function RideRequestCard({ ride, preferences, secsLeft, index, onClick, fmtUSD }: RideRequestCardProps) {
   const [luggage, setLuggage] = useState<{ count: number; description: string | null } | null>(null);
   const [luggageOpen, setLuggageOpen] = useState(false);
+
+  // Marks this driver as "viewing" the ride for as long as this card is
+  // mounted, so the rider can see how many drivers currently have their
+  // request open — see src/pages/RideMatching.tsx's viewer count.
+  useTrackRideViewer(ride.id);
 
   useEffect(() => {
     let mounted = true;

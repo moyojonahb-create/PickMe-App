@@ -21,7 +21,7 @@ const ZWPlacesAutocomplete: React.FC<ZWPlacesAutocompleteProps> = ({
   return (
       <div className="relative">
         <div className="flex items-center gap-2 px-3 py-3 border border-gray-300 rounded-lg bg-white">
-          <MapPin className="w-4 h-4 text-gray-400 flex-shrink-0" />
+          <MapPin className="w-4 h-4 text-foreground flex-shrink-0" />
           <input
             type="text"
             placeholder={placeholder}
@@ -66,7 +66,7 @@ const ZWPlacesAutocomplete: React.FC<ZWPlacesAutocompleteProps> = ({
         )}
 
         {isOpen && loading && (
-          <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-300 rounded-lg p-2 text-xs text-gray-500">
+          <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-300 rounded-lg p-2 text-xs text-muted-foreground">
             Loading locations...
           </div>
         )}

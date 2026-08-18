@@ -130,23 +130,24 @@ export default function RideBottomSheet({
     <div
       ref={sheetRef}
       className={cn(
-        'fixed bottom-0 left-0 right-0 bg-card rounded-t-[24px] z-40',
+        'fixed bottom-0 left-0 right-0 bg-card rounded-t-3xl z-40 overflow-hidden',
         'transition-[height] shadow-[0_-2px_24px_rgba(0,0,0,0.08)]',
         isDragging ? 'duration-0' : 'duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]',
         className
       )}
       style={{ height: sheetHeight, paddingBottom: 'env(safe-area-inset-bottom)' }}
     >
-      {/* Drag Handle */}
+      {/* Drag Handle — PickMe red bar */}
       <div
-        className="flex flex-col items-center pt-2.5 pb-1.5 cursor-grab active:cursor-grabbing touch-none select-none"
+        className="flex flex-col items-center py-2 cursor-grab active:cursor-grabbing touch-none select-none"
+        style={{ background: 'var(--gradient-primary)' }}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
         onMouseDown={handleMouseDown}
         onClick={handleHandleClick}
       >
-        <div className="w-8 h-[3px] bg-muted-foreground/20 rounded-full" />
+        <div className="w-9 h-1 bg-white/90 rounded-full" />
       </div>
 
       {/* Content */}

@@ -25,6 +25,20 @@ type fakeRepository struct {
 	first      []OfferOutcome
 	accepted   []OfferOutcome
 	err        error
+
+	// done, if non-nil, receives a signal after each Record*Outcome call
+	// finishes. RecordFirstOffer/RecordAcceptedOffer run these against the
+	// repo in a fire-and-forget goroutine, so tests that need to observe
+	// the write must synchronize on this instead of sleeping — a sleep
+	// races with the goroutine under the Go memory model even when the
+	// duration is "usually enough" in practice.
+	done chan struct{}
+}
+
+func (f *fakeRepository) signalDone() {
+	if f.done != nil {
+		f.done <- struct{}{}
+	}
 }
 
 func (f *fakeRepository) CreateShadowRun(ctx context.Context, run ShadowRun) error {
@@ -48,6 +62,7 @@ func (f *fakeRepository) UpdateShadowWriteLatency(ctx context.Context, runID str
 }
 
 func (f *fakeRepository) RecordFirstOfferOutcome(ctx context.Context, outcome OfferOutcome) error {
+	defer f.signalDone()
 	if f.err != nil {
 		return f.err
 	}
@@ -56,6 +71,7 @@ func (f *fakeRepository) RecordFirstOfferOutcome(ctx context.Context, outcome Of
 }
 
 func (f *fakeRepository) RecordAcceptedOfferOutcome(ctx context.Context, outcome OfferOutcome) error {
+	defer f.signalDone()
 	if f.err != nil {
 		return f.err
 	}
@@ -163,13 +179,14 @@ func TestShadowWriteFailureDoesNotPanicOrBlockResult(t *testing.T) {
 }
 
 func TestComparisonLogicRecordsOfferOutcomes(t *testing.T) {
-	repo := &fakeRepository{}
+	repo := &fakeRepository{done: make(chan struct{}, 2)}
 	service := NewService(Config{Mode: ModeShadow}, nil, repo)
 
 	service.RecordFirstOffer(context.Background(), OfferOutcome{RideID: "ride-1", OfferID: "offer-1", DriverID: "driver-1"})
 	service.RecordAcceptedOffer(context.Background(), OfferOutcome{RideID: "ride-1", OfferID: "offer-1", DriverID: "driver-1"})
 
-	time.Sleep(50 * time.Millisecond)
+	<-repo.done
+	<-repo.done
 	if len(repo.first) != 1 || repo.first[0].DriverID != "driver-1" {
 		t.Fatalf("expected first offer outcome, got %#v", repo.first)
 	}

@@ -44,6 +44,21 @@ func (r *ConnectionRegistry) Delete(id string) {
 	delete(r.connections, id)
 }
 
+// DeleteIfMatches removes id's entry only if it currently points at conn. It
+// protects against a stale connection's cleanup racing a newer reconnection:
+// without this check, a slow-to-fire disconnect handler for an old
+// connection can delete the registry entry a newer live connection just
+// installed. Returns whether an entry was removed.
+func (r *ConnectionRegistry) DeleteIfMatches(id string, conn *socketio.Websocket) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if current, ok := r.connections[id]; !ok || current != conn {
+		return false
+	}
+	delete(r.connections, id)
+	return true
+}
+
 func (r *ConnectionRegistry) Count() int {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

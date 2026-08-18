@@ -1,8 +1,6 @@
-/* eslint-disable react-hooks/exhaustive-deps */
-import { useEffect, useState } from 'react';
+import { useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { supabase } from '@/lib/supabaseClient';
-import { useAuth } from '@/hooks/useAuth';
+import { useAppBootstrap } from '@/hooks/useAppBootstrap';
 import { Clock, Star, MapPin } from 'lucide-react';
 
 interface RecentDestination {
@@ -12,74 +10,36 @@ interface RecentDestination {
   count: number;
 }
 
-interface FavoriteLocation {
-  id: string;
-  name: string;
-  address: string;
-  latitude: number;
-  longitude: number;
-  icon: string | null;
-}
-
 interface RecentDestinationsProps {
   onSelect: (dest: { name: string; lat: number; lng: number }) => void;
   field: 'pickup' | 'dropoff';
 }
 
 export default function RecentDestinations({ onSelect, field }: RecentDestinationsProps) {
-  const { user } = useAuth();
-  const [destinations, setDestinations] = useState<RecentDestination[]>([]);
-  const [favorites, setFavorites] = useState<FavoriteLocation[]>([]);
+  // Both favorites and recent rides are preloaded into the splash-time
+  // cache (see useAppBootstrap) — derive this screen's view from memory
+  // instead of re-querying Supabase on every mount.
+  const { favorites: allFavorites, recentRides } = useAppBootstrap();
+  const favorites = useMemo(() => allFavorites.slice(0, 5), [allFavorites]);
 
-  useEffect(() => {
-    if (!user) return;
-    fetchRecent();
-    fetchFavorites();
-  }, [user]);
-
-  const fetchRecent = async () => {
-    const col = field === 'pickup' ? 'pickup' : 'dropoff';
-    const { data } = await supabase
-      .from('rides')
-      .select(`${col}_address, ${col}_lat, ${col}_lon`)
-      .eq('user_id', user!.id)
-      .order('created_at', { ascending: false })
-      .limit(20);
-
-    if (!data) return;
-
+  const destinations = useMemo(() => {
     const map = new Map<string, RecentDestination>();
-    for (const row of data) {
-      const r = row as Record<string, unknown>;
-      const name = typeof r[`${col}_address`] === 'string' ? r[`${col}_address`] as string : '';
-      const lat = typeof r[`${col}_lat`] === 'number' ? r[`${col}_lat`] as number : Number(r[`${col}_lat`]);
-      const lng = typeof r[`${col}_lon`] === 'number' ? r[`${col}_lon`] as number : Number(r[`${col}_lon`]);
+    for (const ride of recentRides) {
+      const name = field === 'pickup' ? ride.pickup_address : ride.dropoff_address;
+      const lat = field === 'pickup' ? ride.pickup_lat : ride.dropoff_lat;
+      const lng = field === 'pickup' ? ride.pickup_lon : ride.dropoff_lon;
       if (!name) continue;
-      const existing = map.get(name as string);
+      const existing = map.get(name);
       if (existing) {
         existing.count++;
       } else {
         map.set(name, { name, lat: Number(lat) || 0, lng: Number(lng) || 0, count: 1 });
       }
     }
-
-    setDestinations(
-      Array.from(map.values())
-        .sort((a, b) => b.count - a.count)
-        .slice(0, 5)
-    );
-  };
-
-  const fetchFavorites = async () => {
-    const { data } = await supabase
-      .from('favorite_locations')
-      .select('*')
-      .eq('user_id', user!.id)
-      .order('created_at', { ascending: false })
-      .limit(5);
-
-    if (data) setFavorites(data);
-  };
+    return Array.from(map.values())
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
+  }, [recentRides, field]);
 
   const hasFavorites = favorites.length > 0;
   const hasRecent = destinations.length > 0;

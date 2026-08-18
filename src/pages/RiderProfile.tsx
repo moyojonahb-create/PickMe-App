@@ -10,11 +10,12 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { supabase } from '@/lib/supabaseClient';
 import { resolveAvatarUrl } from '@/lib/avatarUrl';
 import {
-  ArrowLeft, User, LogOut, Shield, Car, Bell, ShieldCheck, CarFront,
+  ArrowLeft, User, LogOut, Shield, ShieldCheck, CarFront,
   MapPin, ChevronRight, Edit3, History, Camera, Loader2, Wallet,
   Moon, Sun, Trash2, Gift, Navigation, Banknote, Users, Copy, Check,
   DollarSign, TrendingUp, GraduationCap,
 } from 'lucide-react';
+import pickMeCarIcon from '@/assets/pickme-car-icon.png';
 import { useStudentProfile } from '@/hooks/useStudentProfile';
 import { updateMyProfileAvatar } from '@/lib/businessApi';
 import { Button } from '@/components/ui/button';
@@ -201,7 +202,7 @@ export default function RiderProfile() {
             color="yellow"
           />
           <QuickAction
-            icon={<Car className="w-4 h-4" />}
+            icon={<img src={pickMeCarIcon} alt="" className="h-5 w-auto object-contain" />}
             label="Drive"
             sublabel={isApprovedDriver ? 'Active' : 'Earn $'}
             onClick={() => navigate(`${prefix}/driver`)}
@@ -272,12 +273,12 @@ export default function RiderProfile() {
         {/* Student Verification Card */}
         <button
           onClick={() => navigate('/student-verification')}
-          className="w-full glass-card rounded-2xl p-3.5 bg-gradient-to-r from-blue-500/10 to-blue-400/5 border border-blue-500/20 active:scale-[0.98] transition-all text-left"
+          className="w-full glass-card rounded-2xl p-3.5 bg-gradient-to-r from-primary/10 to-primary/5 border border-primary/20 active:scale-[0.98] transition-all text-left"
         >
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 min-w-0">
-              <div className="w-8 h-8 rounded-full bg-blue-500/15 flex items-center justify-center shrink-0">
-                <GraduationCap className="w-4 h-4 text-blue-600" />
+              <div className="w-8 h-8 rounded-full bg-primary/15 flex items-center justify-center shrink-0">
+                <GraduationCap className="w-4 h-4 text-primary" />
               </div>
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-foreground truncate">
@@ -325,13 +326,6 @@ export default function RiderProfile() {
             <Switch checked={theme === 'dark'} onCheckedChange={(v) => setTheme(v ? 'dark' : 'light')} />
           </div>
 
-          <NavRow
-            icon={<Bell className="w-4 h-4 text-primary" />}
-            label="Notifications"
-            sublabel={stats.unreadNotifications > 0 ? `${stats.unreadNotifications} unread` : 'Manage alerts'}
-            onClick={() => navigate(`${prefix}/edit-profile`)}
-            badge={stats.unreadNotifications > 0 ? stats.unreadNotifications : undefined}
-          />
           <NavRow
             icon={<User className="w-4 h-4 text-primary" />}
             label="Edit Profile"

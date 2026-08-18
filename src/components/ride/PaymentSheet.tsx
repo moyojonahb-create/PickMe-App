@@ -139,7 +139,7 @@ export default function PaymentSheet({
           transition: sheetTransition,
           willChange: 'transform',
         }}
-        className={`w-[calc(100%-56px)] max-w-[290px] mb-[calc(env(safe-area-inset-bottom)+8px)] bg-background rounded-2xl shadow-xl border border-border/60 overflow-hidden ${
+        className={`w-[calc(100%-56px)] max-w-[290px] mb-[calc(env(safe-area-inset-bottom)+8px)] bg-background rounded-3xl shadow-xl border border-border/60 overflow-hidden ${
           reduceMotion ? '' : 'animate-in slide-in-from-bottom-6 fade-in duration-300 ease-out'
         }`}
       >

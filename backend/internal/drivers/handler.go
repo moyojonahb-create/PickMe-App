@@ -260,6 +260,42 @@ func (h *Handler) UpdateLocation(c *fiber.Ctx) error {
 		log.Println("Driver session location update error:", err)
 	}
 
+	// live_locations is the table rider-side "nearby drivers"/tracking reads
+	// (see useNearbyDrivers/useDriverTracking on the frontend) — it was
+	// previously only written by Online()/Offline()/Heartbeat(), so a
+	// driver's position froze at whatever Online() wrote (often 0,0) for
+	// their entire online session even while this periodic location update
+	// kept driver_locations/driver_sessions fresh. Keep it in lockstep here.
+	if _, err := h.db.Exec(context.Background(), `
+		INSERT INTO public.live_locations (
+			user_id,
+			user_type,
+			latitude,
+			longitude,
+			heading,
+			speed,
+			is_online,
+			updated_at
+		)
+		VALUES ($1,'driver',$2,$3,$4,$5,true,NOW())
+		ON CONFLICT (user_id)
+		DO UPDATE SET
+			latitude = EXCLUDED.latitude,
+			longitude = EXCLUDED.longitude,
+			heading = EXCLUDED.heading,
+			speed = EXCLUDED.speed,
+			is_online = true,
+			updated_at = NOW()
+	`,
+		req.DriverID,
+		req.Latitude,
+		req.Longitude,
+		req.Heading,
+		req.Speed,
+	); err != nil {
+		log.Println("live_locations update error:", err)
+	}
+
 	h.writeRedisDriverLocation(middleware.RequestContext(c), req)
 	h.recordLocationFreshness(middleware.RequestContext(c), req.DriverID, true)
 

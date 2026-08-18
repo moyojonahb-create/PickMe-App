@@ -3,8 +3,9 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useDriverStatus } from '@/hooks/useDriverStatus';
 import { Button } from '@/components/ui/button';
-import { Clock, DollarSign, Percent, Car, ChevronRight } from 'lucide-react';
+import { Clock, DollarSign, Percent, ChevronRight } from 'lucide-react';
 import PickMeLogo from '@/components/PickMeLogo';
+import pickMeCarFront from '@/assets/pickme-car-front.png';
 import { useState } from 'react';
 import AuthModalWrapper from '@/components/auth/AuthModalWrapper';
 
@@ -79,9 +80,7 @@ export default function DriverModeLanding() {
           onClick={handleDriverAction}
           className="flex items-center gap-4 p-5 rounded-2xl glass-card hover:bg-foreground/[0.02] transition-colors mb-2"
         >
-          <span className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center">
-            <Car className="w-7 h-7" />
-          </span>
+          <img src={pickMeCarFront} alt="" className="h-12 w-auto object-contain shrink-0" />
           <span className="text-lg font-semibold text-foreground flex-1 text-left">Driver</span>
           <ChevronRight className="w-5 h-5 text-muted-foreground" />
         </button>

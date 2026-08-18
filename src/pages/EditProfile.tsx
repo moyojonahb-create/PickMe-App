@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { useAppBootstrap } from '@/hooks/useAppBootstrap';
 import { supabase } from '@/lib/supabaseClient';
 import { resolveAvatarUrl } from '@/lib/avatarUrl';
 import { ArrowLeft, User, Camera, Loader2, Check } from 'lucide-react';
@@ -14,21 +15,27 @@ import { updateMyProfile } from '@/lib/businessApi';
 
 export default function EditProfile() {
   const { user, loading: authLoading } = useAuth();
+  const { profile: cachedProfile } = useAppBootstrap();
   const navigate = useNavigate();
   const location = useLocation();
   const isMapp = location.pathname.startsWith('/mapp');
   const prefix = isMapp ? '/mapp' : '';
 
-  const [fullName, setFullName] = useState('');
-  const [phone, setPhone] = useState('');
+  // The splash bootstrap already fetched full_name/phone/avatar_url — seed
+  // from that cache so this screen renders instantly instead of blocking on
+  // its own fetch. avatar_url still needs async resolution (signed URL),
+  // so that alone loads in the background.
+  const [fullName, setFullName] = useState(cachedProfile?.full_name ?? '');
+  const [phone, setPhone] = useState(cachedProfile?.phone ?? '');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [loaded, setLoaded] = useState(false);
+  const [loaded, setLoaded] = useState(!!cachedProfile);
 
   useEffect(() => {
     if (!authLoading && !user) { navigate('/auth'); return; }
     if (user && !loaded) loadProfile();
+    else if (user && cachedProfile) resolveAvatarUrl(cachedProfile.avatar_url).then(setAvatarUrl);
   }, [user, authLoading]);
 
   const loadProfile = async () => {

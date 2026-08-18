@@ -7,6 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Camera, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import PhotoCropModal from "./PhotoCropModal";
 
 interface DriverAvatarUploadProps {
   currentAvatarUrl?: string | null;
@@ -18,14 +19,16 @@ export default function DriverAvatarUpload({ currentAvatarUrl, gender, onUploade
   const { user } = useAuth();
   const [uploading, setUploading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     resolveAvatarUrl(currentAvatarUrl).then(url => setPreviewUrl(url));
   }, [currentAvatarUrl]);
 
-  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = "";
     if (!file || !user) return;
 
     // Accept any image format — allow low-quality phone cameras
@@ -37,16 +40,20 @@ export default function DriverAvatarUpload({ currentAvatarUrl, gender, onUploade
       toast.error("Image must be under 10MB");
       return;
     }
+    setPendingFile(file);
+  };
 
+  const handleCropped = async (blob: Blob) => {
+    setPendingFile(null);
+    if (!user) return;
     setUploading(true);
     try {
-      const ext = file.name.split(".").pop() || "jpg";
-      const filePath = `${user.id}/avatar.${ext}`;
+      const filePath = `${user.id}/avatar.jpg`;
 
       // Upload to storage
       const { error: uploadErr } = await supabase.storage
         .from("driver-avatars")
-        .upload(filePath, file, { upsert: true });
+        .upload(filePath, blob, { upsert: true, contentType: "image/jpeg" });
 
       if (uploadErr) throw uploadErr;
 
@@ -109,7 +116,14 @@ export default function DriverAvatarUpload({ currentAvatarUrl, gender, onUploade
         accept="image/*"
         capture="user"
         className="hidden"
-        onChange={handleUpload}
+        onChange={handleFileSelected}
+      />
+      <PhotoCropModal
+        file={pendingFile}
+        shape="circle"
+        title="Adjust your photo"
+        onCancel={() => setPendingFile(null)}
+        onCropped={handleCropped}
       />
     </div>
   );

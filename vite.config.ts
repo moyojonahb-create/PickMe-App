@@ -22,6 +22,24 @@ export default defineConfig(({ mode }) => {
         secure: true,
         rewrite: (p) => p.replace(/^\/api\/nominatim/, ''),
       },
+      // The deployed Go backend's CORS allowlist doesn't include localhost,
+      // so browser calls to it fail in local dev. Proxying through Vite
+      // (server-to-server, not subject to browser CORS) fixes that without
+      // touching the deployed backend. goBackendClient/backendSocketClient
+      // route through these paths only when import.meta.env.DEV is true.
+      '/go-api': {
+        target: env.VITE_GO_BACKEND_URL || 'https://koloi-ride-with-confidence-production.up.railway.app',
+        changeOrigin: true,
+        secure: true,
+        rewrite: (p) => p.replace(/^\/go-api/, ''),
+      },
+      '/go-ws': {
+        target: env.VITE_GO_BACKEND_URL || 'https://koloi-ride-with-confidence-production.up.railway.app',
+        changeOrigin: true,
+        secure: true,
+        ws: true,
+        rewrite: (p) => p.replace(/^\/go-ws/, '/ws'),
+      },
     },
     hmr: {
       overlay: false,

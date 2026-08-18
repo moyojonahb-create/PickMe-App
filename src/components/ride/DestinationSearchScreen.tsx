@@ -1,11 +1,10 @@
 /* eslint-disable react-hooks/exhaustive-deps */
-import { useEffect, useState } from 'react';
+import { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import {
   ArrowLeft, Briefcase, Clock, Crosshair, Home, Loader2, Map as MapIcon, MapPin, X,
 } from 'lucide-react';
-import { supabase } from '@/lib/supabaseClient';
-import { useAuth } from '@/hooks/useAuth';
+import { useAppBootstrap } from '@/hooks/useAppBootstrap';
 import { cn } from '@/lib/utils';
 
 export interface SearchPlace {
@@ -20,6 +19,8 @@ export interface SearchResultRow {
   name: string;
   secondary?: string;
   onSelect: () => void;
+  /** Where this result came from — dev-only, shown as a debug badge to gauge whether Google is adding value over our own data. */
+  source?: 'landmark' | 'street' | 'cache' | 'google' | 'nominatim';
 }
 
 interface DestinationSearchScreenProps {
@@ -36,6 +37,11 @@ interface DestinationSearchScreenProps {
   onSelectPlace: (place: SearchPlace) => void;
   results: SearchResultRow[];
   loading?: boolean;
+  /** Set while the rider is picking an address to save as Home/Work (tapped
+   * the shortcut before one was ever saved) — see RideView.tsx's
+   * saveFavoriteIfSetting, which every selection path funnels through. */
+  settingFavorite?: 'home' | 'work' | null;
+  onRequestSetFavorite: (key: 'home' | 'work') => void;
 }
 
 interface FavoritePlace {
@@ -61,49 +67,28 @@ export default function DestinationSearchScreen({
   onSelectPlace,
   results,
   loading,
+  settingFavorite,
+  onRequestSetFavorite,
 }: DestinationSearchScreenProps) {
-  const { user } = useAuth();
-  const [favorites, setFavorites] = useState<FavoritePlace[]>([]);
-  const [recents, setRecents] = useState<SearchPlace[]>([]);
+  // Favorites and recent rides come from the splash-time cache — no
+  // per-mount Supabase query needed (see useAppBootstrap).
+  const { favorites: allFavorites, recentRides } = useAppBootstrap();
+  const favorites = useMemo(() => allFavorites.slice(0, 10) as FavoritePlace[], [allFavorites]);
 
-  useEffect(() => {
-    if (!user?.id) return;
-    let cancelled = false;
-
-    supabase
-      .from('favorite_locations')
-      .select('id, name, address, latitude, longitude, icon')
-      .eq('user_id', user.id)
-      .limit(10)
-      .then(({ data }) => {
-        if (!cancelled && data) setFavorites(data as FavoritePlace[]);
-      });
-
-    const col = activeField === 'pickup' ? 'pickup' : 'dropoff';
-    supabase
-      .from('rides')
-      .select(`${col}_address, ${col}_lat, ${col}_lon`)
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
-      .limit(20)
-      .then(({ data }) => {
-        if (cancelled || !data) return;
-        const seen = new Map<string, SearchPlace>();
-        for (const row of data as Record<string, unknown>[]) {
-          const name = typeof row[`${col}_address`] === 'string' ? (row[`${col}_address`] as string) : '';
-          const lat = Number(row[`${col}_lat`]);
-          const lng = Number(row[`${col}_lon`]);
-          if (!name || !Number.isFinite(lat) || !Number.isFinite(lng)) continue;
-          if (!seen.has(name)) {
-            const parts = name.split(',').map((p) => p.trim()).filter(Boolean);
-            seen.set(name, { name: parts[0] || name, lat, lng, secondary: parts.slice(1).join(', ') || undefined });
-          }
-        }
-        setRecents(Array.from(seen.values()).slice(0, 6));
-      });
-
-    return () => { cancelled = true; };
-  }, [user?.id, activeField]);
+  const recents = useMemo(() => {
+    const seen = new Map<string, SearchPlace>();
+    for (const ride of recentRides) {
+      const name = activeField === 'pickup' ? ride.pickup_address : ride.dropoff_address;
+      const lat = activeField === 'pickup' ? ride.pickup_lat : ride.dropoff_lat;
+      const lng = activeField === 'pickup' ? ride.pickup_lon : ride.dropoff_lon;
+      if (!name || !Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+      if (!seen.has(name)) {
+        const parts = name.split(',').map((p) => p.trim()).filter(Boolean);
+        seen.set(name, { name: parts[0] || name, lat: lat as number, lng: lng as number, secondary: parts.slice(1).join(', ') || undefined });
+      }
+    }
+    return Array.from(seen.values()).slice(0, 12);
+  }, [recentRides, activeField]);
 
   const findFavorite = (key: string) =>
     favorites.find((f) => (f.icon || f.name).toLowerCase().includes(key));
@@ -201,7 +186,9 @@ export default function DestinationSearchScreen({
             <ArrowLeft className="w-5 h-5 text-primary-foreground" />
           </button>
           <h1 className="text-[16px] font-semibold text-primary-foreground">
-            {activeField === 'pickup' ? 'Set pickup' : 'Set destination'}
+            {settingFavorite
+              ? `Search for your ${settingFavorite === 'home' ? 'Home' : 'Work'} address`
+              : activeField === 'pickup' ? 'Set pickup' : 'Set destination'}
           </h1>
         </div>
 
@@ -250,10 +237,10 @@ export default function DestinationSearchScreen({
                   <Icon className="w-5 h-5 text-primary" />
                 </span>,
                 label,
-                fav ? fav.address || fav.name : 'Set address',
+                fav ? fav.address || fav.name : 'Tap to set this address',
                 () => {
                   if (fav) onSelectPlace({ name: fav.name, lat: fav.latitude, lng: fav.longitude });
-                  else onQueryChange('');
+                  else onRequestSetFavorite(key as 'home' | 'work');
                 }
               );
             })}

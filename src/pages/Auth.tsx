@@ -33,7 +33,8 @@ const Auth = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [signupError, setSignupError] = useState<string | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
-  
+  const [isResetting, setIsResetting] = useState(false);
+
 
   useEffect(() => {
     if (!loading && user) {
@@ -56,6 +57,31 @@ const Auth = () => {
       }
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    const trimmed = email.trim();
+    if (!trimmed || !trimmed.includes('@')) {
+      toast({
+        title: 'Enter your email',
+        description: 'Password reset only works with an email address. Type the email you signed up with in the field above.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    setIsResetting(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(trimmed, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      if (error) {
+        toast({ title: 'Could not send reset email', description: error.message, variant: 'destructive' });
+      } else {
+        toast({ title: 'Check your email', description: `We sent a password reset link to ${trimmed}.` });
+      }
+    } finally {
+      setIsResetting(false);
     }
   };
 
@@ -255,10 +281,11 @@ const Auth = () => {
                 </label>
                 <button
                   type="button"
-                  className="text-primary hover:underline"
-                  onClick={() => toast({ title: 'Password reset', description: 'Use the account recovery flow from the app settings.' })}
+                  className="text-primary hover:underline disabled:opacity-60"
+                  onClick={handleForgotPassword}
+                  disabled={isResetting}
                 >
-                  Forgot password?
+                  {isResetting ? 'Sending…' : 'Forgot password?'}
                 </button>
               </div>
 

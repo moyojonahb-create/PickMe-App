@@ -272,7 +272,13 @@ func TestRequestSendsRideOfferExactlyOnceThroughDriverNotifier(t *testing.T) {
 			if !strings.Contains(sql, "INSERT INTO public.rides") {
 				return &fakeRow{err: pgx.ErrNoRows}
 			}
-			if args[0] != "rider-1" || args[1] != "pickup" || args[2] != "dropoff" || !moneyArgEquals(args[3], 10.5) || args[4] != "cash" {
+			// insertArgs order: user_id, pickup_address, dropoff_address,
+			// pickup_lat, pickup_lon, dropoff_lat, dropoff_lon, distance_km,
+			// duration_minutes, fare, status, route_polyline, vehicle_type,
+			// passenger_count, payment_method, town_id, gender_preference,
+			// passenger_name, passenger_phone, scheduled_at — see Handler.Request.
+			if args[0] != "rider-1" || args[1] != "pickup" || args[2] != "dropoff" ||
+				!moneyArgEquals(args[9], 10.5) || args[10] != "pending" || args[14] != "cash" {
 				t.Fatalf("unexpected ride request insert args: %#v", args)
 			}
 			return &fakeRow{values: []any{"ride-1", now}}
@@ -310,25 +316,22 @@ func TestRequestSendsRideOfferExactlyOnceThroughDriverNotifier(t *testing.T) {
 }
 
 func TestSubmitOfferSuccessful(t *testing.T) {
-	insertedIntoRideOffers := false
+	insertedIntoOffers := false
 	now := time.Now()
 	db := &fakeDB{
 		queryRowFn: func(ctx context.Context, sql string, args ...any) pgx.Row {
-			if strings.Contains(sql, "SELECT ride_status") {
-				if strings.Contains(sql, "payment_method") {
-					return &fakeRow{values: []any{"requested", "cash"}}
-				}
-				return &fakeRow{values: []any{"requested"}}
+			if strings.Contains(sql, "SELECT status") && strings.Contains(sql, "FROM public.rides") {
+				return &fakeRow{values: []any{"pending", "cash"}}
 			}
-			if strings.Contains(sql, "INSERT INTO public.ride_offers") {
-				insertedIntoRideOffers = true
+			if strings.Contains(sql, "INSERT INTO public.offers") {
+				insertedIntoOffers = true
 				if args[1] != "ride-1" || args[2] != "driver-1" || args[3] != 12.5 || args[4] != 4 {
 					t.Fatalf("unexpected insert args: %#v", args)
 				}
 				if strings.Contains(sql, "request"+"_id") || strings.Contains(sql, "ride_"+"request"+"_id") {
 					t.Fatalf("offer insert must use ride_id, not request_id columns: %s", sql)
 				}
-				return &fakeRow{values: []any{now, now.Add(defaultOfferTTL)}}
+				return &fakeRow{values: []any{now}}
 			}
 			return &fakeRow{err: pgx.ErrNoRows}
 		},
@@ -341,25 +344,24 @@ func TestSubmitOfferSuccessful(t *testing.T) {
 	if resp.StatusCode != http.StatusCreated {
 		t.Fatalf("expected status 201, got %d", resp.StatusCode)
 	}
-	if !insertedIntoRideOffers {
-		t.Fatal("expected insert into public.ride_offers")
+	if !insertedIntoOffers {
+		t.Fatal("expected insert into public.offers")
 	}
 }
 
-func TestListOffersReturnsPendingNonExpiredOffers(t *testing.T) {
+func TestListOffersReturnsPendingOffers(t *testing.T) {
 	now := time.Now()
 	db := &fakeDB{
 		queryRowFn: func(ctx context.Context, sql string, args ...any) pgx.Row {
 			return &fakeRow{values: []any{"rider-1"}}
 		},
 		queryFn: func(ctx context.Context, sql string, args ...any) (pgx.Rows, error) {
-			if !strings.Contains(sql, "FROM public.ride_offers") ||
+			if !strings.Contains(sql, "FROM public.offers") ||
 				!strings.Contains(sql, "ride_id = $1") ||
-				!strings.Contains(sql, "status = 'pending'") ||
-				!strings.Contains(sql, "expires_at > NOW()") {
+				!strings.Contains(sql, "status = 'pending'") {
 				t.Fatalf("unexpected list offers SQL: %s", sql)
 			}
-			return &fakeRows{rows: [][]any{{"offer-1", "driver-1", 12.5, 4, "pending", now.Add(time.Minute), now}}}, nil
+			return &fakeRows{rows: [][]any{{"offer-1", "driver-1", 12.5, 4, "", "pending", now}}}, nil
 		},
 	}
 
@@ -376,14 +378,26 @@ func TestListOffersReturnsPendingNonExpiredOffers(t *testing.T) {
 	}
 }
 
+// offerAndDriverQueryRow builds a fakeTx.queryRowFn covering the three
+// QueryRow lookups acceptOffer makes inside its transaction: the offer
+// itself (public.offers), the assigned driver's row id (public.drivers),
+// and — via ridesFallback — the ride (public.rides).
+func offerAndDriverQueryRow(ridesFallback []any) func(ctx context.Context, sql string, args ...any) pgx.Row {
+	return func(ctx context.Context, sql string, args ...any) pgx.Row {
+		switch {
+		case strings.Contains(sql, "FROM public.offers"):
+			return &fakeRow{values: []any{"offer-1", "ride-1", "driver-1", 12.5, "pending"}}
+		case strings.Contains(sql, "FROM public.drivers"):
+			return &fakeRow{values: []any{"driver-row-1"}}
+		default:
+			return &fakeRow{values: ridesFallback}
+		}
+	}
+}
+
 func TestAcceptOfferSuccessful(t *testing.T) {
 	tx := &fakeTx{
-		queryRowFn: func(ctx context.Context, sql string, args ...any) pgx.Row {
-			if strings.Contains(sql, "FROM public.ride_offers") {
-				return &fakeRow{values: []any{"offer-1", "ride-1", "driver-1", "pending", time.Now().Add(time.Minute)}}
-			}
-			return &fakeRow{values: []any{"rider-1", "requested", "cash"}, err: nil}
-		},
+		queryRowFn: offerAndDriverQueryRow([]any{"rider-1", "pending", "cash"}),
 		execFn: func(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error) {
 			return pgconn.NewCommandTag("UPDATE 1"), nil
 		},
@@ -421,36 +435,9 @@ func TestAcceptOfferSuccessful(t *testing.T) {
 	}
 }
 
-func TestAcceptOfferExpiredOfferRejected(t *testing.T) {
-	tx := &fakeTx{
-		queryRowFn: func(ctx context.Context, sql string, args ...any) pgx.Row {
-			return &fakeRow{values: []any{"offer-1", "ride-1", "driver-1", "pending", time.Now().Add(-time.Minute)}}
-		},
-		execFn: func(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error) {
-			return pgconn.NewCommandTag("UPDATE 0"), nil
-		},
-		commitFn:   func(ctx context.Context) error { return nil },
-		rollbackFn: func(ctx context.Context) error { return nil },
-	}
-	db := &fakeDB{beginFn: func(ctx context.Context) (Tx, error) { return tx, nil }}
-
-	h := makeHandlerWithDB(db)
-	app := makeAuthApp(h.AcceptOffer, "rider-1")
-
-	resp := doRequest(t, app, "/test/ride-1/offer-1", AcceptRideRequest{})
-	if resp.StatusCode != http.StatusConflict {
-		t.Fatalf("expected status 409, got %d", resp.StatusCode)
-	}
-}
-
 func TestAcceptOfferDuplicateAcceptanceAttempt(t *testing.T) {
 	tx := &fakeTx{
-		queryRowFn: func(ctx context.Context, sql string, args ...any) pgx.Row {
-			if strings.Contains(sql, "FROM public.ride_offers") {
-				return &fakeRow{values: []any{"offer-1", "ride-1", "driver-1", "pending", time.Now().Add(time.Minute)}}
-			}
-			return &fakeRow{values: []any{"rider-1", "requested", "cash"}}
-		},
+		queryRowFn: offerAndDriverQueryRow([]any{"rider-1", "pending", "cash"}),
 		execFn: func(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error) {
 			if strings.Contains(sql, "UPDATE public.rides") {
 				return pgconn.NewCommandTag("UPDATE 0"), nil
@@ -474,18 +461,13 @@ func TestAcceptOfferDuplicateAcceptanceAttempt(t *testing.T) {
 func TestAcceptOfferRaceConditionReturnsConflict(t *testing.T) {
 	callCount := 0
 	tx := &fakeTx{
-		queryRowFn: func(ctx context.Context, sql string, args ...any) pgx.Row {
-			if strings.Contains(sql, "FROM public.ride_offers") {
-				return &fakeRow{values: []any{"offer-1", "ride-1", "driver-1", "pending", time.Now().Add(time.Minute)}}
-			}
-			return &fakeRow{values: []any{"rider-1", "requested", "cash"}}
-		},
+		queryRowFn: offerAndDriverQueryRow([]any{"rider-1", "pending", "cash"}),
 		execFn: func(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error) {
 			callCount++
 			if callCount == 1 && strings.Contains(sql, "UPDATE public.rides") {
 				return pgconn.NewCommandTag("UPDATE 1"), nil
 			}
-			if strings.Contains(sql, "UPDATE public.ride_offers") {
+			if strings.Contains(sql, "UPDATE public.offers") {
 				return pgconn.NewCommandTag("UPDATE 0"), nil
 			}
 			return pgconn.NewCommandTag("UPDATE 1"), nil
@@ -523,10 +505,9 @@ func TestRejectOfferSuccessful(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", resp.StatusCode)
 	}
-	if !strings.Contains(updateSQL, "UPDATE public.ride_offers") ||
+	if !strings.Contains(updateSQL, "UPDATE public.offers") ||
 		!strings.Contains(updateSQL, "ride_id = $2") ||
-		!strings.Contains(updateSQL, "status = 'declined'") ||
-		!strings.Contains(updateSQL, "declined_at = NOW()") {
+		!strings.Contains(updateSQL, "status = 'rejected'") {
 		t.Fatalf("unexpected reject SQL: %s", updateSQL)
 	}
 }
@@ -552,12 +533,7 @@ func TestDriverCannotRejectAnotherDriversOffer(t *testing.T) {
 
 func TestRiderCannotAcceptOfferForAnotherRidersRide(t *testing.T) {
 	tx := &fakeTx{
-		queryRowFn: func(ctx context.Context, sql string, args ...any) pgx.Row {
-			if strings.Contains(sql, "FROM public.ride_offers") {
-				return &fakeRow{values: []any{"offer-1", "ride-1", "driver-1", "pending", time.Now().Add(time.Minute)}}
-			}
-			return &fakeRow{values: []any{"other-rider", "requested", "cash"}}
-		},
+		queryRowFn: offerAndDriverQueryRow([]any{"other-rider", "pending", "cash"}),
 		execFn: func(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error) {
 			return pgconn.NewCommandTag("UPDATE 0"), nil
 		},
@@ -582,8 +558,10 @@ func TestStartRideEmitsRideStartedExactlyOnce(t *testing.T) {
 			switch {
 			case strings.Contains(sql, "COALESCE(driver_id"):
 				return &fakeRow{values: []any{"driver-1"}}
+			case strings.Contains(sql, "FROM public.drivers"):
+				return &fakeRow{values: []any{"driver-1"}}
 			case strings.Contains(sql, "UPDATE public.rides"):
-				if !strings.Contains(sql, "RETURNING rider_id::text, driver_id::text") {
+				if !strings.Contains(sql, "RETURNING user_id::text, driver_id::text") {
 					t.Fatalf("expected start update to return lifecycle identities: %s", sql)
 				}
 				return &fakeRow{values: []any{"rider-1", "driver-1"}}
@@ -609,7 +587,7 @@ func TestStartRideEmitsRideStartedExactlyOnce(t *testing.T) {
 	if event.payload.Event != "ride_started" ||
 		event.payload.RideID != "ride-1" ||
 		event.payload.DriverID != "driver-1" ||
-		event.payload.RideStatus != "ongoing" ||
+		event.payload.RideStatus != "in_progress" ||
 		event.payload.Room != "ride_ride-1" ||
 		event.riderID != "rider-1" ||
 		event.driverID != "driver-1" {
@@ -624,11 +602,13 @@ func TestCompleteRideEmitsRideCompletedExactlyOnce(t *testing.T) {
 			switch {
 			case strings.Contains(sql, "COALESCE(driver_id"):
 				return &fakeRow{values: []any{"driver-1"}}
+			case strings.Contains(sql, "FROM public.drivers"):
+				return &fakeRow{values: []any{"driver-1"}}
 			case strings.Contains(sql, "UPDATE public.rides"):
-				if !strings.Contains(sql, "RETURNING rider_id::text, driver_id::text") {
+				if !strings.Contains(sql, "RETURNING user_id::text, driver_id::text") {
 					t.Fatalf("expected complete update to return lifecycle identities: %s", sql)
 				}
-				return &fakeRow{values: []any{"rider-1", "driver-1"}}
+				return &fakeRow{values: []any{"rider-1", "driver-1", "10.00", "cash"}}
 			default:
 				return &fakeRow{err: pgx.ErrNoRows}
 			}
@@ -667,6 +647,8 @@ func TestDuplicateLifecycleTransitionDoesNotEmitDuplicateEvent(t *testing.T) {
 			switch {
 			case strings.Contains(sql, "COALESCE(driver_id"):
 				return &fakeRow{values: []any{"driver-1"}}
+			case strings.Contains(sql, "FROM public.drivers"):
+				return &fakeRow{values: []any{"driver-1"}}
 			case strings.Contains(sql, "UPDATE public.rides"):
 				updateAttempts++
 				if updateAttempts == 1 {
@@ -696,17 +678,21 @@ func TestDuplicateLifecycleTransitionDoesNotEmitDuplicateEvent(t *testing.T) {
 	}
 }
 
-func TestOfferSQLDoesNotUseLegacyMarketplaceTables(t *testing.T) {
+// TestOfferSQLUsesLiveOffersTable guards against a real production bug this
+// handler once had: public.ride_offers/public.ride_requests are an
+// unrelated, unused negotiation feature (different columns entirely — see
+// their migrations), while the live rider/driver offer flow (RideMatching.tsx,
+// offerHelpers.ts, the accept_ride_offer Postgres RPC) all read/write
+// public.offers. Offer SQL must target that table, not the legacy ones.
+func TestOfferSQLUsesLiveOffersTable(t *testing.T) {
 	source, err := os.ReadFile("handler.go")
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	banned := []string{
-		"app." + "ride_requests",
-		"app." + "ride_offers",
-		"app." + "rides",
-		"app." + "offers",
+		"public." + "ride_offers",
+		"public." + "ride_requests",
 		"app." + "driver_offers",
 		"public." + "active_driver_offers",
 		"public." + "driver_offers",
@@ -717,8 +703,8 @@ func TestOfferSQLDoesNotUseLegacyMarketplaceTables(t *testing.T) {
 			t.Fatalf("offer SQL must not use legacy marketplace table %s", table)
 		}
 	}
-	if !strings.Contains(string(source), "public."+"ride_offers") {
-		t.Fatal("offer SQL should use public.ride_offers")
+	if !strings.Contains(string(source), "public."+"offers") {
+		t.Fatal("offer SQL should use public.offers")
 	}
 }
 

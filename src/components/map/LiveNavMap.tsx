@@ -4,7 +4,7 @@ import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { loadMapbox, resetMapboxLoader } from '@/lib/mapboxLoader';
-import { decodePolyline, trimRouteAhead, bearing as bearingOf, haversineMeters, EMA } from '@/lib/routeProgress';
+import { decodePolyline, trimRouteAhead, splitRouteAtProgress, bearing as bearingOf, haversineMeters, EMA } from '@/lib/routeProgress';
 
 interface Coords { lat: number; lng: number }
 
@@ -25,8 +25,10 @@ export interface LiveNavMapProps {
 }
 
 const ZW_CENTER: Coords = { lat: -19.015, lng: 29.155 };
-const YELLOW = '#FACC15';
-const BLUE = '#1B3FA0';
+// Route line: red = already driven, yellow = still ahead. Pins are always red;
+// the driver's own live position marker uses yellow, matching the "you/current" dot.
+const RED = '#B81104';
+const YELLOW = '#FFDD00';
 
 function carMarkerEl(color: string): HTMLDivElement {
   const el = document.createElement('div');
@@ -82,7 +84,6 @@ function LiveNavMapInner({
   const [ready, setReady] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  const routeColor = phase === 'to_pickup' ? YELLOW : BLUE;
   const startCenter = driverLocation ?? pickup ?? dropoff ?? ZW_CENTER;
   const decoded = useMemo(
     () => (routeGeometry ? decodePolyline(routeGeometry) : []),
@@ -121,42 +122,50 @@ function LiveNavMapInner({
           }
         });
 
-        map.on('load', () => {
-          if (cancelled) return;
-          // Force a resize once style is ready — fixes 0px container races.
-          requestAnimationFrame(() => map.resize());
-
-          // Glow casing (soft outer halo)
-          map.addSource('nav-route', {
+        // Adds a glow + casing + line layer triple reading from `${id}-src`,
+        // used once per route segment (traveled / upcoming).
+        const addRouteLayers = (id: string, color: string) => {
+          const sourceId = `${id}-src`;
+          map.addSource(sourceId, {
             type: 'geojson',
             data: { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: [] } },
           });
           map.addLayer({
-            id: 'nav-route-glow',
+            id: `${id}-glow`,
             type: 'line',
-            source: 'nav-route',
+            source: sourceId,
             layout: { 'line-cap': 'round', 'line-join': 'round' },
             paint: {
-              'line-color': routeColor,
+              'line-color': color,
               'line-width': 18,
               'line-opacity': 0.18,
               'line-blur': 6,
             },
           });
           map.addLayer({
-            id: 'nav-route-casing',
+            id: `${id}-casing`,
             type: 'line',
-            source: 'nav-route',
+            source: sourceId,
             layout: { 'line-cap': 'round', 'line-join': 'round' },
             paint: { 'line-color': '#0b1220', 'line-width': 10, 'line-opacity': 0.55 },
           });
           map.addLayer({
-            id: 'nav-route-line',
+            id: `${id}-line`,
             type: 'line',
-            source: 'nav-route',
+            source: sourceId,
             layout: { 'line-cap': 'round', 'line-join': 'round' },
-            paint: { 'line-color': routeColor, 'line-width': 6 },
+            paint: { 'line-color': color, 'line-width': 6 },
           });
+        };
+
+        map.on('load', () => {
+          if (cancelled) return;
+          // Force a resize once style is ready — fixes 0px container races.
+          requestAnimationFrame(() => map.resize());
+
+          // Two-tone route: red behind the vehicle (traveled), yellow ahead (upcoming).
+          addRouteLayers('nav-route-traveled', RED);
+          addRouteLayers('nav-route-upcoming', YELLOW);
 
           setReady(true);
         });
@@ -178,18 +187,7 @@ function LiveNavMapInner({
     };
   }, []);
 
-  // ── Route color reflects phase ──
-  useEffect(() => {
-    const map = mapRef.current;
-    const mapboxgl = mapboxRef.current;
-    if (!map || !mapboxgl || !ready) return;
-    try {
-      map.setPaintProperty('nav-route-line', 'line-color', routeColor);
-      map.setPaintProperty('nav-route-glow', 'line-color', routeColor);
-    } catch { /* layers may be replaced on style change */ }
-  }, [ready, routeColor]);
-
-  // ── Pickup / dropoff markers ──
+  // ── Pickup / dropoff markers (always red — matches the two-tone route pins) ──
   useEffect(() => {
     const map = mapRef.current;
     const mapboxgl = mapboxRef.current;
@@ -197,7 +195,7 @@ function LiveNavMapInner({
 
     if (pickup) {
       if (!pickupMarkerRef.current) {
-        pickupMarkerRef.current = new mapboxgl.Marker({ element: pinEl(YELLOW, 'P'), anchor: 'bottom' })
+        pickupMarkerRef.current = new mapboxgl.Marker({ element: pinEl(RED, 'P'), anchor: 'bottom' })
           .setLngLat([pickup.lng, pickup.lat])
           .addTo(map);
       } else {
@@ -210,7 +208,7 @@ function LiveNavMapInner({
 
     if (dropoff) {
       if (!dropoffMarkerRef.current) {
-        dropoffMarkerRef.current = new mapboxgl.Marker({ element: pinEl(BLUE, 'D'), anchor: 'bottom' })
+        dropoffMarkerRef.current = new mapboxgl.Marker({ element: pinEl(RED, 'D'), anchor: 'bottom' })
           .setLngLat([dropoff.lng, dropoff.lat])
           .addTo(map);
       } else {
@@ -243,13 +241,22 @@ function LiveNavMapInner({
     }
     lastPosRef.current = { lat: driverLocation.lat, lng: driverLocation.lng, t: now };
 
-    // Trim route ahead of driver
-    const { ahead, remainingMeters, snapped } = trimRouteAhead(decoded, driverLocation);
-    const src = map.getSource('nav-route') as { setData?: (data: unknown) => void } | undefined;
-    src?.setData({
+    // Trim route ahead of driver (for telemetry + camera) and split it into
+    // traveled (red) / upcoming (yellow) segments for the two-tone route line.
+    const { remainingMeters, snapped } = trimRouteAhead(decoded, driverLocation);
+    const decodedLatLng = decoded.map(([lng, lat]) => ({ lat, lng }));
+    const { traveled, upcoming } = splitRouteAtProgress(decodedLatLng, driverLocation);
+    const traveledSrc = map.getSource('nav-route-traveled-src') as { setData?: (data: unknown) => void } | undefined;
+    const upcomingSrc = map.getSource('nav-route-upcoming-src') as { setData?: (data: unknown) => void } | undefined;
+    traveledSrc?.setData({
       type: 'Feature',
       properties: {},
-      geometry: { type: 'LineString', coordinates: ahead },
+      geometry: { type: 'LineString', coordinates: traveled.map((p) => [p.lng, p.lat]) },
+    });
+    upcomingSrc?.setData({
+      type: 'Feature',
+      properties: {},
+      geometry: { type: 'LineString', coordinates: upcoming.map((p) => [p.lng, p.lat]) },
     });
 
     onTelemetry?.({ speedKmh, bearing: bearingRef.current, remainingMeters });
@@ -257,7 +264,7 @@ function LiveNavMapInner({
     // Animate car marker to snapped position (or raw GPS if no route)
     const target: [number, number] = snapped ?? [driverLocation.lng, driverLocation.lat];
     if (!driverMarkerRef.current) {
-      driverMarkerRef.current = new mapboxgl.Marker({ element: carMarkerEl(routeColor), anchor: 'center' })
+      driverMarkerRef.current = new mapboxgl.Marker({ element: carMarkerEl(YELLOW), anchor: 'center' })
         .setLngLat(target)
         .addTo(map);
     } else {
@@ -290,7 +297,7 @@ function LiveNavMapInner({
       duration: 850,
       essential: true,
     });
-  }, [ready, driverLocation?.lat, driverLocation?.lng, decoded, routeColor]);
+  }, [ready, driverLocation?.lat, driverLocation?.lng, decoded]);
 
   // ── Initial fit when no driver location yet ──
   useEffect(() => {

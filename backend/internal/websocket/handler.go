@@ -33,7 +33,7 @@ func NewHandler(manager *Manager, riders *ConnectionRegistry, drivers *Connectio
 		if registerAsRider {
 			if existing, exists := riders.Get(userID); exists && existing != kws {
 				manager.RemoveClient(existing)
-				riders.Delete(userID)
+				riders.DeleteIfMatches(userID, existing)
 			}
 			riders.Set(userID, kws)
 			log.Println("Rider registered:", userID)
@@ -44,9 +44,10 @@ func NewHandler(manager *Manager, riders *ConnectionRegistry, drivers *Connectio
 		if registerAsDriver {
 			if existing, exists := drivers.Get(userID); exists && existing != kws {
 				manager.RemoveClient(existing)
-				drivers.Delete(userID)
+				drivers.DeleteIfMatches(userID, existing)
 			}
 			drivers.Set(userID, kws)
+			manager.JoinRoom(DriverRoleRoom, kws)
 			log.Println("Driver registered:", userID)
 			log.Println("Registered drivers:", drivers.Count())
 		}
@@ -71,11 +72,11 @@ func NewHandler(manager *Manager, riders *ConnectionRegistry, drivers *Connectio
 				manager.LeaveRoom(roomID, kws)
 			}
 			if registerAsDriver {
-				drivers.Delete(userID)
+				drivers.DeleteIfMatches(userID, kws)
 				log.Println("Driver disconnected:", userID)
 			}
 			if registerAsRider {
-				riders.Delete(userID)
+				riders.DeleteIfMatches(userID, kws)
 			}
 			log.Println("WebSocket client disconnected")
 		}()

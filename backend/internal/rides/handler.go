@@ -41,53 +41,62 @@ type DriverAuthorizer interface {
 	CanAcceptRide(ctx context.Context, userID uuid.UUID) error
 }
 
+// rideAPIRecord mirrors the real public.rides columns (see the live Supabase
+// schema — user_id/status/pickup_address/pickup_lat/.../fare, not the
+// rider_id/ride_status/pickup_location/estimated_fare names this handler
+// used to assume).
 type rideAPIRecord struct {
-	ID             string
-	RiderID        string
-	DriverID       string
-	PickupAddress  string
-	DropoffAddress string
-	PickupLat      float64
-	PickupLon      float64
-	DropoffLat     float64
-	DropoffLon     float64
-	FareDecimal    string
-	PaymentMethod  string
-	RideStatus     string
-	CreatedAt      time.Time
-	ExpiresAt      time.Time
+	ID               string
+	RiderID          string
+	DriverID         string
+	PickupAddress    string
+	DropoffAddress   string
+	PickupLat        float64
+	PickupLon        float64
+	DropoffLat       float64
+	DropoffLon       float64
+	FareDecimal      string
+	PaymentMethod    string
+	Status           string
+	DistanceKm       float64
+	DurationMinutes  int
+	RoutePolyline    string
+	VehicleType      string
+	PassengerCount   int
+	TownID           string
+	GenderPreference string
+	CreatedAt        time.Time
+	ExpiresAt        time.Time
 }
 
-func publicRideStatus(rideStatus string) string {
-	switch rideStatus {
-	case "pending", "requested":
-		return "requested"
-	case "ongoing", "in_progress":
-		return "in_progress"
-	case "driver_arrived":
-		return "arrived"
-	case "enroute_pickup":
-		return "enroute"
-	default:
-		if rideStatus == "" {
-			return "requested"
-		}
-		return rideStatus
+// publicRideStatus is a display-layer alias only — the frontend's own
+// normalizeRideRow (src/lib/rideContract.ts) already maps "pending" to a
+// "requested" label, so the backend just passes the real stored status
+// through unchanged.
+func publicRideStatus(status string) string {
+	if status == "" {
+		return "pending"
 	}
+	return status
 }
 
+// canonicalRideStatus maps an incoming status value (from a status-update
+// request) onto the vocabulary actually stored in public.rides.status:
+// pending, scheduled, accepted, arrived, in_progress, completed, cancelled.
+// A handful of legacy aliases are accepted on input for backward
+// compatibility but are never written back out.
 func canonicalRideStatus(status string) (string, bool) {
 	status = strings.ToLower(strings.TrimSpace(status))
 	switch status {
 	case "", "ongoing", "in_progress":
-		return "ongoing", true
+		return "in_progress", true
 	case "pending", "requested":
-		return "requested", true
+		return "pending", true
+	case "scheduled":
+		return "scheduled", true
 	case "accepted":
 		return "accepted", true
-	case "enroute", "enroute_pickup":
-		return "enroute", true
-	case "arrived", "driver_arrived":
+	case "arrived", "driver_arrived", "enroute", "enroute_pickup":
 		return "arrived", true
 	case "completed":
 		return "completed", true
@@ -100,32 +109,39 @@ func canonicalRideStatus(status string) (string, bool) {
 
 func rideAPIResponse(ride rideAPIRecord) fiber.Map {
 	fareMoney, _ := wallet.NewMoneyFromDecimal(ride.FareDecimal, wallet.CurrencyUSD)
-	status := publicRideStatus(ride.RideStatus)
+	status := publicRideStatus(ride.Status)
 	driverID := any(nil)
 	if ride.DriverID != "" {
 		driverID = ride.DriverID
 	}
 	return fiber.Map{
-		"id":               ride.ID,
-		"ride_id":          ride.ID,
-		"user_id":          ride.RiderID,
-		"rider_id":         ride.RiderID,
-		"driver_id":        driverID,
-		"pickup_address":   ride.PickupAddress,
-		"pickup_location":  ride.PickupAddress,
-		"dropoff_address":  ride.DropoffAddress,
-		"dropoff_location": ride.DropoffAddress,
-		"pickup_lat":       ride.PickupLat,
-		"pickup_lon":       ride.PickupLon,
-		"dropoff_lat":      ride.DropoffLat,
-		"dropoff_lon":      ride.DropoffLon,
-		"fare":             decimalUSDFromMinor(fareMoney.MinorUnits),
-		"estimated_fare":   decimalUSDFromMinor(fareMoney.MinorUnits),
-		"payment_method":   ride.PaymentMethod,
-		"ride_status":      ride.RideStatus,
-		"status":           status,
-		"created_at":       ride.CreatedAt,
-		"expires_at":       ride.ExpiresAt,
+		"id":                 ride.ID,
+		"ride_id":            ride.ID,
+		"user_id":            ride.RiderID,
+		"rider_id":           ride.RiderID,
+		"driver_id":          driverID,
+		"pickup_address":     ride.PickupAddress,
+		"pickup_location":    ride.PickupAddress,
+		"dropoff_address":    ride.DropoffAddress,
+		"dropoff_location":   ride.DropoffAddress,
+		"pickup_lat":         ride.PickupLat,
+		"pickup_lon":         ride.PickupLon,
+		"dropoff_lat":        ride.DropoffLat,
+		"dropoff_lon":        ride.DropoffLon,
+		"distance_km":        ride.DistanceKm,
+		"duration_minutes":   ride.DurationMinutes,
+		"route_polyline":     ride.RoutePolyline,
+		"vehicle_type":       ride.VehicleType,
+		"passenger_count":    ride.PassengerCount,
+		"town_id":            ride.TownID,
+		"gender_preference":  ride.GenderPreference,
+		"fare":               decimalUSDFromMinor(fareMoney.MinorUnits),
+		"estimated_fare":     decimalUSDFromMinor(fareMoney.MinorUnits),
+		"payment_method":     ride.PaymentMethod,
+		"ride_status":        ride.Status,
+		"status":             status,
+		"created_at":         ride.CreatedAt,
+		"expires_at":         ride.ExpiresAt,
 	}
 }
 
@@ -186,8 +202,7 @@ func NewHandler(db DB, ws *websocket.Manager, riders *websocket.ConnectionRegist
 		riders:  riders,
 		drivers: drivers,
 		offerNotifier: websocketRideOfferNotifier{
-			ws:      ws,
-			drivers: drivers,
+			ws: ws,
 		},
 		lifecycleNotifier: websocketRideLifecycleNotifier{
 			ws:      ws,
@@ -257,8 +272,7 @@ type pilotGate interface {
 }
 
 type websocketRideOfferNotifier struct {
-	ws      *websocket.Manager
-	drivers *websocket.ConnectionRegistry
+	ws *websocket.Manager
 }
 
 type websocketRideLifecycleNotifier struct {
@@ -267,22 +281,22 @@ type websocketRideLifecycleNotifier struct {
 	drivers *websocket.ConnectionRegistry
 }
 
+// NotifyRideOffer broadcasts an open ride to every online driver (legacy
+// non-authoritative dispatch: any driver may submit a competing offer).
+// Every driver connection joins websocket.DriverRoleRoom on connect (see
+// websocket/handler.go), so a single BroadcastRoom reaches drivers on any
+// instance — a per-driver-ID registry loop couldn't, since each instance
+// only knows the driver IDs connected to itself.
 func (n websocketRideOfferNotifier) NotifyRideOffer(payload RideOfferBroadcast) {
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
 		log.Println("Offer marshal error:", err)
 		return
 	}
-
-	for driverID, driverSocket := range n.drivers.Snapshot() {
-		if n.ws == nil || !n.ws.Send(driverSocket, payloadBytes) {
-			log.Println("Targeted ride offer send failed")
-			n.drivers.Delete(driverID)
-			continue
-		}
-
-		log.Println("Ride offer sent to driver:", driverID)
+	if n.ws == nil {
+		return
 	}
+	n.ws.BroadcastRoom(websocket.DriverRoleRoom, payloadBytes)
 }
 
 func (n websocketRideLifecycleNotifier) NotifyRideLifecycle(payload RideLifecycleBroadcast, riderID string, driverID string) {
@@ -295,22 +309,23 @@ func (n websocketRideLifecycleNotifier) NotifyRideLifecycle(payload RideLifecycl
 	roomClients := n.ws.RoomSnapshot(payload.Room)
 	n.ws.BroadcastRoom(payload.Room, payloadBytes)
 
-	if riderSocket, exists := n.riders.Get(riderID); exists {
-		if !roomClients[riderSocket] {
-			if n.ws == nil || !n.ws.Send(riderSocket, payloadBytes) {
-				log.Println("Ride lifecycle rider send failed")
-				n.riders.Delete(riderID)
-			}
-		}
+	// Skip the direct send only when we can positively confirm, from this
+	// instance's local room snapshot, that the room broadcast already
+	// reached this user's connection. If the user isn't connected locally
+	// at all (possibly on another instance, possibly offline), we can't
+	// know that, so default to sending: SendToUser's pub/sub fallback is
+	// the only way a same-instance-unknown rider/driver gets reached.
+	// Its bool return only reports local delivery, so a false here is not
+	// logged as an error (see acceptRide/acceptOffer for the same reasoning).
+	if n.ws == nil {
+		return
+	}
+	if riderSocket, exists := n.riders.Get(riderID); !exists || !roomClients[riderSocket] {
+		n.ws.SendToUser(websocket.RoleRider, riderID, payloadBytes)
 	}
 
-	if driverSocket, exists := n.drivers.Get(driverID); exists {
-		if !roomClients[driverSocket] {
-			if n.ws == nil || !n.ws.Send(driverSocket, payloadBytes) {
-				log.Println("Ride lifecycle driver send failed")
-				n.drivers.Delete(driverID)
-			}
-		}
+	if driverSocket, exists := n.drivers.Get(driverID); !exists || !roomClients[driverSocket] {
+		n.ws.SendToUser(websocket.RoleDriver, driverID, payloadBytes)
 	}
 }
 
@@ -417,14 +432,14 @@ func (h *Handler) List(c *fiber.Ctx) error {
 	role, _ := c.Locals(middleware.LocalsAuthRole).(string)
 
 	query := `
-		SELECT id, rider_id, pickup_location, dropoff_location,
-		       estimated_fare, ride_status, created_at
+		SELECT id, user_id, pickup_address, dropoff_address,
+		       fare, status, created_at
 		FROM public.rides
 	`
 	args := []any{}
 	if role != "admin" && role != "service_role" {
 		query += `
-		WHERE rider_id::text = $1
+		WHERE user_id::text = $1
 		   OR driver_id::text = $1
 		`
 		args = append(args, authUserID)
@@ -442,20 +457,20 @@ func (h *Handler) List(c *fiber.Ctx) error {
 	var response []fiber.Map
 	for rows.Next() {
 		var ride RideRecord
-		var estimatedFareDecimal string
+		var fareDecimal string
 		err := rows.Scan(
 			&ride.ID,
 			&ride.RiderID,
 			&ride.PickupLocation,
 			&ride.DropoffLocation,
-			&estimatedFareDecimal,
+			&fareDecimal,
 			&ride.RideStatus,
 			&ride.CreatedAt,
 		)
 		if err != nil {
 			continue
 		}
-		if fareMoney, err := wallet.NewMoneyFromDecimal(estimatedFareDecimal, wallet.CurrencyUSD); err == nil {
+		if fareMoney, err := wallet.NewMoneyFromDecimal(fareDecimal, wallet.CurrencyUSD); err == nil {
 			ride.EstimatedFareMinor = fareMoney.MinorUnits
 		}
 
@@ -463,8 +478,11 @@ func (h *Handler) List(c *fiber.Ctx) error {
 			"id":               ride.ID,
 			"rider_id":         ride.RiderID,
 			"user_id":          ride.RiderID,
+			"pickup_address":   ride.PickupLocation,
 			"pickup_location":  ride.PickupLocation,
+			"dropoff_address":  ride.DropoffLocation,
 			"dropoff_location": ride.DropoffLocation,
+			"fare":             decimalUSDFromMinor(ride.EstimatedFareMinor),
 			"estimated_fare":   decimalUSDFromMinor(ride.EstimatedFareMinor),
 			"ride_status":      ride.RideStatus,
 			"status":           publicRideStatus(ride.RideStatus),
@@ -483,17 +501,18 @@ func (h *Handler) GetRide(c *fiber.Ctx) error {
 	rideID := c.Params("rideId")
 	var ride rideAPIRecord
 	err := h.db.QueryRow(middleware.RequestContext(c), `
-		SELECT id, rider_id::text, COALESCE(driver_id::text, ''),
-		       COALESCE(pickup_location, pickup_address, ''),
-		       COALESCE(dropoff_location, dropoff_address, ''),
-		       COALESCE(pickup_lat, 0), COALESCE(pickup_lon, 0),
-		       COALESCE(dropoff_lat, 0), COALESCE(dropoff_lon, 0),
-		       COALESCE(estimated_fare, fare, 0), COALESCE(payment_method, 'cash'),
-		       COALESCE(ride_status, status, 'requested'), created_at,
+		SELECT id, user_id::text, COALESCE(driver_id::text, ''),
+		       pickup_address, dropoff_address,
+		       pickup_lat, pickup_lon, dropoff_lat, dropoff_lon,
+		       fare, COALESCE(payment_method, 'cash'),
+		       status, distance_km, duration_minutes,
+		       COALESCE(route_polyline, ''), vehicle_type,
+		       passenger_count, COALESCE(town_id, ''),
+		       COALESCE(gender_preference, 'any'), created_at,
 		       COALESCE(expires_at, created_at + interval '5 minutes')
 		FROM public.rides
 		WHERE id = $1
-		  AND (rider_id::text = $2 OR driver_id::text = $2)
+		  AND (user_id::text = $2 OR driver_id::text = $2)
 	`, rideID, authUserID).Scan(
 		&ride.ID,
 		&ride.RiderID,
@@ -506,7 +525,14 @@ func (h *Handler) GetRide(c *fiber.Ctx) error {
 		&ride.DropoffLon,
 		&ride.FareDecimal,
 		&ride.PaymentMethod,
-		&ride.RideStatus,
+		&ride.Status,
+		&ride.DistanceKm,
+		&ride.DurationMinutes,
+		&ride.RoutePolyline,
+		&ride.VehicleType,
+		&ride.PassengerCount,
+		&ride.TownID,
+		&ride.GenderPreference,
 		&ride.CreatedAt,
 		&ride.ExpiresAt,
 	)
@@ -524,16 +550,18 @@ func (h *Handler) ListOpenRides(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Authentication required"})
 	}
 	rows, err := h.db.Query(middleware.RequestContext(c), `
-		SELECT id, rider_id::text, COALESCE(driver_id::text, ''),
-		       COALESCE(pickup_location, pickup_address, ''),
-		       COALESCE(dropoff_location, dropoff_address, ''),
-		       COALESCE(pickup_lat, 0), COALESCE(pickup_lon, 0),
-		       COALESCE(dropoff_lat, 0), COALESCE(dropoff_lon, 0),
-		       COALESCE(estimated_fare, fare, 0), COALESCE(payment_method, 'cash'),
-		       COALESCE(ride_status, status, 'requested'), created_at,
+		SELECT id, user_id::text, COALESCE(driver_id::text, ''),
+		       pickup_address, dropoff_address,
+		       pickup_lat, pickup_lon, dropoff_lat, dropoff_lon,
+		       fare, COALESCE(payment_method, 'cash'),
+		       status, distance_km, duration_minutes,
+		       COALESCE(route_polyline, ''), vehicle_type,
+		       passenger_count, COALESCE(town_id, ''),
+		       COALESCE(gender_preference, 'any'), created_at,
 		       COALESCE(expires_at, created_at + interval '5 minutes')
 		FROM public.rides
-		WHERE COALESCE(ride_status, status) IN ('requested', 'pending')
+		WHERE status = 'pending'
+		  AND driver_id IS NULL
 		  AND created_at >= NOW() - interval '5 minutes'
 		ORDER BY created_at DESC
 		LIMIT 30
@@ -557,7 +585,14 @@ func (h *Handler) ListOpenRides(c *fiber.Ctx) error {
 			&ride.DropoffLon,
 			&ride.FareDecimal,
 			&ride.PaymentMethod,
-			&ride.RideStatus,
+			&ride.Status,
+			&ride.DistanceKm,
+			&ride.DurationMinutes,
+			&ride.RoutePolyline,
+			&ride.VehicleType,
+			&ride.PassengerCount,
+			&ride.TownID,
+			&ride.GenderPreference,
 			&ride.CreatedAt,
 			&ride.ExpiresAt,
 		); err != nil {
@@ -594,8 +629,30 @@ func (h *Handler) Request(c *fiber.Ctx) error {
 		})
 	}
 
+	req.PaymentMethod = strings.ToLower(strings.TrimSpace(req.PaymentMethod))
 	if req.PaymentMethod == "" {
 		req.PaymentMethod = "cash"
+	}
+	if req.PaymentMethod != "cash" && req.PaymentMethod != "wallet" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "payment_method must be cash or wallet"})
+	}
+
+	rideStatus := strings.ToLower(strings.TrimSpace(req.Status))
+	if rideStatus == "" {
+		if req.ScheduledAt != nil {
+			rideStatus = "scheduled"
+		} else {
+			rideStatus = "pending"
+		}
+	}
+	if req.VehicleType == "" {
+		req.VehicleType = "economy"
+	}
+	if req.PassengerCount <= 0 {
+		req.PassengerCount = 1
+	}
+	if req.GenderPreference == "" {
+		req.GenderPreference = "any"
 	}
 
 	fareValue := rideEstimatedFareValue(req)
@@ -633,49 +690,69 @@ func (h *Handler) Request(c *fiber.Ctx) error {
 		}
 	}
 
+	insertColumns := `
+			user_id,
+			pickup_address,
+			dropoff_address,
+			pickup_lat,
+			pickup_lon,
+			dropoff_lat,
+			dropoff_lon,
+			distance_km,
+			duration_minutes,
+			fare,
+			status,
+			route_polyline,
+			vehicle_type,
+			passenger_count,
+			payment_method,
+			town_id,
+			gender_preference,
+			passenger_name,
+			passenger_phone,
+			scheduled_at
+	`
+	insertArgs := []any{
+		req.RiderID,
+		req.PickupLocation,
+		req.DropoffLocation,
+		req.PickupLatitude,
+		req.PickupLongitude,
+		req.DropoffLatitude,
+		req.DropoffLongitude,
+		req.DistanceKm,
+		req.DurationMinutes,
+		fareValue,
+		rideStatus,
+		nullIfEmpty(req.RoutePolyline),
+		req.VehicleType,
+		req.PassengerCount,
+		req.PaymentMethod,
+		nullIfEmpty(req.TownID),
+		req.GenderPreference,
+		nullIfEmpty(req.PassengerName),
+		nullIfEmpty(req.PassengerPhone),
+		req.ScheduledAt,
+	}
+
 	if walletAuthorizationRequired {
 		err = h.db.QueryRow(ctx, `
 		INSERT INTO public.rides (
-			id,
-			rider_id,
-			pickup_location,
-			dropoff_location,
-			estimated_fare,
-			payment_method,
-			payment_status,
-			ride_status,
-			created_at
+			id,`+insertColumns+`
 		)
-		VALUES ($1,$2,$3,$4,$5,$6,'pending','requested',NOW())
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
 		RETURNING created_at
 	`,
-			rideID,
-			req.RiderID,
-			req.PickupLocation,
-			req.DropoffLocation,
-			fareValue,
-			req.PaymentMethod,
+			append([]any{rideID}, insertArgs...)...,
 		).Scan(&createdAt)
 	} else {
 		err = h.db.QueryRow(ctx, `
-			INSERT INTO public.rides (
-				rider_id,
-				pickup_location,
-				dropoff_location,
-				estimated_fare,
-				payment_method,
-				payment_status,
-				ride_status,
-				created_at
+			INSERT INTO public.rides (`+insertColumns+`
 			)
-			VALUES ($1,$2,$3,$4,$5,'pending','requested',NOW())
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
 			RETURNING id, created_at
 		`,
-			req.RiderID,
-			req.PickupLocation,
-			req.DropoffLocation,
-			fareValue,
-			req.PaymentMethod,
+			insertArgs...,
 		).Scan(&rideID, &createdAt)
 	}
 
@@ -713,7 +790,9 @@ func (h *Handler) Request(c *fiber.Ctx) error {
 		PaymentMethod:      req.PaymentMethod,
 	}
 
-	if !h.authoritativeDispatchEnabled() {
+	// Scheduled (future-dated) rides aren't dispatched to drivers yet — only
+	// broadcast rides that are immediately open for pickup.
+	if rideStatus == "pending" && !h.authoritativeDispatchEnabled() {
 		h.offerNotifier.NotifyRideOffer(offer)
 		h.recordReputationOfferSent(context.Background(), rideID, h.driverIDsSnapshot())
 	}
@@ -730,13 +809,56 @@ func (h *Handler) Request(c *fiber.Ctx) error {
 		CreatedAt:          createdAt,
 	})
 
+	rideResponse := rideAPIResponse(rideAPIRecord{
+		ID:               rideID,
+		RiderID:          req.RiderID,
+		PickupAddress:    req.PickupLocation,
+		DropoffAddress:   req.DropoffLocation,
+		PickupLat:        req.PickupLatitude,
+		PickupLon:        req.PickupLongitude,
+		DropoffLat:       req.DropoffLatitude,
+		DropoffLon:       req.DropoffLongitude,
+		FareDecimal:      wallet.MinorDecimalString(req.EstimatedFareMinor, wallet.CurrencyUSD),
+		PaymentMethod:    req.PaymentMethod,
+		Status:           rideStatus,
+		DistanceKm:       req.DistanceKm,
+		DurationMinutes:  req.DurationMinutes,
+		RoutePolyline:    req.RoutePolyline,
+		VehicleType:      req.VehicleType,
+		PassengerCount:   req.PassengerCount,
+		TownID:           req.TownID,
+		GenderPreference: req.GenderPreference,
+		CreatedAt:        createdAt,
+	})
+
 	return c.Status(201).JSON(fiber.Map{
 		"message":     "Ride request created and broadcast successfully 🚖",
+		"id":          rideID,
 		"ride_id":     rideID,
-		"ride_status": "requested",
-		"status":      publicRideStatus("requested"),
+		"ride_status": rideStatus,
+		"status":      publicRideStatus(rideStatus),
 		"created_at":  createdAt,
+		"ride":        rideResponse,
 	})
+}
+
+// nullIfEmpty converts an empty string to a real SQL NULL instead of an
+// empty-string value, for the handful of nullable public.rides/offers text
+// columns (route_polyline, town_id, passenger_name, passenger_phone, message).
+func nullIfEmpty(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
+}
+
+// nullIfZero converts a zero int to a real SQL NULL, for nullable integer
+// columns (offers.eta_minutes) where 0 isn't a meaningful ETA.
+func nullIfZero(n int) any {
+	if n == 0 {
+		return nil
+	}
+	return n
 }
 
 func walletAuthorizationStatus(err error) int {
@@ -810,7 +932,7 @@ func (h *Handler) acceptRide(c *fiber.Ctx, rideID string) error {
 	var paymentMethod string
 	err := h.db.QueryRow(
 		context.Background(),
-		`SELECT rider_id, COALESCE(payment_method, 'cash') FROM public.rides WHERE id = $1`,
+		`SELECT user_id, COALESCE(payment_method, 'cash') FROM public.rides WHERE id = $1`,
 		rideID,
 	).Scan(&riderID, &paymentMethod)
 	if err != nil {
@@ -823,15 +945,22 @@ func (h *Handler) acceptRide(c *fiber.Ctx, rideID string) error {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Wallet internal pilot access required"})
 	}
 
+	driverRowID, err := h.resolveApprovedDriverID(context.Background(), req.DriverID)
+	if err != nil {
+		if errors.Is(err, errDriverNotApproved) {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "driver_not_approved"})
+		}
+		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+	}
+
 	commandTag, err := h.db.Exec(context.Background(), `
 		UPDATE public.rides
 		SET driver_id = $1,
-		    ride_status = 'accepted',
 		    status = 'accepted',
 		    updated_at = NOW()
 		WHERE id = $2
-		  AND ride_status = 'requested'
-	`, req.DriverID, rideID)
+		  AND status = 'pending'
+	`, driverRowID, rideID)
 
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
@@ -846,23 +975,22 @@ func (h *Handler) acceptRide(c *fiber.Ctx, rideID string) error {
 
 	roomID := "ride_" + rideID
 
-	if riderSocket, exists := h.riders.Get(riderID); exists {
-		acceptMsg := fiber.Map{
-			"event":       "ride_accepted",
-			"ride_id":     rideID,
-			"driver_id":   req.DriverID,
-			"room":        roomID,
-			"ride_status": "accepted",
-			"status":      publicRideStatus("accepted"),
-		}
+	acceptMsg := fiber.Map{
+		"event":       "ride_accepted",
+		"ride_id":     rideID,
+		"driver_id":   req.DriverID,
+		"room":        roomID,
+		"ride_status": "accepted",
+		"status":      publicRideStatus("accepted"),
+	}
 
-		msgBytes, _ := json.Marshal(acceptMsg)
-		if h.ws == nil || !h.ws.Send(riderSocket, msgBytes) {
-			log.Println("Ride acceptance send failed")
-			h.riders.Delete(riderID)
-		} else {
-			log.Println("Ride acceptance sent to rider:", riderID)
-		}
+	msgBytes, _ := json.Marshal(acceptMsg)
+	// SendToUser's bool only reports local delivery on this instance; a
+	// false here can mean "delivered by whichever instance actually holds
+	// the rider's connection" just as easily as "undeliverable anywhere",
+	// so it is not logged as an error.
+	if h.ws != nil {
+		h.ws.SendToUser(websocket.RoleRider, riderID, msgBytes)
 	}
 
 	return c.JSON(fiber.Map{
@@ -911,38 +1039,24 @@ func (h *Handler) SubmitOffer(c *fiber.Ctx) error {
 	var rideStatus string
 	var paymentMethod string
 	err := h.db.QueryRow(ctx, `
-		SELECT ride_status, COALESCE(payment_method, 'cash')
+		SELECT status, COALESCE(payment_method, 'cash')
 		FROM public.rides
 		WHERE id = $1
 	`, rideID).Scan(&rideStatus, &paymentMethod)
 	if err != nil {
+		observability.RecordPostgresFailure("rides_submit_offer_lookup")
+		observability.CaptureError(err)
 		if err == pgx.ErrNoRows {
-			fallbackErr := h.db.QueryRow(ctx, `
-				SELECT ride_status
-				FROM public.rides
-				WHERE id = $1
-			`, rideID).Scan(&rideStatus)
-			if fallbackErr != nil {
-				observability.RecordPostgresFailure("rides_submit_offer_lookup")
-				observability.CaptureError(fallbackErr)
-				if fallbackErr == pgx.ErrNoRows {
-					return c.Status(404).JSON(fiber.Map{"error": "Ride not found"})
-				}
-				return c.Status(500).JSON(fiber.Map{"error": fallbackErr.Error()})
-			}
-			paymentMethod = "cash"
-		} else {
-			observability.RecordPostgresFailure("rides_submit_offer_lookup")
-			observability.CaptureError(err)
-			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+			return c.Status(404).JSON(fiber.Map{"error": "Ride not found"})
 		}
+		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
 	if h.walletPilotRequiredForDriver(ctx, paymentMethod, req.DriverID) {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Wallet internal pilot access required"})
 	}
 
-	if rideStatus != "requested" {
-		return c.Status(409).JSON(fiber.Map{"error": "Cannot submit an offer for a ride that is not requested"})
+	if rideStatus != "pending" {
+		return c.Status(409).JSON(fiber.Map{"error": "Cannot submit an offer for a ride that is not pending"})
 	}
 
 	amountMinor := offerAmountMinor(req)
@@ -955,25 +1069,23 @@ func (h *Handler) SubmitOffer(c *fiber.Ctx) error {
 	}
 
 	offerID := uuid.NewString()
-	expiresAt := time.Now().Add(defaultOfferTTL)
 	var createdAt time.Time
 	offerAmount := decimalUSDFromMinor(amountMinor)
 
 	err = h.db.QueryRow(ctx, `
-		INSERT INTO public.ride_offers (
+		INSERT INTO public.offers (
 			id,
 			ride_id,
 			driver_id,
-			offered_fare,
-			offer_price,
+			price,
 			eta_minutes,
+			message,
 			status,
-			expires_at,
 			created_at
 		)
-		VALUES ($1,$2,$3,$4,$4,$5,'pending',$6,NOW())
-		RETURNING created_at, expires_at
-	`, offerID, rideID, req.DriverID, offerAmount, etaMinutes, expiresAt).Scan(&createdAt, &expiresAt)
+		VALUES ($1,$2,$3,$4,$5,$6,'pending',NOW())
+		RETURNING created_at
+	`, offerID, rideID, req.DriverID, offerAmount, nullIfZero(etaMinutes), nullIfEmpty(req.Message)).Scan(&createdAt)
 	if err != nil {
 		observability.RecordPostgresFailure("rides_submit_offer")
 		observability.CaptureError(err)
@@ -1002,8 +1114,8 @@ func (h *Handler) SubmitOffer(c *fiber.Ctx) error {
 		OfferedFare:      decimalUSDFromMinor(amountMinor),
 		OfferedFareMinor: amountMinor,
 		ETAMinutes:       etaMinutes,
+		Message:          req.Message,
 		Status:           "pending",
-		ExpiresAt:        expiresAt,
 		CreatedAt:        createdAt,
 	})
 }
@@ -1051,7 +1163,7 @@ func (h *Handler) ListOffers(c *fiber.Ctx) error {
 	rideID := c.Params("rideId")
 	var riderID string
 	err := h.db.QueryRow(context.Background(), `
-		SELECT rider_id
+		SELECT user_id
 		FROM public.rides
 		WHERE id = $1
 	`, rideID).Scan(&riderID)
@@ -1067,10 +1179,10 @@ func (h *Handler) ListOffers(c *fiber.Ctx) error {
 	}
 
 	rows, err := h.db.Query(context.Background(), `
-		SELECT id, driver_id, offered_fare, COALESCE(eta_minutes, 0), status, expires_at, created_at
-		FROM public.ride_offers
+		SELECT id, driver_id, price, COALESCE(eta_minutes, 0), COALESCE(message, ''), status, created_at
+		FROM public.offers
 		WHERE ride_id = $1
-		  AND (status = 'accepted' OR (status = 'pending' AND expires_at > NOW()))
+		  AND status = 'pending'
 		ORDER BY created_at ASC
 	`, rideID)
 	if err != nil {
@@ -1081,19 +1193,19 @@ func (h *Handler) ListOffers(c *fiber.Ctx) error {
 	var offers []OfferResponse
 	for rows.Next() {
 		var offer OfferResponse
-		var offeredFareDecimal float64
+		var priceDecimal float64
 		if err := rows.Scan(
 			&offer.OfferID,
 			&offer.DriverID,
-			&offeredFareDecimal,
+			&priceDecimal,
 			&offer.ETAMinutes,
+			&offer.Message,
 			&offer.Status,
-			&offer.ExpiresAt,
 			&offer.CreatedAt,
 		); err != nil {
 			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 		}
-		offer.OfferedFareMinor = int64(offeredFareDecimal * 100)
+		offer.OfferedFareMinor = int64(priceDecimal * 100)
 		offer.RideID = rideID
 		offer.ID = offer.OfferID
 		offer.RequestID = rideID
@@ -1126,7 +1238,7 @@ func (h *Handler) rejectOffer(c *fiber.Ctx, rideID string, offerID string) error
 	if rideID == "" {
 		err := h.db.QueryRow(context.Background(), `
 			SELECT ride_id
-			FROM public.ride_offers
+			FROM public.offers
 			WHERE id = $1
 			  AND driver_id = $2
 		`, offerID, authUserID).Scan(&rideID)
@@ -1139,9 +1251,8 @@ func (h *Handler) rejectOffer(c *fiber.Ctx, rideID string, offerID string) error
 	}
 
 	commandTag, err := h.db.Exec(context.Background(), `
-		UPDATE public.ride_offers
-		SET status = 'declined',
-		    declined_at = NOW()
+		UPDATE public.offers
+		SET status = 'rejected'
 		WHERE id = $1
 		  AND ride_id = $2
 		  AND driver_id = $3
@@ -1159,7 +1270,7 @@ func (h *Handler) rejectOffer(c *fiber.Ctx, rideID string, offerID string) error
 	return c.JSON(fiber.Map{
 		"message":  "Offer declined successfully",
 		"offer_id": offerID,
-		"status":   "declined",
+		"status":   "rejected",
 	})
 }
 
@@ -1188,11 +1299,11 @@ func (h *Handler) PatchRide(c *fiber.Ctx) error {
 	rideID := c.Params("rideId")
 	commandTag, err := h.db.Exec(context.Background(), `
 		UPDATE public.rides
-		SET estimated_fare = $3,
+		SET fare = $3,
 		    updated_at = NOW()
 		WHERE id = $1
-		  AND rider_id = $2
-		  AND COALESCE(ride_status, status) IN ('requested', 'pending')
+		  AND user_id = $2
+		  AND status = 'pending'
 	`, rideID, authUserID, wallet.MinorDecimalString(amountMinor, wallet.CurrencyUSD))
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
@@ -1236,17 +1347,18 @@ func (h *Handler) acceptOffer(c *fiber.Ctx, rideID, offerID string) error {
 	}()
 
 	var offer OfferRecord
+	var offerPrice float64
 	err = tx.QueryRow(ctx, `
-		SELECT id, ride_id, driver_id, status, expires_at
-		FROM public.ride_offers
+		SELECT id, ride_id, driver_id, price, status
+		FROM public.offers
 		WHERE id = $1
 		FOR UPDATE
 	`, offerID).Scan(
 		&offer.ID,
 		&offer.RideID,
 		&offer.DriverID,
+		&offerPrice,
 		&offer.Status,
-		&offer.ExpiresAt,
 	)
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -1263,37 +1375,20 @@ func (h *Handler) acceptOffer(c *fiber.Ctx, rideID, offerID string) error {
 		return c.Status(409).JSON(fiber.Map{"error": "Offer is not pending"})
 	}
 
-	if time.Now().After(offer.ExpiresAt) {
-		return c.Status(409).JSON(fiber.Map{"error": "Offer has expired"})
-	}
-
 	var riderID string
 	var rideStatus string
 	var paymentMethod string
 	err = tx.QueryRow(ctx, `
-		SELECT rider_id, ride_status, COALESCE(payment_method, 'cash')
+		SELECT user_id, status, COALESCE(payment_method, 'cash')
 		FROM public.rides
 		WHERE id = $1
 		FOR UPDATE
 	`, rideID).Scan(&riderID, &rideStatus, &paymentMethod)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			fallbackErr := tx.QueryRow(ctx, `
-				SELECT rider_id, ride_status
-				FROM public.rides
-				WHERE id = $1
-				FOR UPDATE
-			`, rideID).Scan(&riderID, &rideStatus)
-			if fallbackErr != nil {
-				if fallbackErr == pgx.ErrNoRows {
-					return c.Status(404).JSON(fiber.Map{"error": "Ride not found"})
-				}
-				return c.Status(500).JSON(fiber.Map{"error": fallbackErr.Error()})
-			}
-			paymentMethod = "cash"
-		} else {
-			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+			return c.Status(404).JSON(fiber.Map{"error": "Ride not found"})
 		}
+		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
 
 	if riderID != authUserID {
@@ -1303,19 +1398,28 @@ func (h *Handler) acceptOffer(c *fiber.Ctx, rideID, offerID string) error {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Wallet internal pilot access required"})
 	}
 
-	if rideStatus != "requested" {
+	if rideStatus != "pending" {
 		return c.Status(409).JSON(fiber.Map{"error": "Ride cannot be accepted in its current state"})
+	}
+
+	driverRowID, err := h.resolveApprovedDriverIDVia(ctx, tx, offer.DriverID)
+	if err != nil {
+		if errors.Is(err, errDriverNotApproved) {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "driver_not_approved"})
+		}
+		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
 
 	commandTag, err := tx.Exec(ctx, `
 		UPDATE public.rides
 		SET driver_id = $1,
-		    ride_status = 'accepted',
 		    status = 'accepted',
+		    fare = $2,
+		    locked_price = $2,
 		    updated_at = NOW()
-		WHERE id = $2
-		  AND ride_status = 'requested'
-	`, offer.DriverID, rideID)
+		WHERE id = $3
+		  AND status = 'pending'
+	`, driverRowID, offerPrice, rideID)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -1324,12 +1428,10 @@ func (h *Handler) acceptOffer(c *fiber.Ctx, rideID, offerID string) error {
 	}
 
 	commandTag, err = tx.Exec(ctx, `
-		UPDATE public.ride_offers
-		SET status = 'accepted',
-		    accepted_at = NOW()
+		UPDATE public.offers
+		SET status = 'accepted'
 		WHERE id = $1
 		  AND status = 'pending'
-		  AND expires_at > NOW()
 	`, offerID)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
@@ -1339,9 +1441,8 @@ func (h *Handler) acceptOffer(c *fiber.Ctx, rideID, offerID string) error {
 	}
 
 	commandTag, err = tx.Exec(ctx, `
-		UPDATE public.ride_offers
-		SET status = 'expired',
-		    expired_at = NOW()
+		UPDATE public.offers
+		SET status = 'rejected'
 		WHERE ride_id = $1
 		  AND id != $2
 		  AND status = 'pending'
@@ -1367,24 +1468,21 @@ func (h *Handler) acceptOffer(c *fiber.Ctx, rideID, offerID string) error {
 	h.recordReputationOfferAccepted(ctx, offer.DriverID, rideID, offerID)
 
 	roomID := "ride_" + rideID
-	if riderSocket, exists := h.riders.Get(riderID); exists {
-		acceptMsg := fiber.Map{
-			"event":       "ride_accepted",
-			"ride_id":     rideID,
-			"driver_id":   offer.DriverID,
-			"offer_id":    offerID,
-			"room":        roomID,
-			"ride_status": "accepted",
-			"status":      publicRideStatus("accepted"),
-		}
+	acceptMsg := fiber.Map{
+		"event":       "ride_accepted",
+		"ride_id":     rideID,
+		"driver_id":   offer.DriverID,
+		"offer_id":    offerID,
+		"room":        roomID,
+		"ride_status": "accepted",
+		"status":      publicRideStatus("accepted"),
+	}
 
-		msgBytes, _ := json.Marshal(acceptMsg)
-		if h.ws == nil || !h.ws.Send(riderSocket, msgBytes) {
-			log.Println("Ride acceptance send failed")
-			h.riders.Delete(riderID)
-		} else {
-			log.Println("Ride acceptance sent to rider:", riderID)
-		}
+	msgBytes, _ := json.Marshal(acceptMsg)
+	if h.ws != nil {
+		// See acceptRide: SendToUser's bool only reports local delivery, so
+		// a false is not treated as an error.
+		h.ws.SendToUser(websocket.RoleRider, riderID, msgBytes)
 	}
 
 	return c.JSON(fiber.Map{
@@ -1556,11 +1654,11 @@ func (h *Handler) UpdateStatus(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Unsupported ride status"})
 	}
 	switch canonicalStatus {
-	case "ongoing":
+	case "in_progress":
 		return h.startRide(c, c.Params("rideId"))
 	case "completed":
 		return h.completeRide(c, c.Params("rideId"))
-	case "enroute", "arrived", "cancelled":
+	case "arrived", "cancelled":
 		return h.updateRideStatus(c, c.Params("rideId"), canonicalStatus, req.ExpectedStatus)
 	default:
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Unsupported ride status transition"})
@@ -1582,30 +1680,34 @@ func (h *Handler) updateRideStatus(c *fiber.Ctx, rideID string, rideStatus strin
 
 	var allowedPrevious []string
 	event := "ride_status_updated"
-	if rideStatus == "enroute" {
+	if rideStatus == "arrived" {
 		allowedPrevious = []string{"accepted"}
-	} else if rideStatus == "arrived" {
-		allowedPrevious = []string{"accepted", "enroute"}
 	} else {
-		allowedPrevious = []string{"requested", "accepted", "enroute", "arrived", "ongoing"}
+		allowedPrevious = []string{"pending", "accepted", "arrived", "in_progress"}
 		event = "ride_cancelled"
 	}
 
 	var riderID string
-	var driverID string
+	var driverRowID string
 	var err error
 	if rideStatus == "cancelled" {
+		// A rider cancels by their own user_id; a driver cancels by their
+		// resolved drivers.id (rides.driver_id's FK target) — try both, since
+		// either party may be the caller here.
+		driverLookupID, lookupErr := h.resolveDriverRowID(ctx, authUserID)
+		if lookupErr != nil && !errors.Is(lookupErr, errDriverNotFound) {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": lookupErr.Error()})
+		}
 		err = h.db.QueryRow(ctx, `
 			UPDATE public.rides
-			SET ride_status = 'cancelled',
-			    status = 'cancelled',
+			SET status = 'cancelled',
 			    updated_at = NOW()
 			WHERE id = $1
-			  AND (rider_id::text = $2 OR driver_id::text = $2)
-			  AND ride_status = ANY($3)
-			  AND ($4 = '' OR ride_status = $4)
-			RETURNING rider_id::text, COALESCE(driver_id::text, '')
-		`, rideID, authUserID, allowedPrevious, expectedStatus).Scan(&riderID, &driverID)
+			  AND (user_id::text = $2 OR driver_id::text = $3)
+			  AND status = ANY($4)
+			  AND ($5 = '' OR status = $5)
+			RETURNING user_id::text, COALESCE(driver_id::text, '')
+		`, rideID, authUserID, driverLookupID, allowedPrevious, expectedStatus).Scan(&riderID, &driverRowID)
 	} else {
 		authorized, authErr := h.isAssignedDriver(rideID, authUserID)
 		if authErr != nil {
@@ -1614,31 +1716,39 @@ func (h *Handler) updateRideStatus(c *fiber.Ctx, rideID string, rideStatus strin
 		if !authorized {
 			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Cannot update a ride assigned to another driver"})
 		}
+		driverRowID, err = h.resolveDriverRowID(ctx, authUserID)
+		if err != nil {
+			if errors.Is(err, errDriverNotFound) {
+				return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Cannot update a ride assigned to another driver"})
+			}
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+		}
 		err = h.db.QueryRow(ctx, `
 			UPDATE public.rides
-			SET ride_status = $1,
-			    status = $1,
+			SET status = $1,
 			    updated_at = NOW()
 			WHERE id = $2
 			  AND driver_id::text = $3
-			  AND ride_status = ANY($4)
-			  AND ($5 = '' OR ride_status = $5)
-			RETURNING rider_id::text, driver_id::text
-		`, rideStatus, rideID, authUserID, allowedPrevious, expectedStatus).Scan(&riderID, &driverID)
+			  AND status = ANY($4)
+			  AND ($5 = '' OR status = $5)
+			RETURNING user_id::text, driver_id::text
+		`, rideStatus, rideID, driverRowID, allowedPrevious, expectedStatus).Scan(&riderID, &driverRowID)
 	}
 	if err != nil {
 		observability.RecordPostgresFailure("rides_update_status")
 		observability.CaptureError(err)
 		if err == pgx.ErrNoRows {
-			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "Ride cannot transition to requested status"})
+			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "Ride cannot transition to that status"})
 		}
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	h.emitRideLifecycle(event, rideID, driverID, rideStatus, riderID)
-	if rideStatus == "cancelled" && driverID != "" {
-		h.recordReputationRideCancelled(ctx, driverID, rideID)
-		h.setDispatchDriverAvailability(ctx, driverID, "available", "")
+	// Lifecycle/reputation/dispatch key drivers by auth user ID — see the
+	// comment on resolveDriverRowID.
+	h.emitRideLifecycle(event, rideID, authUserID, rideStatus, riderID)
+	if rideStatus == "cancelled" && driverRowID != "" {
+		h.recordReputationRideCancelled(ctx, authUserID, rideID)
+		h.setDispatchDriverAvailability(ctx, authUserID, "available", "")
 	}
 
 	return c.JSON(fiber.Map{
@@ -1666,19 +1776,25 @@ func (h *Handler) startRide(c *fiber.Ctx, rideID string) error {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Cannot start a ride assigned to another driver"})
 	}
 
+	driverRowID, err := h.resolveDriverRowID(ctx, authUserID)
+	if err != nil {
+		if errors.Is(err, errDriverNotFound) {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Cannot start a ride assigned to another driver"})
+		}
+		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+	}
+
 	var riderID string
 	var driverID string
 	err = h.db.QueryRow(ctx, `
 		UPDATE public.rides
-		SET ride_status = 'ongoing',
-		    status = 'in_progress',
-		    started_at = COALESCE(started_at, NOW()),
+		SET status = 'in_progress',
 		    updated_at = NOW()
 		WHERE id = $1
-		  AND ride_status IN ('accepted', 'enroute', 'arrived')
+		  AND status IN ('accepted', 'arrived')
 		  AND driver_id = $2
-		RETURNING rider_id::text, driver_id::text
-	`, rideID, authUserID).Scan(&riderID, &driverID)
+		RETURNING user_id::text, driver_id::text
+	`, rideID, driverRowID).Scan(&riderID, &driverID)
 	if err != nil {
 		observability.RecordPostgresFailure("rides_start")
 		observability.CaptureError(err)
@@ -1691,13 +1807,13 @@ func (h *Handler) startRide(c *fiber.Ctx, rideID string) error {
 	}
 
 	observability.RecordRideStarted()
-	h.emitRideLifecycle("ride_started", rideID, driverID, "ongoing", riderID)
+	h.emitRideLifecycle("ride_started", rideID, authUserID, "in_progress", riderID)
 
 	return c.JSON(fiber.Map{
-		"message":     "Ride started successfully ðŸš–",
+		"message":     "Ride started successfully 🚖",
 		"ride_id":     rideID,
-		"ride_status": "ongoing",
-		"status":      publicRideStatus("ongoing"),
+		"ride_status": "in_progress",
+		"status":      publicRideStatus("in_progress"),
 	})
 }
 
@@ -1741,56 +1857,45 @@ func (h *Handler) completeRide(c *fiber.Ctx, rideID string) error {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Cannot complete a ride assigned to another driver"})
 	}
 
+	driverRowID, err := h.resolveDriverRowID(ctx, authUserID)
+	if err != nil {
+		if errors.Is(err, errDriverNotFound) {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Cannot complete a ride assigned to another driver"})
+		}
+		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+	}
+
 	var riderID string
 	var driverID string
 	var fareDecimal string
 	var paymentMethod string
 	err = h.db.QueryRow(ctx, `
 		UPDATE public.rides
-		SET ride_status = 'completed',
-		    status = 'completed',
-		    completed_at = NOW(),
+		SET status = 'completed',
 		    updated_at = NOW()
 		WHERE id = $1
-		  AND ride_status IN ('ongoing', 'in_progress')
+		  AND status = 'in_progress'
 		  AND driver_id = $2
-		RETURNING rider_id::text, driver_id::text, COALESCE(estimated_fare, 0), COALESCE(payment_method, 'cash')
-	`, rideID, authUserID).Scan(&riderID, &driverID, &fareDecimal, &paymentMethod)
+		RETURNING user_id::text, driver_id::text, COALESCE(fare, 0), COALESCE(payment_method, 'cash')
+	`, rideID, driverRowID).Scan(&riderID, &driverID, &fareDecimal, &paymentMethod)
 	if err != nil {
+		observability.RecordPostgresFailure("rides_complete")
+		observability.CaptureError(err)
 		if err == pgx.ErrNoRows {
-			fallbackErr := h.db.QueryRow(ctx, `
-				UPDATE public.rides
-				SET ride_status = 'completed',
-				    status = 'completed',
-				    completed_at = NOW(),
-				    updated_at = NOW()
-				WHERE id = $1
-				  AND ride_status IN ('ongoing', 'in_progress')
-				  AND driver_id = $2
-				RETURNING rider_id::text, driver_id::text
-			`, rideID, authUserID).Scan(&riderID, &driverID)
-			if fallbackErr != nil {
-				observability.RecordPostgresFailure("rides_complete")
-				observability.CaptureError(fallbackErr)
-				if fallbackErr == pgx.ErrNoRows {
-					return c.Status(409).JSON(fiber.Map{
-						"error": "Ride must be ongoing before it can be completed",
-					})
-				}
-				return c.Status(500).JSON(fiber.Map{"error": fallbackErr.Error()})
-			}
-			fareDecimal = "0"
-			paymentMethod = "cash"
-		} else {
-			observability.RecordPostgresFailure("rides_complete")
-			observability.CaptureError(err)
-			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+			return c.Status(409).JSON(fiber.Map{
+				"error": "Ride must be ongoing before it can be completed",
+			})
 		}
+		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
 
 	observability.RecordRideCompleted()
-	h.emitRideLifecycle("ride_completed", rideID, driverID, "completed", riderID)
-	h.recordReputationRideCompleted(ctx, driverID, rideID)
+	// Lifecycle/reputation/wallet/dispatch all key drivers by their auth
+	// user ID (websocket connections, wallet accounts, dispatch snapshots),
+	// not by the drivers.id row we just resolved for the rides.driver_id FK
+	// — see the comment on resolveDriverRowID.
+	h.emitRideLifecycle("ride_completed", rideID, authUserID, "completed", riderID)
+	h.recordReputationRideCompleted(ctx, authUserID, rideID)
 	fareMoney, fareErr := wallet.NewPositiveMoneyFromDecimal(fareDecimal, wallet.CurrencyUSD)
 	if fareErr != nil {
 		fareMoney = wallet.Money{MinorUnits: 0, Currency: wallet.CurrencyUSD}
@@ -1798,7 +1903,7 @@ func (h *Handler) completeRide(c *fiber.Ctx, rideID string) error {
 	completedRide := wallet.CompletedRide{
 		RideID:        rideID,
 		RiderID:       riderID,
-		DriverID:      driverID,
+		DriverID:      authUserID,
 		FareMinor:     fareMoney.MinorUnits,
 		PaymentMethod: paymentMethod,
 		Currency:      wallet.CurrencyUSD,
@@ -1808,7 +1913,7 @@ func (h *Handler) completeRide(c *fiber.Ctx, rideID string) error {
 	h.recordShadowSettlement(ctx, completedRide)
 	h.recordActiveCashSettlement(ctx, completedRide)
 	h.captureWalletSettlement(ctx, completedRide)
-	h.setDispatchDriverAvailability(ctx, driverID, "available", "")
+	h.setDispatchDriverAvailability(ctx, authUserID, "available", "")
 
 	return c.JSON(fiber.Map{
 		"message":     "Ride completed successfully ðŸš–",
@@ -1816,6 +1921,63 @@ func (h *Handler) completeRide(c *fiber.Ctx, rideID string) error {
 		"ride_status": "completed",
 		"status":      publicRideStatus("completed"),
 	})
+}
+
+// errDriverNotApproved/errDriverNotFound are sentinel errors for the
+// authUserID -> public.drivers.id lookups below. rides.driver_id is a
+// foreign key to drivers.id (a separate PK from drivers.user_id — see the
+// drivers_user_id_key unique constraint), so every write/compare against
+// rides.driver_id must go through one of these resolvers rather than using
+// the authenticated user's ID directly.
+var errDriverNotApproved = errors.New("driver not approved")
+var errDriverNotFound = errors.New("driver profile not found")
+
+// resolveDriverRowID looks up public.drivers.id for an authenticated user,
+// regardless of approval status — used to check whether a user already
+// rowQuerier is satisfied by both DB and Tx, so the driver-ID resolvers below
+// can run inside an existing transaction (acceptOffer) as well as directly
+// against the pool (acceptRide, startRide, completeRide, updateRideStatus).
+type rowQuerier interface {
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
+
+func (h *Handler) resolveDriverRowID(ctx context.Context, authUserID string) (string, error) {
+	return h.resolveDriverRowIDVia(ctx, h.db, authUserID)
+}
+
+// resolveDriverRowIDVia looks up public.drivers.id for an authenticated
+// user, regardless of approval status — used to check whether a user
+// already assigned to a ride (rides.driver_id) is the one making the
+// request. Accepts h.db or an in-flight Tx via the querier param.
+func (h *Handler) resolveDriverRowIDVia(ctx context.Context, querier rowQuerier, authUserID string) (string, error) {
+	var driverRowID string
+	err := querier.QueryRow(ctx, `SELECT id::text FROM public.drivers WHERE user_id = $1`, authUserID).Scan(&driverRowID)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return "", errDriverNotFound
+		}
+		return "", err
+	}
+	return driverRowID, nil
+}
+
+func (h *Handler) resolveApprovedDriverID(ctx context.Context, authUserID string) (string, error) {
+	return h.resolveApprovedDriverIDVia(ctx, h.db, authUserID)
+}
+
+// resolveApprovedDriverIDVia is the same lookup restricted to approved
+// drivers — used when a driver newly claims a ride (accepting a request or
+// having an offer accepted), matching accept_ride_offer()'s Postgres RPC.
+func (h *Handler) resolveApprovedDriverIDVia(ctx context.Context, querier rowQuerier, authUserID string) (string, error) {
+	var driverRowID string
+	err := querier.QueryRow(ctx, `SELECT id::text FROM public.drivers WHERE user_id = $1 AND status = 'approved'`, authUserID).Scan(&driverRowID)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return "", errDriverNotApproved
+		}
+		return "", err
+	}
+	return driverRowID, nil
 }
 
 func (h *Handler) isAssignedDriver(rideID string, authUserID string) (bool, error) {
@@ -1834,7 +1996,14 @@ func (h *Handler) isAssignedDriver(rideID string, authUserID string) (bool, erro
 	if driverID == "" {
 		return true, nil
 	}
-	return driverID == authUserID, nil
+	driverRowID, err := h.resolveDriverRowID(context.Background(), authUserID)
+	if err != nil {
+		if errors.Is(err, errDriverNotFound) {
+			return false, nil
+		}
+		return false, err
+	}
+	return driverID == driverRowID, nil
 }
 
 func (h *Handler) JoinRoom(c *fiber.Ctx) error {

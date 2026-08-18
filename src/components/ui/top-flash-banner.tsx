@@ -15,8 +15,7 @@ export interface TopFlashBannerProps {
   /** Optional CTA shown below the message. */
   actionLabel?: string;
   onAction?: () => void;
-  /** Visual tone. */
-  /** Visual tone — both render in brand blue per design spec. */
+  /** Visual tone — both render in brand red per design spec. */
   tone?: "success" | "info";
   icon?: React.ReactNode;
 }
@@ -53,9 +52,9 @@ export default function TopFlashBanner({
     };
   }, [open, durationMs, onClose]);
 
-  // Both tones render in brand blue (per spec). Kept as prop for future variants.
+  // Both tones render in brand red (per spec). Kept as prop for future variants.
   void tone;
-  const toneClasses = "bg-blue-600 text-white";
+  const toneClasses = "bg-primary text-white";
 
   return (
     <AnimatePresence>
@@ -73,7 +72,7 @@ export default function TopFlashBanner({
             animate={{
               boxShadow: [
                 "0 8px 24px rgba(0,0,0,0.18)",
-                "0 8px 36px rgba(37,99,235,0.55)",
+                "0 8px 36px rgba(184,17,4,0.55)",
                 "0 8px 24px rgba(0,0,0,0.18)",
               ],
             }}

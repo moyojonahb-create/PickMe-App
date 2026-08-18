@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
+import pickMeCarIcon from '@/assets/pickme-car-icon.png';
 
 interface Props {
   message?: string;
@@ -60,9 +61,7 @@ export default function CarLoadingSpinner({ message = 'Processing...', onClose }
           animate={{ y: [0, -4, 0] }}
           transition={{ repeat: Infinity, duration: 1.5, ease: 'easeInOut' }}
         >
-          <div className="w-16 h-16 rounded-2xl flex items-center justify-center shadow-pickme-md" style={{ background: 'var(--gradient-primary)' }}>
-            <span className="text-3xl">🚗</span>
-          </div>
+          <img src={pickMeCarIcon} alt="" className="w-32 h-auto object-contain drop-shadow-lg" />
         </motion.div>
 
         {/* Pulse rings */}

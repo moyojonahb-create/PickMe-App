@@ -14,6 +14,16 @@ func (r *RideRequest) UnmarshalJSON(data []byte) error {
 		rideRequest
 		EstimatedFare      json.RawMessage `json:"estimated_fare"`
 		EstimatedFareMinor int64           `json:"estimated_fare_minor"`
+		// Fare/FareMinor are the field names the current frontend actually
+		// sends (see requestRide.ts's ridePayload) — used as a fallback when
+		// estimated_fare/estimated_fare_minor are absent.
+		Fare      json.RawMessage `json:"fare"`
+		FareMinor int64           `json:"fare_minor"`
+		// PickupLat/PickupLon are the field names the current frontend
+		// actually sends (see requestRide.ts's ridePayload) — used as a
+		// fallback when pickup_latitude/pickup_longitude are absent.
+		PickupLat float64 `json:"pickup_lat"`
+		PickupLon float64 `json:"pickup_lon"`
 	}
 	if err := json.Unmarshal(data, &aux); err != nil {
 		return err
@@ -26,6 +36,31 @@ func (r *RideRequest) UnmarshalJSON(data []byte) error {
 		}
 		r.EstimatedFare = amount
 		r.EstimatedFareMinor = amountMinor
+	} else if aux.EstimatedFareMinor > 0 {
+		r.EstimatedFareMinor = aux.EstimatedFareMinor
+		r.EstimatedFare = decimalUSDFromMinor(aux.EstimatedFareMinor)
+	} else if len(aux.Fare) > 0 && string(aux.Fare) != "null" {
+		amount, amountMinor, err := parseJSONMoneyUSD(aux.Fare)
+		if err != nil {
+			return err
+		}
+		r.EstimatedFare = amount
+		r.EstimatedFareMinor = amountMinor
+	} else if aux.FareMinor > 0 {
+		r.EstimatedFareMinor = aux.FareMinor
+		r.EstimatedFare = decimalUSDFromMinor(aux.FareMinor)
+	}
+	if r.PickupLocation == "" {
+		r.PickupLocation = aux.PickupAddress
+	}
+	if r.DropoffLocation == "" {
+		r.DropoffLocation = aux.DropoffAddress
+	}
+	if r.PickupLatitude == 0 && aux.PickupLat != 0 {
+		r.PickupLatitude = aux.PickupLat
+	}
+	if r.PickupLongitude == 0 && aux.PickupLon != 0 {
+		r.PickupLongitude = aux.PickupLon
 	}
 	return nil
 }

@@ -25,11 +25,11 @@ const PhotoTips = ({ tips, label }: { tips: { Icon: TipIcon; label: string }[]; 
   <ul
     role="list"
     aria-label={label}
-    className="rounded-2xl border-2 border-blue-700/30 bg-white dark:bg-blue-950/40 p-3 mb-4 space-y-2 shadow-sm"
+    className="rounded-2xl border-2 border-primary/30 bg-white dark:bg-primary/10 p-3 mb-4 space-y-2 shadow-sm"
   >
     {tips.map(({ Icon, label: t }, i) => (
-      <li key={i} className="flex items-start gap-2.5 text-[13px] sm:text-[12.5px] text-blue-950 dark:text-blue-50 font-medium leading-snug">
-        <Icon aria-hidden="true" className="w-4 h-4 mt-0.5 text-blue-700 dark:text-blue-300 shrink-0" />
+      <li key={i} className="flex items-start gap-2.5 text-[13px] sm:text-[12.5px] text-foreground font-medium leading-snug">
+        <Icon aria-hidden="true" className="w-4 h-4 mt-0.5 text-primary shrink-0" />
         <span>{t}</span>
       </li>
     ))}
@@ -228,7 +228,7 @@ export default function StudentVerificationPage() {
   }, [step]);
 
   return (
-    <div className="min-h-[100dvh] bg-gradient-to-b from-blue-50 via-background to-background">
+    <div className="min-h-[100dvh] bg-gradient-to-b from-primary/5 via-background to-background">
       {/* Header */}
       <header className="sticky top-0 z-10 backdrop-blur-md bg-background/80 border-b border-border/50">
         <div className="max-w-xl mx-auto px-4 py-3 flex items-center gap-3">
@@ -237,12 +237,12 @@ export default function StudentVerificationPage() {
           </button>
           <div className="flex-1">
             <h1 className="text-base font-bold flex items-center gap-1.5">
-              <GraduationCap className="w-4 h-4 text-blue-600" />
+              <GraduationCap className="w-4 h-4 text-primary" />
               Student Verification
             </h1>
             <div className="h-1 w-full bg-muted rounded-full mt-1.5 overflow-hidden">
               <motion.div
-                className="h-full bg-blue-600 rounded-full"
+                className="h-full bg-primary rounded-full"
                 animate={{ width: `${progress}%` }}
                 transition={{ duration: 0.3 }}
               />
@@ -276,7 +276,7 @@ export default function StudentVerificationPage() {
                     onClick={() => setTypeFilter(t)}
                     className={cn(
                       'px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap border transition-colors',
-                      typeFilter === t ? 'bg-blue-600 text-white border-blue-600' : 'bg-card border-border text-foreground',
+                      typeFilter === t ? 'bg-primary text-white border-primary' : 'bg-card border-border text-foreground',
                     )}
                   >
                     {t === 'all' ? 'All' : t.charAt(0).toUpperCase() + t.slice(1) + 's'}
@@ -285,7 +285,7 @@ export default function StudentVerificationPage() {
               </div>
 
               {instLoading ? (
-                <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-blue-600" /></div>
+                <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>
               ) : (
                 <div className="space-y-1.5 mb-4 max-h-[55dvh] overflow-y-auto">
                   {filteredInstitutions.map(i => (
@@ -295,8 +295,8 @@ export default function StudentVerificationPage() {
                       className={cn(
                         'w-full text-left px-4 py-3 rounded-2xl border transition-all',
                         institution?.id === i.id
-                          ? 'border-blue-600 bg-blue-50 ring-1 ring-blue-600'
-                          : 'border-border bg-card hover:border-blue-300',
+                          ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                          : 'border-border bg-card hover:border-primary/40',
                       )}
                     >
                       <div className="font-semibold text-sm">{i.name}</div>
@@ -312,7 +312,7 @@ export default function StudentVerificationPage() {
                 </div>
               )}
 
-              <Button onClick={goNext} disabled={!institution} className="w-full h-12 font-bold gap-2 bg-blue-600 hover:bg-blue-700">
+              <Button onClick={goNext} disabled={!institution} className="w-full h-12 font-bold gap-2 bg-primary hover:bg-primary/90">
                 Continue <ArrowRight className="w-4 h-4" />
               </Button>
             </motion.div>
@@ -330,7 +330,7 @@ export default function StudentVerificationPage() {
                 className="h-12 rounded-2xl text-base font-mono mb-4"
                 autoFocus
               />
-              <Button onClick={goNext} disabled={reg.trim().length < 3} className="w-full h-12 font-bold gap-2 bg-blue-600 hover:bg-blue-700">
+              <Button onClick={goNext} disabled={reg.trim().length < 3} className="w-full h-12 font-bold gap-2 bg-primary hover:bg-primary/90">
                 Continue <ArrowRight className="w-4 h-4" />
               </Button>
             </motion.div>
@@ -348,7 +348,7 @@ export default function StudentVerificationPage() {
                 className="h-12 rounded-2xl text-base font-mono mb-4"
                 autoFocus
               />
-              <Button onClick={goNext} disabled={nid.trim().length < 5} className="w-full h-12 font-bold gap-2 bg-blue-600 hover:bg-blue-700">
+              <Button onClick={goNext} disabled={nid.trim().length < 5} className="w-full h-12 font-bold gap-2 bg-primary hover:bg-primary/90">
                 Continue <ArrowRight className="w-4 h-4" />
               </Button>
             </motion.div>
@@ -375,12 +375,12 @@ export default function StudentVerificationPage() {
               <label
                 htmlFor="id-upload"
                 aria-label="Upload a photo of your national ID"
-                className="relative block aspect-[4/3] rounded-3xl border-2 border-dashed border-blue-500 bg-blue-50/50 dark:bg-blue-950/30 cursor-pointer overflow-hidden mb-4"
+                className="relative block aspect-[4/3] rounded-3xl border-2 border-dashed border-primary/60 bg-primary/5 dark:bg-primary/10 cursor-pointer overflow-hidden mb-4"
               >
                 {idPhotoPreview ? (
                   <img src={idPhotoPreview} alt="Your captured ID document" className="w-full h-full object-cover" />
                 ) : (
-                  <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-blue-700 dark:text-blue-200">
+                  <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-primary">
                     <Upload aria-hidden="true" className="w-8 h-8" />
                     <p className="text-sm font-semibold">Tap to capture or upload</p>
                     <p className="text-[11px] text-muted-foreground">Auto-compressed before upload</p>
@@ -388,8 +388,8 @@ export default function StudentVerificationPage() {
                 )}
                 {/* ID alignment frame overlay (always visible to teach the boundary) */}
                 <div aria-hidden="true" className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                  <div className="w-[88%] h-[72%] rounded-2xl border-2 border-blue-600/80 shadow-[0_0_0_9999px_rgba(15,23,42,0.18)]" />
-                  <span className="absolute top-3 left-1/2 -translate-x-1/2 text-[10px] font-bold uppercase tracking-wider text-white bg-blue-700/90 px-2 py-0.5 rounded-full">
+                  <div className="w-[88%] h-[72%] rounded-2xl border-2 border-primary/80 shadow-[0_0_0_9999px_rgba(15,23,42,0.18)]" />
+                  <span className="absolute top-3 left-1/2 -translate-x-1/2 text-[10px] font-bold uppercase tracking-wider text-white bg-primary/90 px-2 py-0.5 rounded-full">
                     Align ID inside frame
                   </span>
                 </div>
@@ -415,7 +415,7 @@ export default function StudentVerificationPage() {
                     <RotateCcw className="w-4 h-4" /> Retake
                   </Button>
                 )}
-                <Button onClick={goNext} disabled={!idPhoto} className="flex-1 h-12 font-bold gap-2 bg-blue-600 hover:bg-blue-700">
+                <Button onClick={goNext} disabled={!idPhoto} className="flex-1 h-12 font-bold gap-2 bg-primary hover:bg-primary/90">
                   Continue <ArrowRight className="w-4 h-4" />
                 </Button>
               </div>
@@ -440,7 +440,7 @@ export default function StudentVerificationPage() {
 
           {step === 'submitting' && (
             <motion.div key="sub" className="py-20 flex flex-col items-center gap-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-              <Loader2 className="w-10 h-10 animate-spin text-blue-600" />
+              <Loader2 className="w-10 h-10 animate-spin text-primary" />
               <p className="text-sm font-semibold">Verifying your identity…</p>
               <p className="text-xs text-muted-foreground">Comparing your selfie with your ID photo.</p>
             </motion.div>
@@ -547,8 +547,8 @@ function SelfieCapture({
         {/* Always-on face alignment oval (only over live video) */}
         {active && (
           <div aria-hidden="true" className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div className="w-[62%] aspect-[3/4] rounded-[50%] border-[3px] border-blue-400 shadow-[0_0_0_9999px_rgba(0,0,0,0.45)]" />
-            <span className="absolute bottom-4 left-1/2 -translate-x-1/2 text-[11px] font-bold uppercase tracking-wider text-white bg-blue-700/90 px-3 py-1 rounded-full">
+            <div className="w-[62%] aspect-[3/4] rounded-[50%] border-[3px] border-primary shadow-[0_0_0_9999px_rgba(0,0,0,0.45)]" />
+            <span className="absolute bottom-4 left-1/2 -translate-x-1/2 text-[11px] font-bold uppercase tracking-wider text-white bg-primary/90 px-3 py-1 rounded-full">
               Centre your face
             </span>
           </div>
@@ -562,7 +562,7 @@ function SelfieCapture({
             onClick={start}
             autoFocus
             aria-label="Open camera to take selfie"
-            className="flex-1 h-12 font-bold gap-2 bg-blue-600 hover:bg-blue-700 focus-visible:ring-4 focus-visible:ring-blue-300 focus-visible:ring-offset-2"
+            className="flex-1 h-12 font-bold gap-2 bg-primary hover:bg-primary/90 focus-visible:ring-4 focus-visible:ring-primary/40 focus-visible:ring-offset-2"
           >
             <Camera className="w-4 h-4" /> Open Camera
           </Button>
@@ -574,7 +574,7 @@ function SelfieCapture({
             onKeyDown={(e) => { if (e.key === 'Escape') stop(); }}
             aria-label="Capture selfie now"
             aria-keyshortcuts="Enter Space"
-            className="flex-1 h-12 font-bold gap-2 bg-blue-600 hover:bg-blue-700 focus-visible:ring-4 focus-visible:ring-blue-300 focus-visible:ring-offset-2"
+            className="flex-1 h-12 font-bold gap-2 bg-primary hover:bg-primary/90 focus-visible:ring-4 focus-visible:ring-primary/40 focus-visible:ring-offset-2"
           >
             <Camera className="w-4 h-4" /> Take Photo
           </Button>
@@ -585,7 +585,7 @@ function SelfieCapture({
               onClick={start}
               variant="outline"
               aria-label="Retake selfie"
-              className="flex-1 h-12 gap-2 focus-visible:ring-4 focus-visible:ring-blue-300 focus-visible:ring-offset-2"
+              className="flex-1 h-12 gap-2 focus-visible:ring-4 focus-visible:ring-primary/40 focus-visible:ring-offset-2"
             >
               <RotateCcw className="w-4 h-4" /> Retake
             </Button>
@@ -593,7 +593,7 @@ function SelfieCapture({
               onClick={onSubmit}
               autoFocus
               aria-label="Submit verification"
-              className="flex-1 h-12 font-bold gap-2 bg-blue-600 hover:bg-blue-700 focus-visible:ring-4 focus-visible:ring-blue-300 focus-visible:ring-offset-2"
+              className="flex-1 h-12 font-bold gap-2 bg-primary hover:bg-primary/90 focus-visible:ring-4 focus-visible:ring-primary/40 focus-visible:ring-offset-2"
             >
               <ShieldCheck className="w-4 h-4" /> Submit
             </Button>
@@ -668,7 +668,7 @@ function ResultScreen({
       tone: 'text-rose-600 bg-rose-50',
     },
   }[status] ?? {
-    Icon: Clock, title: 'Submitted', desc: 'We\'ll get back to you soon.', tone: 'text-blue-600 bg-blue-50',
+    Icon: Clock, title: 'Submitted', desc: 'We\'ll get back to you soon.', tone: 'text-primary bg-primary/10',
   };
 
   const { Icon } = config;
@@ -720,7 +720,7 @@ function ResultScreen({
         {showRetake && rejectedStep === 'id' && (
           <Button
             onClick={() => onRetryStep('id')}
-            className="w-full h-12 font-bold gap-2 bg-blue-600 hover:bg-blue-700 focus-visible:ring-4 focus-visible:ring-blue-300"
+            className="w-full h-12 font-bold gap-2 bg-primary hover:bg-primary/90 focus-visible:ring-4 focus-visible:ring-primary/40"
             aria-label="Retake only the ID photo"
           >
             <RotateCcw className="w-4 h-4" /> Retake ID photo only
@@ -729,18 +729,18 @@ function ResultScreen({
         {showRetake && rejectedStep === 'selfie' && (
           <Button
             onClick={() => onRetryStep('selfie')}
-            className="w-full h-12 font-bold gap-2 bg-blue-600 hover:bg-blue-700 focus-visible:ring-4 focus-visible:ring-blue-300"
+            className="w-full h-12 font-bold gap-2 bg-primary hover:bg-primary/90 focus-visible:ring-4 focus-visible:ring-primary/40"
             aria-label="Retake only the selfie"
           >
             <RotateCcw className="w-4 h-4" /> Retake selfie only
           </Button>
         )}
         {showRetake && (
-          <Button onClick={onRetry} variant="outline" className="w-full h-12 gap-2 focus-visible:ring-4 focus-visible:ring-blue-300" aria-label="Retake both photos and try again">
+          <Button onClick={onRetry} variant="outline" className="w-full h-12 gap-2 focus-visible:ring-4 focus-visible:ring-primary/40" aria-label="Retake both photos and try again">
             <RotateCcw className="w-4 h-4" /> Retake both photos
           </Button>
         )}
-        <Button onClick={onClose} variant={showRetake ? 'ghost' : 'default'} className={cn('w-full h-12 font-bold', !showRetake && 'bg-blue-600 hover:bg-blue-700')}>
+        <Button onClick={onClose} variant={showRetake ? 'ghost' : 'default'} className={cn('w-full h-12 font-bold', !showRetake && 'bg-primary hover:bg-primary/90')}>
           Back to profile
         </Button>
       </div>

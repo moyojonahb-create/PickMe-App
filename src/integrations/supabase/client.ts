@@ -5,6 +5,22 @@ import type { Database } from './types';
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
+// This throws during module evaluation, before React mounts, so a missing
+// value otherwise leaves the whole page blank with only a console error.
+if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
+  const message =
+    'PickMe is misconfigured: VITE_SUPABASE_URL / VITE_SUPABASE_PUBLISHABLE_KEY were not set when this build was created.';
+  console.error(`[PickMe] ${message}`);
+  document.body.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px;font-family:system-ui,-apple-system,sans-serif;text-align:center;">
+      <div>
+        <h1 style="font-size:1.25rem;margin-bottom:8px;">Configuration error</h1>
+        <p style="color:#6b7280;max-width:28rem;">${message} Please try again shortly or contact support if this persists.</p>
+      </div>
+    </div>`;
+  throw new Error(message);
+}
+
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 

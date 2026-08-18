@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Search } from 'lucide-react';
+import pickMeCarIcon from '@/assets/pickme-car-icon.png';
 
 interface RideHomeGreetingProps {
   name: string;
@@ -30,9 +30,7 @@ export default function RideHomeGreeting({ name, onSearchClick }: RideHomeGreeti
         onClick={onSearchClick}
         className="w-full flex items-center gap-3 px-4 py-4 rounded-2xl glass-card-heavy active:scale-[0.98] transition-transform text-left"
       >
-        <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'var(--gradient-primary)' }}>
-          <Search className="w-5 h-5 text-primary-foreground" />
-        </div>
+        <img src={pickMeCarIcon} alt="" className="h-11 w-auto shrink-0 object-contain" />
         <div>
           <p className="text-base font-semibold text-foreground">Where to?</p>
           <p className="text-xs text-muted-foreground">Search destination or pick a saved place</p>

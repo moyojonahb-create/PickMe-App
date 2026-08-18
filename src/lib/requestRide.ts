@@ -33,7 +33,21 @@ interface RideRow {
   [key: string]: unknown;
 }
 
+const REQUEST_RIDE_TIMEOUT_MS = 30_000;
+
+// Bounds the whole ride-request flow (auth check, Go backend call, Supabase
+// fallback insert) so a stalled network condition can never leave the
+// caller's spinner running forever — see requestRideImpl for the actual work.
 export async function requestRide(input: RequestRideInput) {
+  return Promise.race([
+    requestRideImpl(input),
+    new Promise<{ ok: false; error: string }>((resolve) => {
+      setTimeout(() => resolve({ ok: false, error: "Request timed out. Please check your connection and try again." }), REQUEST_RIDE_TIMEOUT_MS);
+    }),
+  ]);
+}
+
+async function requestRideImpl(input: RequestRideInput) {
   const { data: authData, error: authErr } = await supabase.auth.getUser();
   if (authErr) return { ok: false as const, error: `Auth error: ${authErr.message}` };
   const user = authData?.user;
@@ -43,9 +57,8 @@ export async function requestRide(input: RequestRideInput) {
     return { ok: false as const, error: "Too many ride requests. Please wait a moment and try again." };
   }
 
-  if (user.email && !user.email_confirmed_at) {
-    return { ok: false as const, error: "Please verify your email address before requesting a ride. Check your inbox for a verification link." };
-  }
+  // Email verification isn't required for now — signups go straight in
+  // without a confirmation-link gate (see Auth.tsx's plain signUp flow).
 
   const pickup_address = (input.pickup_address || "").trim();
   const dropoff_address = (input.dropoff_address || "").trim();

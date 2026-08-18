@@ -26,20 +26,20 @@ export default function GenderPreferenceToggle({ value, onChange }: GenderPrefer
       className={cn(
         "flex items-center gap-2 px-3 py-2 rounded-xl border transition-all text-left w-full",
         isFemaleOnly
-          ? "border-pink-400 bg-pink-50 dark:bg-pink-950/20"
+          ? "border-primary bg-primary/10 dark:bg-primary/15"
           : "border-border hover:border-muted-foreground/30"
       )}
     >
       <div className={cn(
         "w-7 h-7 rounded-lg flex items-center justify-center shrink-0",
-        isFemaleOnly ? "bg-pink-400 text-white" : "bg-secondary text-muted-foreground"
+        isFemaleOnly ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground"
       )}>
         {isFemaleOnly ? <ShieldCheck className="w-4 h-4" /> : <Shield className="w-4 h-4" />}
       </div>
       <div className="flex-1 min-w-0">
         <p className={cn(
           "text-xs font-semibold leading-tight",
-          isFemaleOnly ? "text-pink-600 dark:text-pink-400" : "text-foreground"
+          isFemaleOnly ? "text-primary" : "text-foreground"
         )}>
           {isFemaleOnly ? 'Women-Only Ride' : 'Any Driver'}
         </p>
@@ -49,7 +49,7 @@ export default function GenderPreferenceToggle({ value, onChange }: GenderPrefer
       </div>
       <div className={cn(
         "w-9 h-5 rounded-full transition-colors relative shrink-0",
-        isFemaleOnly ? "bg-pink-400" : "bg-muted"
+        isFemaleOnly ? "bg-primary" : "bg-muted"
       )}>
         <div className={cn(
           "absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform",

@@ -234,7 +234,7 @@ const AdminDashboard = () => {
           {/* Header — gradient hero */}
           <div
             className="relative overflow-hidden rounded-3xl px-6 py-5 text-primary-foreground"
-            style={{ background: 'linear-gradient(135deg, hsl(224 71% 37%), hsl(225 65% 48%))' }}
+            style={{ background: 'var(--gradient-primary)' }}
           >
             <div className="absolute -top-16 -right-10 w-56 h-56 rounded-full bg-white/10 blur-3xl pointer-events-none" />
             <div className="relative flex items-center justify-between gap-3 flex-wrap">

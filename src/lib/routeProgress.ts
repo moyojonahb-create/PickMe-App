@@ -99,6 +99,31 @@ export function trimRouteAhead(
   return { ahead, remainingMeters: remaining, snapped: bestPt };
 }
 
+/**
+ * Splits a route polyline into the portion already driven (behind the current
+ * position) and the portion still ahead, at the vertex nearest to `progress`.
+ * Used to render the traveled/upcoming two-tone route line.
+ */
+export function splitRouteAtProgress(
+  points: LatLng[],
+  progress: LatLng | null | undefined,
+): { traveled: LatLng[]; upcoming: LatLng[] } {
+  if (!progress || points.length < 2) return { traveled: [], upcoming: points };
+  let bestIndex = 0;
+  let bestDist = Infinity;
+  for (let i = 0; i < points.length; i++) {
+    const dist = haversineMeters(points[i], progress);
+    if (dist < bestDist) {
+      bestDist = dist;
+      bestIndex = i;
+    }
+  }
+  return {
+    traveled: points.slice(0, bestIndex + 1),
+    upcoming: points.slice(bestIndex),
+  };
+}
+
 /** Exponential moving average for smoothing speed values. */
 export class EMA {
   private value: number | null = null;

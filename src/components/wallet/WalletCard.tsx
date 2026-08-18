@@ -10,7 +10,7 @@ interface WalletCardProps {
 }
 
 /**
- * Bank-card style wallet display: blue gradient with yellow accents.
+ * Bank-card style wallet display: red gradient with yellow accents.
  * Shows the user's PickMe account number (PMR######R) and balance.
  */
 export default function WalletCard({ fullName, balance, pickmeAccount, hidden }: WalletCardProps) {
@@ -34,7 +34,7 @@ export default function WalletCard({ fullName, balance, pickmeAccount, hidden }:
     <div
       className="relative overflow-hidden rounded-3xl p-5 text-white shadow-2xl"
       style={{
-        background: "linear-gradient(135deg, #0a3d91 0%, #1e63d8 55%, #0a3d91 100%)",
+        background: "linear-gradient(135deg, #7F0B02 0%, #B81104 55%, #7F0B02 100%)",
       }}
     >
       {/* Decorative yellow circles */}
@@ -50,7 +50,7 @@ export default function WalletCard({ fullName, balance, pickmeAccount, hidden }:
             </p>
             <p className="text-base font-bold truncate max-w-[180px]">{displayName}</p>
           </div>
-          <div className="flex items-center gap-1 bg-yellow-400 text-blue-900 px-2.5 py-1 rounded-full font-black text-[11px] shadow">
+          <div className="flex items-center gap-1 bg-accent text-accent-foreground px-2.5 py-1 rounded-full font-black text-[11px] shadow">
             <Wallet className="h-3.5 w-3.5" />
             PickMe
           </div>

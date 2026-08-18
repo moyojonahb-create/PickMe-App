@@ -1,4 +1,4 @@
-import MapboxMap, { type Coords } from "@/components/MapboxMap";
+import MapboxMap, { type Coords, type MapEtaCard } from "@/components/MapboxMap";
 
 export type TripPhase = "driver_to_pickup" | "pickup_to_dropoff" | "idle";
 
@@ -9,6 +9,8 @@ interface TripMapboxMapProps {
   tripStatus: string;
   height?: string;
   className?: string;
+  routeGradient?: boolean;
+  mapCards?: MapEtaCard[];
 }
 
 function getPhase(status: string): TripPhase {
@@ -24,6 +26,8 @@ export default function TripMapboxMap({
   tripStatus,
   height,
   className,
+  routeGradient,
+  mapCards,
 }: TripMapboxMapProps) {
   const phase = getPhase(tripStatus);
   const routeCoordinates =
@@ -41,6 +45,8 @@ export default function TripMapboxMap({
       routeCoordinates={routeCoordinates}
       height={height ?? "300px"}
       className={className}
+      routeGradient={routeGradient}
+      mapCards={mapCards}
     />
   );
 }

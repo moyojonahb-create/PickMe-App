@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "next-themes";
 import App from "./App";
 import { AuthProvider } from "./hooks/useAuth";
+import { AppBootstrapProvider } from "./hooks/useAppBootstrap";
 import { I18nProvider } from "./lib/i18n";
 import { FemaleThemeProvider } from "./hooks/useFemaleTheme";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -169,7 +170,9 @@ createRoot(rootElement).render(
         <I18nProvider>
           <FemaleThemeProvider>
             <AuthProvider>
-              <App />
+              <AppBootstrapProvider>
+                <App />
+              </AppBootstrapProvider>
             </AuthProvider>
           </FemaleThemeProvider>
         </I18nProvider>

@@ -62,11 +62,11 @@ export default function PremiumOfferCard({ offer, riderFare, onAccept, onDecline
       exit={{ opacity: 0, scale: 0.92, y: -8 }}
       transition={{ type: 'spring', stiffness: 360, damping: 28 }}
       layout
-      className="bg-white dark:bg-card rounded-3xl border border-[#3B82F6]/15 overflow-hidden
-                 shadow-[0_10px_30px_-12px_rgba(29,78,216,0.25),0_4px_12px_-4px_rgba(15,23,42,0.08)]"
+      className="bg-white dark:bg-card rounded-3xl border border-primary/15 overflow-hidden
+                 shadow-[0_10px_30px_-12px_hsl(var(--primary)/0.25),0_4px_12px_-4px_rgba(15,23,42,0.08)]"
     >
       {/* Glass Blue header */}
-      <div className="relative px-4 pt-3 pb-2 bg-gradient-to-r from-[#1D4ED8] via-[#2563EB] to-[#3B82F6] text-white">
+      <div className="relative px-4 pt-3 pb-2 text-white" style={{ background: 'var(--gradient-primary)' }}>
         <div className="flex items-center justify-between">
           <span className="inline-flex items-center gap-1.5 text-[10px] font-bold tracking-[0.14em] uppercase opacity-95">
             <ShieldCheck className="h-3 w-3" /> Driver Offer
@@ -93,7 +93,7 @@ export default function PremiumOfferCard({ offer, riderFare, onAccept, onDecline
         {/* Driver + Fare hero row */}
         <div className="flex items-start gap-3">
           <div className="relative shrink-0">
-            <Avatar className="h-16 w-16 border-2 border-[#3B82F6]/30 shadow-md">
+            <Avatar className="h-16 w-16 border-2 border-primary/30 shadow-md">
               {offer.avatarUrl && (
                 <AvatarImage
                   src={offer.avatarUrl}
@@ -103,13 +103,13 @@ export default function PremiumOfferCard({ offer, riderFare, onAccept, onDecline
                   decoding="async"
                 />
               )}
-              <AvatarFallback className="bg-[#3B82F6]/10 text-[#1D4ED8] font-black text-lg">
+              <AvatarFallback className="bg-primary/10 text-primary font-black text-lg">
                 {offer.driverName?.charAt(0)?.toUpperCase() || '?'}
               </AvatarFallback>
             </Avatar>
             {isVerified && (
               <span className="absolute -bottom-1 -right-1 bg-white rounded-full p-0.5 shadow-sm">
-                <CheckCircle2 className="w-4 h-4 text-[#2563EB] fill-[#DBEAFE]" />
+                <CheckCircle2 className="w-4 h-4 text-primary fill-primary/15" />
               </span>
             )}
           </div>
@@ -120,7 +120,7 @@ export default function PremiumOfferCard({ offer, riderFare, onAccept, onDecline
                 {offer.driverName}
               </p>
               {isVerified && (
-                <span className="text-[9px] font-bold tracking-wide px-1.5 py-0.5 rounded-full bg-[#DBEAFE] text-[#1D4ED8] uppercase">
+                <span className="text-[9px] font-bold tracking-wide px-1.5 py-0.5 rounded-full bg-primary/15 text-primary uppercase">
                   Verified
                 </span>
               )}
@@ -144,7 +144,7 @@ export default function PremiumOfferCard({ offer, riderFare, onAccept, onDecline
               key={offer.fare}
               initial={{ scale: 1.12 }}
               animate={{ scale: 1 }}
-              className="text-[32px] font-black text-[#1D4ED8] tabular-nums leading-none mt-1"
+              className="text-[32px] font-black text-primary tabular-nums leading-none mt-1"
             >
               ${offer.fare.toFixed(2)}
             </motion.p>
@@ -152,9 +152,9 @@ export default function PremiumOfferCard({ offer, riderFare, onAccept, onDecline
         </div>
 
         {/* Vehicle row */}
-        <div className="flex items-center gap-2 rounded-2xl bg-[#F1F5FF] dark:bg-muted/40 px-3 py-2.5">
+        <div className="flex items-center gap-2 rounded-2xl bg-primary/5 dark:bg-muted/40 px-3 py-2.5">
           <div className="w-8 h-8 rounded-xl bg-white dark:bg-card flex items-center justify-center shadow-sm shrink-0">
-            <Car className="h-4 w-4 text-[#2563EB]" />
+            <Car className="h-4 w-4 text-primary" />
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5 text-[13px] font-semibold text-foreground truncate">
@@ -221,9 +221,7 @@ export default function PremiumOfferCard({ offer, riderFare, onAccept, onDecline
             <PrimaryButton
               onClick={() => onAccept(offer.offerId)}
               disabled={disabled || expired}
-              className="w-full h-12 text-[15px] font-bold rounded-2xl inline-flex items-center justify-center
-                         bg-gradient-to-r from-[#1D4ED8] to-[#3B82F6] text-white
-                         shadow-[0_10px_22px_-8px_rgba(37,99,235,0.55)]"
+              className="w-full h-12 text-[15px] font-bold rounded-2xl inline-flex items-center justify-center text-white"
             >
               Accept Offer
             </PrimaryButton>
@@ -264,7 +262,7 @@ function Badge({
   tone: 'blue' | 'emerald' | 'violet';
 }) {
   const tones = {
-    blue: 'bg-[#DBEAFE] text-[#1D4ED8] border-[#3B82F6]/20',
+    blue: 'bg-primary/15 text-primary border-primary/20',
     emerald: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300',
     violet: 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-500/10 dark:text-violet-300',
   } as const;

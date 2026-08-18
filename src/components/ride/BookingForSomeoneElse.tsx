@@ -15,8 +15,9 @@ interface BookingForSomeoneElseProps {
 }
 
 /**
- * Full-width soft-yellow button that expands downward into a blue-bordered
+ * Square black-glass tile that expands downward (spanning full width) into a
  * "Rider details" card with name + phone inputs and a Contacts picker.
+ * Pairs with PassengerCountCard in a 2-col row when collapsed.
  */
 export default function BookingForSomeoneElse({
   enabled,
@@ -37,20 +38,24 @@ export default function BookingForSomeoneElse({
   };
 
   return (
-    <div className="w-full">
+    <div className={cn('w-full', open && 'col-span-2')}>
       <button
         type="button"
         onClick={toggle}
         aria-expanded={open}
-        style={{ backgroundColor: '#FFF6DA', borderColor: '#FFC107' }}
-        className="w-full flex items-center gap-2.5 px-3.5 py-3 rounded-2xl border active:scale-[0.99] transition-all"
+        className={cn(
+          'flex rounded-2xl bg-foreground/85 backdrop-blur-xl border border-white/10 active:scale-[0.98] transition-all',
+          open
+            ? 'w-full items-center gap-2.5 px-3.5 py-3'
+            : 'w-full aspect-square flex-col items-center justify-center gap-2 p-3 text-center'
+        )}
       >
-        <UserPlus className="w-4 h-4 text-primary shrink-0" />
-        <span className="flex-1 text-left text-[13px] font-semibold text-primary">
-          Booking for someone else
+        <UserPlus className={cn('text-background shrink-0', open ? 'w-4 h-4' : 'w-5 h-5')} />
+        <span className={cn('font-semibold text-background', open ? 'flex-1 text-left text-[13px]' : 'text-[12px] leading-tight')}>
+          {open ? 'Booking for someone else' : <>Booking for<br />someone else</>}
         </span>
         <ChevronDown
-          className={cn('w-4 h-4 text-primary transition-transform duration-300', open && 'rotate-180')}
+          className={cn('text-background/70 transition-transform duration-300', open ? 'w-4 h-4' : 'w-3.5 h-3.5', open && 'rotate-180')}
         />
       </button>
 

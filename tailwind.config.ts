@@ -59,7 +59,7 @@ export default {
           ring: "hsl(var(--sidebar-ring))",
         },
         // PickMe custom colors
-        voyex: {
+        pickme: {
           blue: "hsl(var(--pickme-blue))",
           "blue-dark": "hsl(var(--pickme-blue-dark))",
           "blue-light": "hsl(var(--pickme-blue-light))",

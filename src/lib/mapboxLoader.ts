@@ -13,6 +13,9 @@ export type MapboxMapInstance = {
   remove: () => void;
   resize: () => void;
   panTo: (lngLat: [number, number]) => void;
+  flyTo: (options: Record<string, unknown>) => void;
+  easeTo: (options: Record<string, unknown>) => void;
+  project: (lngLat: [number, number]) => { x: number; y: number };
   setZoom: (zoom: number) => void;
   fitBounds: (bounds: any, options?: Record<string, unknown>) => void;
   getSource: (id: string) => any;
@@ -21,6 +24,7 @@ export type MapboxMapInstance = {
   addLayer: (layer: Record<string, unknown>) => void;
   removeLayer: (id: string) => void;
   removeSource: (id: string) => void;
+  setPaintProperty: (layerId: string, name: string, value: unknown) => void;
 };
 
 export type MapboxGL = {

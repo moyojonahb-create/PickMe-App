@@ -1,5 +1,6 @@
 import { MapPin, Navigation2 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import pickMeCarIcon from '@/assets/pickme-car-icon.png';
 
 const PhoneMockup = () => {
   return (
@@ -112,9 +113,7 @@ const PhoneMockup = () => {
             >
               <div className="relative">
                 <div className="absolute inset-0 bg-primary/20 rounded-full animate-ping" style={{ animationDuration: '2s' }} />
-                <div className="w-8 h-8 bg-card rounded-full shadow-md flex items-center justify-center border border-border/50">
-                  <span className="text-sm">🚗</span>
-                </div>
+                <img src={pickMeCarIcon} alt="" className="w-14 h-auto object-contain drop-shadow-md" />
               </div>
             </motion.div>
           </div>

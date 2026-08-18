@@ -12,9 +12,13 @@ interface EmergencyButtonProps {
   pickupAddress?: string;
   dropoffAddress?: string;
   driverName?: string;
+  /** 'default' (existing) is the floating red circle. 'square' matches the
+   * bordered icon-over-label action-grid style used on the redesigned
+   * connected-ride screens. Same panel/SOS logic either way. */
+  variant?: 'default' | 'square';
 }
 
-export default function EmergencyButton({ rideId, pickupAddress, dropoffAddress, driverName }: EmergencyButtonProps) {
+export default function EmergencyButton({ rideId, pickupAddress, dropoffAddress, driverName, variant = 'default' }: EmergencyButtonProps) {
   const { user } = useAuth();
   const [showPanel, setShowPanel] = useState(false);
   const [sosCountdown, setSosCountdown] = useState<number | null>(null);
@@ -130,18 +134,31 @@ export default function EmergencyButton({ rideId, pickupAddress, dropoffAddress,
 
   return (
     <>
-      <motion.div whileTap={{ scale: 0.9 }}>
-        <Button
-          variant="destructive"
-          size="icon"
-          className="h-12 w-12 rounded-full shadow-lg relative"
+      {variant === 'square' ? (
+        <button
+          type="button"
           onClick={() => setShowPanel(true)}
-          aria-label="Emergency"
+          aria-label="Safety"
+          className="flex flex-col items-center gap-1.5 py-3 rounded-2xl border border-border active:scale-95 transition-transform relative"
         >
-          <Shield className="h-5 w-5" />
-          <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-destructive rounded-full border-2 border-background animate-pulse" />
-        </Button>
-      </motion.div>
+          <Shield className="w-5 h-5 text-foreground" />
+          <span className="text-[11px] font-medium text-foreground">Safety</span>
+          <span className="absolute top-1.5 right-[calc(50%-20px)] w-2 h-2 bg-destructive rounded-full animate-pulse" />
+        </button>
+      ) : (
+        <motion.div whileTap={{ scale: 0.9 }}>
+          <Button
+            variant="destructive"
+            size="icon"
+            className="h-12 w-12 rounded-full shadow-lg relative"
+            onClick={() => setShowPanel(true)}
+            aria-label="Emergency"
+          >
+            <Shield className="h-5 w-5" />
+            <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-destructive rounded-full border-2 border-background animate-pulse" />
+          </Button>
+        </motion.div>
+      )}
 
       <AnimatePresence>
         {showPanel && (

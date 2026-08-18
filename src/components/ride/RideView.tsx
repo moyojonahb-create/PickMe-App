@@ -5,7 +5,6 @@ import { motion } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { haptic } from '@/lib/haptics';
 import { useAuth } from '@/hooks/useAuth';
-import EmailVerificationBanner from '@/components/auth/EmailVerificationBanner';
 import { useOSRMRoute } from '@/hooks/useOSRMRoute';
 import { usePricingSettings } from '@/hooks/usePricingSettings';
 import { useLandmarks } from '@/hooks/useLandmarks';
@@ -37,8 +36,9 @@ import PaymentMethodSelector from './PaymentMethodSelector';
 import { Button } from '@/components/ui/button';
 import {
   Loader2, MapPin, Navigation, Crosshair, ArrowLeft, User, X, Search,
-  Car, Star, Phone, MessageCircle, Clock, Users, ChevronRight, Locate,
-  Banknote, Wallet, Zap, CarFront, Menu, History, Minus, Plus, Route, ContactRound } from
+  Star, Phone, MessageCircle, Clock, ChevronRight, Locate,
+  Banknote, Wallet, Zap, CarFront, Menu, History, ContactRound,
+  Calendar, CreditCard, ChevronDown } from
 'lucide-react';
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle } from
@@ -59,15 +59,13 @@ import ProximityFilter from './ProximityFilter';
 import EmergencyButton from './EmergencyButton';
 import { NotificationBell } from '@/components/NotificationCenter';
 
-import RecentDestinations from './RecentDestinations';
 import RideHomeGreeting from './RideHomeGreeting';
 import DropoffAutocomplete from './DropoffAutocomplete';
 
 import QuickShortcutsRow from './QuickShortcutsRow';
-import NearbyDriversSummary from './NearbyDriversSummary';
-import MultiStopInput, { type RideStop } from './MultiStopInput';
-import ScheduleRide from './ScheduleRide';
+import { type RideStop } from './MultiStopInput';
 import { useLandmarks as useLandmarksSearch, type Landmark } from '@/hooks/useLandmarks';
+import { useStreets, type Street } from '@/hooks/useStreets';
 import { DEFAULT_TOWN, detectTown, type TownConfig } from '@/lib/towns';
 import TownSelectorSheet from './TownSelectorSheet';
 import ShareTripButton from './ShareTripButton';
@@ -82,13 +80,14 @@ import GenderPreferenceToggle, { type GenderPreference } from './GenderPreferenc
 import ContactPickerSheet from './ContactPickerSheet';
 import PilotReadinessCard from '@/components/pilot/PilotReadinessCard';
 import LuggageSheet from '@/components/luggage/LuggageSheet';
-import GpsPermissionBanner from '@/components/ride/GpsPermissionBanner';
-import BookingForSomeoneElse from '@/components/ride/BookingForSomeoneElse';
+import LocationPermissionPrompt from '@/components/ride/LocationPermissionPrompt';
 import DestinationSearchScreen, { type SearchResultRow } from '@/components/ride/DestinationSearchScreen';
+import RideTierSelector, { type RideTierId, type RideTierOption } from './RideTierSelector';
+import LocationSummaryPill from './LocationSummaryPill';
 
 interface SelectedLocation {name: string;lat: number;lng: number;}
 interface GPSState {status: 'idle' | 'loading' | 'success' | 'denied' | 'unavailable';coords: {lat: number;lng: number;} | null;error: string | null;}
-type VehicleTier = 'standard';
+type VehicleTier = RideTierId;
 type PaymentMethod = 'cash' | 'wallet';
 
 const SERVICE_TABS: {id: ServiceType;label: string;icon: string;}[] = [
@@ -97,9 +96,11 @@ const SERVICE_TABS: {id: ServiceType;label: string;icon: string;}[] = [
 { id: 'courier', label: 'Courier', icon: '📦' },
 { id: 'freight', label: 'Freight', icon: '🚛' }];
 
-
-const VEHICLE_TIERS: {id: VehicleTier;name: string;icon: typeof Car;priceRange: string;passengers: string;eta: string;multiplier: number;}[] = [
-{ id: 'standard', name: 'PickMe Standard', icon: Car, priceRange: '$1.50 – $10', passengers: '1–4', eta: '3 min', multiplier: 1 }];
+const RIDE_TIER_LABELS: Record<RideTierId, string> = {
+  economy: 'Economy',
+  share: 'Share Ride',
+  parcel: 'Parcel',
+};
 
 
 export default function RideView() {
@@ -117,6 +118,7 @@ export default function RideView() {
   const [gpsState, setGpsState] = useState<GPSState>({ status: 'idle', coords: null, error: null });
   const [activeField, setActiveField] = useState<'pickup' | 'dropoff' | null>(null);
   const [mapPickMode, setMapPickMode] = useState(false);
+  const [settingFavorite, setSettingFavorite] = useState<'home' | 'work' | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [proximityRadius, setProximityRadius] = useState<number | null>(null);
   const [nominatimResults, setNominatimResults] = useState<Array<{name: string;lat?: number;lng?: number;displayName: string;placeId?: string;source?: 'google' | 'osm';}>>([]);
@@ -124,9 +126,17 @@ export default function RideView() {
   const [nominatimLoading, setNominatimLoading] = useState(false);
   const [cachedPlacesLoading, setCachedPlacesLoading] = useState(false);
   const nominatimDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Google Places session token: groups one autocomplete "session" (first
+  // keystroke through place selection) into a single billed unit. Lazily
+  // created on first Google call, cleared once a place is picked.
+  const googleSessionTokenRef = useRef<string | null>(null);
   const [reverseGeoLoading, setReverseGeoLoading] = useState(false);
-  const [selectedTier, setSelectedTier] = useState<VehicleTier>('standard');
+  const [selectedTier, setSelectedTier] = useState<VehicleTier>('economy');
+  const [schedulePickerOpen, setSchedulePickerOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
+  // Payment method row is only shown until the rider explicitly confirms a
+  // method (tapping Cash or Wallet in the sheet) — it then hides for good.
+  const [paymentMethodConfirmed, setPaymentMethodConfirmed] = useState(false);
   const { balance: walletBalance } = useWallet();
   const [passengerCount, setPassengerCount] = useState(1);
   const [bookForSomeoneElse, setBookForSomeoneElse] = useState(false);
@@ -144,11 +154,21 @@ export default function RideView() {
   const [luggageOpen, setLuggageOpen] = useState(false);
   const [luggagePromptOpen, setLuggagePromptOpen] = useState(false);
   const [luggagePromptShown, setLuggagePromptShown] = useState(false);
+  const [paymentPopupOpen, setPaymentPopupOpen] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
   const [sheetExpanded, setSheetExpanded] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [selectedTown, setSelectedTown] = useState<TownConfig>(DEFAULT_TOWN);
+  // Set when the rider explicitly picks a town, so the map recenters there even
+  // if GPS already has a fix. Cleared by a fresh GPS fix or a new pickup, so
+  // "use my location" still wins after a manual town selection.
+  const [preferredCenter, setPreferredCenter] = useState<{ lat: number; lng: number } | null>(null);
+  // Drives the upfront "Allow location" prompt: only shown when the browser
+  // reports the permission is still undecided ('prompt'). Already-granted or
+  // already-denied skip the prompt entirely — see the effects below.
+  const [gpsPermissionState, setGpsPermissionState] = useState<'unknown' | 'granted' | 'prompt' | 'denied' | 'unsupported'>('unknown');
+  const [locationPromptDismissed, setLocationPromptDismissed] = useState(false);
   const [profileName, setProfileName] = useState<string>('');
   const [rideStops, setRideStops] = useState<RideStop[]>([]);
   const [scheduledAt, setScheduledAt] = useState<Date | null>(null);
@@ -162,6 +182,7 @@ export default function RideView() {
   const hearingImpaired = riderPrefs.hearing_impaired;
 
   const { landmarks, loading: landmarksLoading } = useLandmarksSearch({ searchQuery, limit: 30, userLocation: gpsState.coords, radiusKm: proximityRadius, townCenter: selectedTown.center, townRadiusKm: selectedTown.radiusKm });
+  const { streets, loading: streetsLoading } = useStreets({ searchQuery, townName: selectedTown.name, limit: 15 });
   const nearbyDrivers = useNearbyDrivers(
     rideStatus === 'idle' || rideStatus === 'searching',
     gpsState.coords ? { lat: gpsState.coords.lat, lng: gpsState.coords.lng } : (pickupLocation ?? selectedTown.center),
@@ -190,9 +211,55 @@ export default function RideView() {
     }
   }, [dropoffLocation, luggagePromptShown]);
 
+  // Check the browser's actual permission state before ever touching
+  // navigator.geolocation, so a first-time visitor sees our explicit
+  // "Allow location" ask instead of a silent/no-context native prompt.
   useEffect(() => {
-    if (gpsState.status === 'idle' && navigator.geolocation) handleUseMyLocation(true);
+    if (!navigator.geolocation) {
+      setGpsPermissionState('unsupported');
+      return;
+    }
+    if (!navigator.permissions?.query) {
+      // Permissions API unavailable (Safari, some WebViews) — fall back to
+      // showing our prompt; tapping "Allow" still triggers the native ask.
+      setGpsPermissionState('prompt');
+      return;
+    }
+    let cancelled = false;
+    navigator.permissions.query({ name: 'geolocation' })
+      .then((status) => {
+        if (cancelled) return;
+        setGpsPermissionState(status.state);
+        status.onchange = () => {
+          if (!cancelled) setGpsPermissionState(status.state);
+        };
+      })
+      .catch(() => {
+        if (!cancelled) setGpsPermissionState('prompt');
+      });
+    return () => { cancelled = true; };
   }, []);
+
+  // Already decided by the browser — skip our custom prompt entirely.
+  // 'granted' fetches location immediately; 'denied' fetches too (the
+  // browser fails instantly with no dialog) purely so gpsState flips to
+  // 'denied' and the existing GpsPermissionBanner + retry takes over.
+  useEffect(() => {
+    if ((gpsPermissionState === 'granted' || gpsPermissionState === 'denied') && gpsState.status === 'idle') {
+      handleUseMyLocation(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gpsPermissionState]);
+
+  // Once pickup is set (e.g. GPS auto-fill on mount), never leave the rider
+  // staring at the bare in-between map with nothing to do — jump straight
+  // into the destination search until drop-off is picked too, so the flow
+  // is always: entering places → choosing the ride, no dead middle screen.
+  useEffect(() => {
+    if (pickupLocation && !dropoffLocation && !activeField && rideStatus === 'idle') {
+      setActiveField('dropoff');
+    }
+  }, [pickupLocation, dropoffLocation, activeField, rideStatus]);
 
   // Prefer the rider's saved profile name (nickname) for the greeting
   useEffect(() => {
@@ -290,6 +357,53 @@ export default function RideView() {
   const { available: studentDiscountAvailable, usedToday: studentRidesUsedToday, dailyCap: studentDailyCap } = useStudentDiscountAvailable();
   const STUDENT_DISCOUNT = 1;
 
+  // Single source of truth for the fare breakdown — the headline price, the
+  // itemized card, and the Find Drivers button all read from this, so they
+  // can never disagree about what the ride actually costs.
+  const fareBreakdown = useMemo(() => {
+    if (!fareEstimate) return null;
+    const baseFare = townPricing.base_fare;
+    const distanceFare = fareEstimate.fareR - baseFare;
+    const extraPassengers = Math.max(passengerCount - 3, 0);
+    const extraPassengerFee = extraPassengers * 0.5;
+    const validStopsCount = rideStops.filter((s) => s.address && s.lat && s.lng).length;
+    const stopFee = validStopsCount * 0.5;
+    const subtotal = baseFare + distanceFare + extraPassengerFee + stopFee;
+    const discount = studentDiscountAvailable ? Math.min(STUDENT_DISCOUNT, Math.max(subtotal - 0.5, 0)) : 0;
+    const totalFare = Math.max(subtotal - discount, 0.5);
+    const sym = fareEstimate.currencySymbol;
+    return {
+      baseFare, distanceFare, extraPassengers, extraPassengerFee,
+      validStopsCount, stopFee, subtotal, discount, totalFare, sym,
+      fmt: (v: number) => `${sym}${v.toFixed(2)}`,
+    };
+  }, [fareEstimate, townPricing, passengerCount, rideStops, studentDiscountAvailable]);
+
+  // Ride tier list — Economy is the real priced fare (fareBreakdown); Share and
+  // Parcel are derived client-side from the same base numbers, same pattern the
+  // app already uses to build fareBreakdown itself. Their fare is sent as-is in
+  // the ride request, same as Economy's.
+  const rideTierOptions: RideTierOption[] = useMemo(() => {
+    if (!fareBreakdown || !fareEstimate) return [];
+    const economyPrice = fareBreakdown.totalFare;
+    const sharePrice = Math.max(economyPrice + 2, economyPrice * 1.4);
+    const parcelPrice = Math.max(fareBreakdown.baseFare, fareBreakdown.baseFare + fareBreakdown.distanceFare * 0.6);
+    const etaMinutes = Math.max(1, Math.round(fareEstimate.durationMinutes));
+    return [
+      { id: 'economy', name: 'Economy', capacity: 4, etaMinutes, price: economyPrice, badge: 'Affordable', badgeVariant: 'primary' },
+      { id: 'share', name: 'Share Ride', capacity: 4, etaMinutes: etaMinutes + 2, price: sharePrice, badge: 'Save more', badgeVariant: 'accent' },
+      { id: 'parcel', name: 'Parcel', capacity: 1, etaMinutes: Math.max(etaMinutes, 10), price: parcelPrice, badge: 'Send anything', badgeVariant: 'accent' },
+    ];
+  }, [fareBreakdown, fareEstimate]);
+
+  const selectedTierPrice = rideTierOptions.find((t) => t.id === selectedTier)?.price ?? fareBreakdown?.totalFare ?? 0;
+
+  const handleSelectTier = (id: RideTierId) => {
+    setSelectedTier(id);
+    setServiceType(id === 'parcel' ? 'courier' : 'ride');
+    haptic('light');
+  };
+
   // ── handlers ──
   const applyPosition = useCallback(async (pos: GeolocationPosition, reverseGeocode: boolean) => {
     const c = { lat: pos.coords.latitude, lng: pos.coords.longitude };
@@ -318,6 +432,12 @@ export default function RideView() {
    * devices). A precise fix is requested straight after in the background.
    */
   const handleUseMyLocation = useCallback((fast = false) => {
+    // An explicit "use my location" ask (or the initial already-decided-
+    // permission fetch, where this is a no-op since nothing's been picked
+    // yet) always wins back over a manually-selected town's center. The
+    // background "upgrade to precise fix" request below does NOT re-enter
+    // this function, so it can't undo a town selection made in the meantime.
+    setPreferredCenter(null);
     if (!navigator.geolocation) {
       setGpsState({ status: 'unavailable', coords: null, error: 'Geolocation not supported' });
       // Fallback to the pilot town if no geolocation
@@ -368,6 +488,28 @@ export default function RideView() {
     );
   }, [applyPosition]);
 
+  // Runs on every "a place was picked" path (landmark/street/nominatim
+  // search results, recents, an existing Home/Work shortcut) — when the
+  // rider tapped Home/Work before either was ever saved, the very next
+  // place they pick both completes their pickup/dropoff selection *and*
+  // gets saved as that favorite, so future taps are instant.
+  const saveFavoriteIfSetting = useCallback((loc: SelectedLocation) => {
+    if (!settingFavorite || !user?.id) return;
+    const key = settingFavorite;
+    const label = key === 'home' ? 'Home' : 'Work';
+    setSettingFavorite(null);
+    supabase
+      .from('favorite_locations')
+      .insert([{ user_id: user.id, name: label, address: loc.name, latitude: loc.lat, longitude: loc.lng, icon: key }] as never)
+      .then(({ error }) => {
+        if (error) {
+          toast({ title: `Couldn't save ${label}`, description: error.message, variant: 'destructive' });
+          return;
+        }
+        toast({ title: `${label} saved`, description: 'Tap it again next time for instant selection.' });
+      });
+  }, [settingFavorite, user?.id, toast]);
+
   const handleLandmarkSelect = (landmark: Landmark) => {
     const loc: SelectedLocation = { name: landmark.name, lat: landmark.latitude, lng: landmark.longitude };
     if (activeStopId) {
@@ -376,6 +518,19 @@ export default function RideView() {
     } else if (activeField === 'pickup') setPickupLocation(loc);else
     setDropoffLocation(loc);
     setActiveField(null);setSearchQuery('');setNominatimResults([]);
+    saveFavoriteIfSetting(loc);
+    haptic('light');
+  };
+
+  const handleStreetSelect = (street: Street) => {
+    const loc: SelectedLocation = { name: street.name, lat: street.latitude, lng: street.longitude };
+    if (activeStopId) {
+      setRideStops((prev) => prev.map((s) => s.id === activeStopId ? { ...s, address: loc.name, lat: loc.lat, lng: loc.lng } : s));
+      setActiveStopId(null);
+    } else if (activeField === 'pickup') setPickupLocation(loc);else
+    setDropoffLocation(loc);
+    setActiveField(null);setSearchQuery('');setNominatimResults([]);
+    saveFavoriteIfSetting(loc);
     haptic('light');
   };
 
@@ -389,6 +544,7 @@ export default function RideView() {
         const base = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/google-places-search`;
         const url = new URL(base);
         url.searchParams.set('placeId', result.placeId);
+        if (googleSessionTokenRef.current) url.searchParams.set('sessionToken', googleSessionTokenRef.current);
         const res = await fetch(url.toString(), {
           headers: {
             Accept: 'application/json',
@@ -404,6 +560,9 @@ export default function RideView() {
         }
       } catch {
         // handled by the guard below
+      } finally {
+        // Selection ends the autocomplete session — next search starts a fresh token.
+        googleSessionTokenRef.current = null;
       }
     }
     if (lat === undefined || lng === undefined) return;
@@ -415,6 +574,7 @@ export default function RideView() {
     } else if (activeField === 'pickup') setPickupLocation(loc);else
     setDropoffLocation(loc);
     setActiveField(null);setSearchQuery('');setNominatimResults([]);
+    saveFavoriteIfSetting(loc);
   };
 
   const handleQuickPickSelect = (pick: {name: string;lat: number;lng: number;}) => {
@@ -462,15 +622,23 @@ export default function RideView() {
       // Cap total search time at 5s. This calls the google-places-search edge
       // function, which tries Google Places first and falls back to Nominatim
       // server-side — so this is a single request, not a bounded/unbounded pair.
+      // Only invoked (see the gating effect below) once our own landmarks +
+      // streets data has already come up thin, so this never outranks local data.
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 5000);
       try {
+        if (!googleSessionTokenRef.current) {
+          googleSessionTokenRef.current = typeof crypto !== 'undefined' && crypto.randomUUID
+            ? crypto.randomUUID()
+            : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        }
         const base = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/google-places-search`;
         const url = new URL(base);
         url.searchParams.set('q', query.trim());
         url.searchParams.set('lat', String(selectedTown.center.lat));
         url.searchParams.set('lng', String(selectedTown.center.lng));
         url.searchParams.set('radiusKm', String(selectedTown.radiusKm));
+        url.searchParams.set('sessionToken', googleSessionTokenRef.current);
 
         const res = await fetch(url.toString(), {
           signal: controller.signal,
@@ -482,6 +650,11 @@ export default function RideView() {
         });
         if (!res.ok) throw new Error(`Place search failed: ${res.status}`);
         const results: Array<{ placeId: string; name: string; description: string; category?: string; lat?: number; lng?: number; source?: 'google' | 'osm' }> = await res.json();
+        if (import.meta.env.DEV) {
+          const googleCount = results.filter((r) => r.source === 'google').length;
+          const osmCount = results.filter((r) => r.source === 'osm').length;
+          console.log(`[search] fallback tail for "${query.trim()}": ${googleCount} google, ${osmCount} nominatim`);
+        }
         setNominatimResults(
           (Array.isArray(results) ? results : []).map((r) => ({
             name: r.name,
@@ -500,6 +673,36 @@ export default function RideView() {
       }
     }, 150);
   }, [selectedTown]);
+
+  // Google is a quota-limited demo key, so only spend it when our own data
+  // (landmarks + streets) is thin — otherwise local results already answer
+  // the query and a Google call would just burn the daily allowance for nothing.
+  const GOOGLE_FALLBACK_MIN_QUERY_LENGTH = 3;
+  const GOOGLE_FALLBACK_LOCAL_RESULT_THRESHOLD = 5;
+  useEffect(() => {
+    const trimmed = searchQuery.trim();
+    if (trimmed.length < GOOGLE_FALLBACK_MIN_QUERY_LENGTH) {
+      setNominatimResults([]);
+      setNominatimLoading(false);
+      return;
+    }
+    // Wait for our own landmarks + streets results to settle before deciding
+    // local coverage is thin — both are now server-side searches, so a
+    // premature check would fire Google before the local answer is in.
+    if (landmarksLoading || streetsLoading) return;
+
+    const localCount = landmarks.length + streets.length;
+    if (localCount >= GOOGLE_FALLBACK_LOCAL_RESULT_THRESHOLD) {
+      if (import.meta.env.DEV) {
+        console.log(`[search] "${trimmed}" has ${localCount} local matches — skipping Google fallback`);
+      }
+      setNominatimResults([]);
+      setNominatimLoading(false);
+      return;
+    }
+    handleNominatimSearch(trimmed);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery, landmarks, streets, landmarksLoading, streetsLoading, handleNominatimSearch]);
 
   const handleCachedPlacesSearch = useCallback((query: string) => {
     const trimmed = query.trim();
@@ -719,18 +922,15 @@ export default function RideView() {
     } catch (error: unknown) {toast({ title: 'Failed to send offer', description: (error as Error).message, variant: 'destructive' });setRideStatus('idle');} finally {setIsRequesting(false);}
   };
 
+  // Add-a-stop now lives solely in the top floating bar's "+" — since there's
+  // no stop-list row to tap afterward, jump straight into the search overlay
+  // for the new stop so it's immediately fillable.
   const handleAddStop = () => {
     if (rideStops.length >= 3) return;
-    setRideStops((prev) => [...prev, { id: uuid(), address: '', lat: 0, lng: 0 }]);
-  };
-
-  const handleRemoveStop = (id: string) => {
-    setRideStops((prev) => prev.filter((s) => s.id !== id));
-  };
-
-  const handleStopClick = (id: string) => {
+    const id = uuid();
+    setRideStops((prev) => [...prev, { id, address: '', lat: 0, lng: 0 }]);
     setActiveStopId(id);
-    setActiveField('dropoff'); // Reuse search overlay
+    setActiveField('dropoff');
     setSearchQuery('');
   };
 
@@ -770,29 +970,59 @@ export default function RideView() {
   const handleSearchChange = (value: string) => {
     setSearchQuery(value);
     handleCachedPlacesSearch(value);
-    handleNominatimSearch(value);
+    // Google fallback is triggered by the gating effect above, once landmarks
+    // + streets results for this query are known to be thin.
   };
   const canRequestRide = pickupLocation && dropoffLocation && fareEstimate && !isRequesting;
   const firstName = (profileName || (user?.user_metadata?.full_name as string | undefined) || user?.email?.split('@')[0] || '').split(' ')[0];
-  const mapCenter = gpsState.coords ?? pickupLocation ?? selectedTown.center;
+  const mapCenter = preferredCenter ?? gpsState.coords ?? pickupLocation ?? selectedTown.center;
   const mapZoom = gpsState.coords ? 16 : 14;
   const searchResultRows: SearchResultRow[] = useMemo(() => {
-    const rows: SearchResultRow[] = [];
-    landmarks.forEach((l) => rows.push({
+    // Landmarks + streets are our own DB, ranked together by fuzzy match
+    // strength so a strong street match can outrank a weak landmark match.
+    // The geocoder (cache + Nominatim) is a fallback tail, not ranked in.
+    type ScoredRow = SearchResultRow & { matchScore: number };
+    const dbRows: ScoredRow[] = [];
+
+    landmarks.forEach((l) => dbRows.push({
       id: `lm-${l.id}`,
       name: l.name,
       secondary: [l.category, l.distance !== undefined ? (l.distance < 1 ? `${Math.round(l.distance * 1000)}m` : `${l.distance.toFixed(1)}km`) : null].filter(Boolean).join(' · '),
       onSelect: () => handleLandmarkSelect(l),
+      matchScore: l.matchScore ?? 0,
+      source: 'landmark',
     }));
+
+    streets.forEach((s) => dbRows.push({
+      id: `st-${s.id}`,
+      name: s.name,
+      secondary: [s.road_class, s.town].filter(Boolean).join(' · '),
+      onSelect: () => handleStreetSelect(s),
+      matchScore: s.matchScore ?? 0,
+      source: 'street',
+    }));
+
+    dbRows.sort((a, b) => b.matchScore - a.matchScore);
+    const rows: SearchResultRow[] = dbRows.map(({ matchScore: _matchScore, ...row }) => row);
+
     cachedPlaceResults.forEach((r, i) => rows.push({
-      id: `cache-${i}`, name: r.name, secondary: r.displayName, onSelect: () => handleNominatimSelect(r),
+      id: `cache-${i}`, name: r.name, secondary: r.displayName, onSelect: () => handleNominatimSelect(r), source: 'cache',
     }));
     nominatimResults.forEach((r, i) => rows.push({
       id: `nom-${i}`, name: r.name, secondary: r.displayName, onSelect: () => handleNominatimSelect(r),
+      source: r.source === 'google' ? 'google' : 'nominatim',
     }));
+    if (import.meta.env.DEV && searchQuery.trim().length >= 3) {
+      const counts = rows.reduce<Record<string, number>>((acc, r) => {
+        const key = r.source ?? 'unknown';
+        acc[key] = (acc[key] ?? 0) + 1;
+        return acc;
+      }, {});
+      console.log(`[search] "${searchQuery.trim()}" result sources:`, counts);
+    }
     return rows;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [landmarks, cachedPlaceResults, nominatimResults, activeField, activeStopId]);
+  }, [landmarks, streets, cachedPlaceResults, nominatimResults, activeField, activeStopId]);
 
   const estimatedWaitMinutes = Math.max(2, Math.min(8, Math.round(8 - nearbyDrivers.length * 0.6)));
   const showHomeContent = rideStatus === 'idle' && !pickupLocation && !dropoffLocation;
@@ -803,151 +1033,13 @@ export default function RideView() {
     });
 
   // ═══════════════════════════════════════════
-  // DRIVER MATCHED VIEW
-  // ═══════════════════════════════════════════
-  if (matchedDriver && (rideStatus === 'driver_assigned' || rideStatus === 'driver_arriving')) {
-    return (
-      <div className="relative h-[100dvh] w-full overflow-hidden bg-background">
-        <div className="absolute inset-0">
-          <MapboxMap pickup={pickupLocation} dropoff={dropoffLocation} routeGeometry={routeData?.geometry} defaultCenter={mapCenter} defaultZoom={mapZoom} className="w-full h-full" height="100%" stops={rideStops.filter(s => s.lat && s.lng)} />
-        </div>
-
-        {/* Top gradient */}
-        <div className="absolute top-0 left-0 right-0 h-28 z-10 pointer-events-none" style={{ background: 'linear-gradient(to bottom, hsl(217 85% 29% / 0.12), transparent)' }} />
-
-        {/* Header */}
-        <div className="absolute top-0 left-0 right-0 z-40 flex items-center justify-between px-4" style={{ paddingTop: 'calc(env(safe-area-inset-top) + 12px)' }}>
-          <button onClick={handleCancelRide} className="w-12 h-12 flex items-center justify-center rounded-full glass-card active:scale-95 transition-all">
-            <ArrowLeft className="w-5 h-5 text-primary" />
-          </button>
-          <PickMeLogo size="sm" />
-          <div className="w-12" />
-        </div>
-
-        {/* ETA pill - animated */}
-        <motion.div
-          initial={{ y: -30, opacity: 0, scale: 0.9 }}
-          animate={{ y: 0, opacity: 1, scale: 1 }}
-          transition={{ type: 'spring', stiffness: 300, damping: 25, delay: 0.2 }}
-          className="absolute top-24 left-4 right-4 z-30">
-          
-          <div className="glass-card-heavy p-5 flex items-center gap-4">
-            <motion.div
-              className="w-14 h-14 rounded-2xl flex items-center justify-center"
-              style={{ background: 'var(--gradient-primary)' }}
-              animate={{ scale: [1, 1.05, 1] }}
-              transition={{ repeat: Infinity, duration: 2, ease: 'easeInOut' }}>
-              
-              <Clock className="w-7 h-7 text-primary-foreground" />
-            </motion.div>
-            <div>
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Arriving in</p>
-              <motion.p
-                key={matchedDriver.eta}
-                initial={{ scale: 1.2, color: 'hsl(45 100% 51%)' }}
-                animate={{ scale: 1, color: 'hsl(var(--foreground))' }}
-                className="text-3xl font-bold font-display text-foreground tabular-nums">
-                
-                {matchedDriver.eta} <span className="text-lg font-medium text-muted-foreground">min</span>
-              </motion.p>
-            </div>
-          </div>
-        </motion.div>
-
-        {/* Driver card bottom - slide up animation */}
-        <motion.div
-          initial={{ y: 100, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ type: 'spring', stiffness: 300, damping: 30, delay: 0.4 }}
-          className="absolute bottom-0 left-0 right-0 z-50">
-          
-           <div className="glass-card-heavy rounded-t-[28px] overflow-hidden pb-5" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 20px)', borderBottomLeftRadius: 0, borderBottomRightRadius: 0 }}>
-            {/* Blue top bar */}
-            <div className="px-4 py-1.5 text-center text-[10px] font-bold tracking-wider uppercase bg-primary/10 text-primary">
-              Ride Confirmed
-            </div>
-            <div className="px-4 pt-4">
-            <div className="w-10 h-1 rounded-full bg-foreground/10 mx-auto mb-4" />
-            <div className="flex items-center gap-3 mb-5">
-              <motion.div
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ type: 'spring', stiffness: 400, damping: 15, delay: 0.6 }}
-                className="w-14 h-14 rounded-2xl flex items-center justify-center ring-2 ring-primary/20 shrink-0"
-                style={{ background: 'var(--gradient-primary)' }}>
-                
-                <User className="w-7 h-7 text-primary-foreground" />
-              </motion.div>
-              <div className="flex-1 min-w-0">
-                <p className="text-base font-semibold font-display text-foreground truncate">{matchedDriver.name}</p>
-                <p className="text-sm text-muted-foreground truncate">{matchedDriver.car} · {matchedDriver.plate}</p>
-              </div>
-              <div className="flex items-center gap-1 glass-card rounded-full px-3 py-1.5 glass-glow-yellow shrink-0">
-                <Star className="w-3.5 h-3.5 text-accent fill-accent" />
-                <span className="text-sm font-bold text-foreground">{matchedDriver.rating}</span>
-              </div>
-            </div>
-            <div className="grid grid-cols-4 gap-2">
-              {[
-              { icon: Phone, label: 'Call', bg: 'var(--gradient-primary)', textClass: 'text-primary-foreground' },
-              { icon: MessageCircle, label: 'Message', bg: undefined, textClass: 'text-primary' },
-              { icon: Navigation, label: 'Navigate', bg: undefined, textClass: 'text-emerald-500' },
-              { icon: X, label: 'Cancel', bg: undefined, textClass: 'text-destructive' }].
-              map((action, i) =>
-              <motion.button
-                key={action.label}
-                initial={{ y: 20, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                transition={{ delay: 0.7 + i * 0.1, type: 'spring', stiffness: 400, damping: 25 }}
-                onClick={action.label === 'Cancel' ? handleCancelRide : action.label === 'Navigate' ? () => {
-                  if (dropoffLocation) {
-                    const url = `https://www.mapbox.com/directions?destination=${dropoffLocation.lng},${dropoffLocation.lat}`;
-                    window.open(url, '_blank');
-                  }
-                } : undefined}
-                className={cn(
-                  'flex flex-col items-center gap-1.5 py-3 rounded-2xl active:scale-95 transition-all',
-                  action.bg ? '' : action.label === 'Cancel' ? 'bg-destructive/8' : 'glass-card'
-                )}
-                style={action.bg ? { background: action.bg } : undefined}>
-                
-                  <action.icon className={cn('w-5 h-5', action.textClass)} />
-                  <span className={cn('text-[11px] font-medium', action.bg ? 'text-primary-foreground' : action.textClass)}>{action.label}</span>
-                </motion.button>
-              )}
-            </div>
-            <div className="mt-3 flex justify-center">
-              {currentRideId && pickupLocation && dropoffLocation &&
-              <div className="mr-2">
-                  <ShareTripButton
-                  rideId={currentRideId}
-                  pickupAddress={pickupLocation.name}
-                  dropoffAddress={dropoffLocation.name}
-                  driverName={matchedDriver.name} />
-                
-                </div>
-              }
-              <EmergencyButton
-                rideId={currentRideId ?? undefined}
-                pickupAddress={pickupLocation?.name}
-                dropoffAddress={dropoffLocation?.name}
-                driverName={matchedDriver.name} />
-              
-            </div>
-            </div>
-          </div>
-        </motion.div>
-      </div>);
-  }
-
-  // ═══════════════════════════════════════════
   // MAIN RIDE BOOKING UI
   // ═══════════════════════════════════════════
   return (
     <div className="relative h-[100dvh] w-full overflow-hidden bg-background">
       {/* ── MAP ── */}
       <div className="absolute inset-0">
-        <MapboxMap pickup={pickupLocation} dropoff={dropoffLocation} routeGeometry={routeData?.geometry} onMapClick={handleMapClick} defaultCenter={mapCenter} defaultZoom={mapZoom} className="w-full h-full" height="100%" drivers={nearbyDrivers} stops={rideStops.filter(s => s.lat && s.lng)} riderGender={(riderPrefs?.gender as "male" | "female" | undefined) ?? null} />
+        <MapboxMap pickup={pickupLocation} dropoff={dropoffLocation} routeGeometry={routeData?.geometry} onMapClick={handleMapClick} defaultCenter={mapCenter} preferredCenter={preferredCenter} defaultZoom={mapZoom} className="w-full h-full" height="100%" drivers={nearbyDrivers} stops={rideStops.filter(s => s.lat && s.lng)} riderGender={(riderPrefs?.gender as "male" | "female" | undefined) ?? null} />
 
         {/* Floating map buttons */}
         <div className="absolute right-3 z-20" style={{ bottom: sheetExpanded ? 'calc(70vh + 16px)' : 'calc(48vh + 16px)', transition: 'bottom 0.3s cubic-bezier(0.32,0.72,0,1)' }}>
@@ -955,7 +1047,7 @@ export default function RideView() {
             <button onClick={() => handleUseMyLocation()} className="w-11 h-11 rounded-full glass-card flex items-center justify-center active:scale-90 transition-all glass-glow-blue">
               {gpsState.status === 'loading' ? <Loader2 className="w-5 h-5 animate-spin text-primary" /> : <Locate className="w-5 h-5 text-primary" />}
             </button>
-            <button className="w-11 h-11 rounded-full glass-card flex items-center justify-center active:scale-90 transition-all glass-glow-yellow">
+            <button onClick={() => handleUseMyLocation()} className="w-11 h-11 rounded-full glass-card flex items-center justify-center active:scale-90 transition-all glass-glow-yellow">
               <Navigation className="w-5 h-5 text-accent" />
             </button>
           </div>
@@ -986,7 +1078,7 @@ export default function RideView() {
 
         {/* Tap-map instruction */}
         {activeField && !reverseGeoLoading &&
-        <div className="absolute top-4 left-4 right-4 z-30">
+        <div className="absolute left-4 right-4 z-30" style={{ top: 'calc(env(safe-area-inset-top) + 104px)' }}>
             <div className="glass-card-heavy px-5 py-3.5 text-sm font-medium text-center text-foreground">
               📍 Tap map to set {activeField === 'pickup' ? 'pickup' : 'drop-off'}
             </div>
@@ -994,16 +1086,48 @@ export default function RideView() {
         }
       </div>
 
-      {/* ── FLOATING MAP BUTTONS (no solid header) ── */}
-      <div className="absolute top-0 left-0 right-0 z-40 flex items-center justify-between px-4 pointer-events-none" style={{ paddingTop: 'calc(env(safe-area-inset-top) + 12px)' }}>
-        <button onClick={() => setMenuOpen(true)} className="pointer-events-auto w-11 h-11 flex items-center justify-center rounded-full bg-card/90 backdrop-blur-md shadow-lg active:scale-95 transition-all">
-          <Menu className="w-5 h-5 text-foreground" />
-        </button>
-        <div className="pointer-events-auto flex items-center gap-2">
-          <NotificationBell />
-          <button onClick={() => user ? navigate(location.pathname.startsWith('/mapp') ? '/mapp/profile' : '/profile') : setAuthModalOpen(true)} className="w-11 h-11 flex items-center justify-center rounded-full bg-card/90 backdrop-blur-md shadow-lg active:scale-95 transition-all">
-            <User className="w-5 h-5 text-foreground" />
+      {/* ── FLOATING TOP HEADER (transparent — map shows through) ── */}
+      <div
+        className="absolute top-0 left-0 right-0 z-40 flex flex-col pointer-events-none"
+        style={{ paddingTop: 'env(safe-area-inset-top)' }}
+      >
+        <div className="h-14 flex items-center gap-2 px-3">
+          <button onClick={() => setMenuOpen(true)} className="pointer-events-auto w-11 h-11 shrink-0 flex items-center justify-center rounded-full bg-card/90 backdrop-blur-md shadow-lg active:scale-95 transition-all">
+            <Menu className="w-5 h-5 text-foreground" />
           </button>
+
+          {/* Location summary card — sole pickup/drop-off entry point once a
+              trip is being planned; tapping drop-off before it's set opens the
+              destination search directly, so there's no separate mid-step card.
+              Sits level with the menu/notification buttons, sized to the gap
+              between them. */}
+          {!showHomeContent && pickupLocation ? (
+            <div className="flex-1 min-w-0 pointer-events-auto">
+              <LocationSummaryPill
+                pickupName={pickupLocation.name}
+                dropoffName={dropoffLocation?.name ?? ''}
+                onPickupClick={() => { setActiveField('pickup'); setSearchQuery(''); }}
+                onDropoffClick={() => { setActiveField('dropoff'); setSearchQuery(''); }}
+                onAddStop={handleAddStop}
+                canAddStop={rideStops.length < 3}
+                className="rounded-xl w-full"
+              />
+            </div>
+          ) : (
+            <div className="flex-1" />
+          )}
+
+          <div className="pointer-events-auto flex items-center gap-2 shrink-0">
+            <NotificationBell />
+            <button onClick={() => user ? navigate(location.pathname.startsWith('/mapp') ? '/mapp/profile' : '/profile') : setAuthModalOpen(true)} className="w-11 h-11 flex items-center justify-center rounded-full bg-card/90 backdrop-blur-md shadow-lg active:scale-95 transition-all">
+              <User className="w-5 h-5 text-foreground" />
+            </button>
+          </div>
+        </div>
+
+        {/* Logo — sits below the button/card row instead of competing with it for space */}
+        <div className="flex justify-center pb-2 pointer-events-none">
+          <PickMeLogo size="sm" />
         </div>
       </div>
 
@@ -1061,31 +1185,29 @@ export default function RideView() {
         className="absolute left-0 right-0 z-50 flex flex-col overflow-hidden"
         style={{
           bottom: 0,
-          height: sheetExpanded ? '76vh' : '52vh',
-          transition: 'height 0.3s cubic-bezier(0.32,0.72,0,1)',
+          maxHeight: sheetExpanded ? '60vh' : '38vh',
+          transition: 'max-height 0.3s cubic-bezier(0.32,0.72,0,1)',
           paddingBottom: 'env(safe-area-inset-bottom)',
-          borderTopLeftRadius: 20,
-          borderTopRightRadius: 20
+          borderTopLeftRadius: 24,
+          borderTopRightRadius: 24
         }}>
 
         {/* Blue ribbon with yellow drag handle */}
         <button
           onClick={() => setSheetExpanded((e) => !e)}
           aria-label="Expand booking sheet"
-          className="w-full py-2.5 flex justify-center shrink-0 bg-primary rounded-t-[20px]">
-          <div className="w-11 h-1.5 rounded-full bg-accent" />
+          className="w-full py-1.5 flex justify-center shrink-0 bg-primary rounded-t-3xl">
+          <div className="w-11 h-1 rounded-full bg-accent" />
         </button>
 
+        {/* Town / scope row — pinned above the greeting, always visible, never scrolls */}
+        <div className="shrink-0 flex items-center justify-between text-muted-foreground px-4 pt-1.5 pb-1">
+          <TownSelectorSheet currentTown={selectedTown} onSelect={(town) => {setSelectedTown(town);setPickupLocation(null);setDropoffLocation(null);setPreferredCenter(town.center);}} />
+          <p className="text-[11px]">{selectedTown.radiusKm} km area</p>
+        </div>
+
         {/* Scrollable content */}
-        <div className="flex-1 px-4 pb-2 space-y-2.5 min-h-0 overflow-y-auto overscroll-contain">
-          {/* Email verification gate */}
-          {user?.email && !user?.email_confirmed_at && (
-            <EmailVerificationBanner email={user.email} emailConfirmedAt={user.email_confirmed_at ?? null} />
-          )}
-
-          {/* GPS state banner — explains denied/loading/unavailable with a one-tap retry. */}
-          <GpsPermissionBanner status={gpsState.status} error={gpsState.error} onRetry={() => handleUseMyLocation()} />
-
+        <div className="flex-1 px-4 pt-1 pb-1.5 space-y-2 min-h-0 overflow-y-auto overscroll-contain">
           {/* ── HOME CONTENT (idle state, before booking starts) ── */}
           {showHomeContent && (() => {
             const ensurePickup = () => {
@@ -1106,14 +1228,12 @@ export default function RideView() {
               setSheetExpanded(true);
             };
             return (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <RideHomeGreeting
                   name={firstName}
                   onSearchClick={() => { ensurePickup(); setActiveField('dropoff'); setSearchQuery(''); setSheetExpanded(true); }}
                 />
                 <QuickShortcutsRow onSelect={pickDropoff} />
-                <NearbyDriversSummary driverCount={nearbyDrivers.length} avgWaitMinutes={estimatedWaitMinutes} />
-                <RecentDestinations field="dropoff" onSelect={pickDropoff} />
               </div>
             );
           })()}
@@ -1128,241 +1248,82 @@ export default function RideView() {
             </div>
           }
 
-          {/* Town / scope row */}
-          <div className="flex items-center justify-between text-muted-foreground">
-            <TownSelectorSheet currentTown={selectedTown} onSelect={(town) => {setSelectedTown(town);setPickupLocation(null);setDropoffLocation(null);}} />
-            <p className="text-[11px]">{selectedTown.radiusKm} km area</p>
-          </div>
 
-          {/* ETA + fare heading */}
-          {dropoffLocation && (
-            <div className="flex items-end justify-between gap-3 px-0.5">
-              <div className="flex items-baseline gap-2 min-w-0">
-                <span className="text-[26px] leading-none font-bold text-primary tabular-nums">
-                  {fareEstimate ? `${fareEstimate.currencySymbol}${fareEstimate.fareR.toFixed(2)}` : '—'}
-                </span>
-                <span className="text-[13px] text-muted-foreground truncate">
-                  {fareEstimate ? `${Math.round(fareEstimate.durationMinutes)} min trip` : "Estimating…"}
+          {/* Ride tier list — Economy / Share Ride / Parcel */}
+          {pickupLocation && dropoffLocation && rideTierOptions.length > 0 && (
+            <div className="space-y-1">
+              <div className="flex items-center justify-between px-0.5">
+                <p className="text-[13px] font-semibold text-foreground">Choose a ride</p>
+                <span className="flex items-center gap-1 text-[12px] text-muted-foreground">
+                  <Clock className="w-3.5 h-3.5" />
+                  {estimatedWaitMinutes} min away
                 </span>
               </div>
-              <div className="flex items-center gap-1 text-[12px] text-muted-foreground shrink-0">
-                <Clock className="w-3.5 h-3.5" />
-                {estimatedWaitMinutes} min away
-              </div>
+              <RideTierSelector
+                options={rideTierOptions}
+                selected={selectedTier}
+                onSelect={handleSelectTier}
+                currencySymbol={fareBreakdown?.sym ?? '$'}
+                passengerCount={passengerCount}
+                onPassengerCountChange={setPassengerCount}
+              />
             </div>
           )}
-
-
-          {/* Pickup & Dropoff — unified premium journey card (hidden on idle home screen) */}
-          {!showHomeContent && (
-          <div className="relative glass-card rounded-[20px] border border-border/60">
-            {/* Vertical journey rail */}
-            <div className="absolute left-6 top-0 bottom-0 w-4 flex flex-col items-center justify-between py-7 pointer-events-none">
-              <div className="w-2.5 h-2.5 rounded-full bg-accent ring-[3px] ring-accent/15" />
-              <div className="flex-1 flex flex-col items-center my-1.5 w-px">
-                <div className="flex-1 w-px border-l border-dashed border-accent/25" />
-                <div className="flex-1 w-px border-l border-dashed border-primary/25" />
-              </div>
-              <div className="w-3 h-3 rounded-[5px] bg-primary ring-[3px] ring-primary/15" />
-            </div>
-
-            {/* Swap control */}
-            <button
-              onClick={handleSwapPickupDropoff}
-              className="absolute right-2 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full bg-primary/95 text-primary-foreground shadow-lg shadow-primary/25 flex items-center justify-center active:scale-90 transition-all"
-              title="Swap pickup and drop-off"
-              aria-label="Swap pickup and drop-off">
-              <Route className="w-4 h-4" />
-            </button>
-
-            {/* Pickup row */}
-            <button
-              onClick={() => {setActiveField('pickup');setSearchQuery('');}}
-              className="w-full min-h-[64px] flex items-center gap-3 pl-12 pr-3 py-3.5 active:scale-[0.98] transition-all text-left rounded-t-[20px] border-b border-border/40 hover:bg-foreground/[0.02]">
-              <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-semibold text-primary uppercase tracking-widest">Pickup</p>
-                <p className={cn("text-[15px] font-medium truncate", pickupLocation ? 'text-foreground' : 'text-muted-foreground')}>
-                  {pickupLocation?.name || 'Where from?'}
-                </p>
-              </div>
-              {pickupLocation ?
-              <span onClick={(e) => {e.stopPropagation();setPickupLocation(null);}} className="p-1.5 hover:bg-foreground/5 rounded-full"><X className="w-3.5 h-3.5 text-muted-foreground" /></span> :
-              <button onClick={(e) => {e.stopPropagation();handleUseMyLocation();}} className="p-1.5 hover:bg-foreground/5 rounded-full"><Locate className="w-3.5 h-3.5 text-primary" /></button>
-              }
-            </button>
-
-            {/* Dropoff row */}
-            <button
-              onClick={() => {setActiveField('dropoff');setSearchQuery('');}}
-              className="w-full min-h-[64px] flex items-center gap-3 pl-12 pr-3 py-3.5 active:scale-[0.98] transition-all text-left rounded-b-[20px] hover:bg-foreground/[0.02]">
-              <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-semibold text-primary uppercase tracking-widest">Drop-off</p>
-                <p className={cn("text-[15px] font-medium truncate", dropoffLocation ? 'text-foreground' : 'text-muted-foreground')}>
-                  {dropoffLocation?.name || 'Search destination'}
-                </p>
-              </div>
-              {dropoffLocation && (
-                <span onClick={(e) => {e.stopPropagation();setDropoffLocation(null);}} className="p-1.5 hover:bg-foreground/5 rounded-full"><X className="w-3.5 h-3.5 text-muted-foreground" /></span>
-              )}
-            </button>
-          </div>
-          )}
-
-          {/* Booking for someone else */}
-          <BookingForSomeoneElse
-            enabled={bookForSomeoneElse}
-            onEnabledChange={setBookForSomeoneElse}
-            name={passengerName}
-            phone={passengerPhone}
-            onNameChange={setPassengerName}
-            onPhoneChange={setPassengerPhone}
-            onOpenContacts={handlePickPassengerFromContacts}
-          />
-
-          {/* Multi-stop + Schedule */}
-          <div className="grid grid-cols-2 gap-2">
-            <MultiStopInput
-              stops={rideStops}
-              onAddStop={handleAddStop}
-              onRemoveStop={handleRemoveStop}
-              onStopClick={handleStopClick} />
-            <ScheduleRide scheduledAt={scheduledAt} onSchedule={setScheduledAt} />
-          </div>
-
-          {/* Passenger selector — compact inline */}
-          <div className="flex items-center justify-between glass-card rounded-2xl px-3 py-2">
-            <div className="flex items-center gap-2">
-              <Users className="w-3.5 h-3.5 text-primary" />
-              <span className="text-xs font-medium text-foreground">Passengers</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setPassengerCount((prev) => Math.max(1, prev - 1))}
-                disabled={passengerCount <= 1}
-                className="w-7 h-7 rounded-full glass-card flex items-center justify-center active:scale-90 transition-all disabled:opacity-30">
-                <Minus className="w-3 h-3 text-foreground" />
-              </button>
-              <span className="text-sm font-bold text-foreground tabular-nums w-4 text-center">{passengerCount}</span>
-              <button
-                onClick={() => setPassengerCount((prev) => Math.min(10, prev + 1))}
-                disabled={passengerCount >= 10}
-                className="w-7 h-7 rounded-full glass-card flex items-center justify-center active:scale-90 transition-all disabled:opacity-30">
-                <Plus className="w-3 h-3 text-foreground" />
-              </button>
-            </div>
-          </div>
-          {passengerCount > 3 &&
-          <p className="text-[11px] text-accent font-medium -mt-1.5 ml-1">⚡ Extra passenger charges applied</p>
-          }
 
           {/* Rider preferences live in Profile only; they are attached to the ride
               and surfaced to the assigned driver, not shown here. */}
 
-          {/* ── Fare breakdown + Negotiation (expanded) ── */}
-          {pickupLocation && dropoffLocation && fareEstimate && (() => {
-            const activeTown = selectedTown.name;
-            const extraPassengers = Math.max(passengerCount - 3, 0);
-            const extraPassengerFee = extraPassengers * 0.5;
-            const validStops = rideStops.filter(s => s.address && s.lat && s.lng);
-            const stopFee = validStops.length * 0.5;
-            const baseFare = townPricing.base_fare;
-            const distanceFare = fareEstimate.fareR - baseFare;
-            const totalFare = baseFare + distanceFare + extraPassengerFee + stopFee;
-            const sym = fareEstimate.currencySymbol;
-            const code = fareEstimate.currencyCode;
-            const fmt = (v: number) => `${sym}${v.toFixed(2)}`;
-
-            return (
-              <>
-                {/* Compact fare card */}
-                
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-                
-
-
-
-
-
-
-
-                {rideStatus !== 'idle' &&
-                <button onClick={handleCancelRide} className="w-full text-center text-sm text-destructive font-medium py-1.5 hover:underline transition-colors">Cancel Ride</button>
-                }
-              </>);
-
-          })()}
+          {/* ─── Negotiation (expanded) ─── */}
+          {pickupLocation && dropoffLocation && fareBreakdown && rideStatus !== 'idle' && (
+            <button onClick={handleCancelRide} className="w-full text-center text-sm text-destructive font-medium py-1.5 hover:underline transition-colors">Cancel Ride</button>
+          )}
         </div>
 
         {/* ── PINNED FIND DRIVERS BUTTON ── always visible at bottom */}
-        <div className="shrink-0 px-4 pb-3 pt-2">
-          {pickupLocation && dropoffLocation && fareEstimate ? (() => {
-            const extraPassengers = Math.max(passengerCount - 3, 0);
-            const extraPassengerFee = extraPassengers * 0.5;
-            const validStops = rideStops.filter(s => s.address && s.lat && s.lng);
-            const stopFee = validStops.length * 0.5;
-            const subtotal = townPricing.base_fare + (fareEstimate.fareR - townPricing.base_fare) + extraPassengerFee + stopFee;
-            const discount = studentDiscountAvailable ? Math.min(STUDENT_DISCOUNT, Math.max(subtotal - 0.5, 0)) : 0;
-            const totalFare = Math.max(subtotal - discount, 0.5);
-            const sym = fareEstimate.currencySymbol;
-            const fmt = (v: number) => `${sym}${v.toFixed(2)}`;
-            return (
-              <>
-                {/* Luggage prompt — shown once, right after drop-off is picked */}
-                {luggagePromptOpen && (
-                  <div className="mb-2 flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-accent/10 border border-accent/30">
-                    <span className="text-[12px] font-semibold text-foreground">🧳 Travelling with luggage?</span>
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        onClick={() => { setLuggagePromptOpen(false); setLuggageOpen(true); }}
-                        className="px-3 py-1 rounded-full bg-primary text-accent text-[11px] font-bold active:scale-95 transition-transform">
-                        Yes
-                      </button>
-                      <button
-                        onClick={() => setLuggagePromptOpen(false)}
-                        className="px-3 py-1 rounded-full bg-muted text-muted-foreground text-[11px] font-semibold active:scale-95 transition-transform">
-                        No
-                      </button>
-                    </div>
+        <div className="shrink-0 px-4 pb-2 pt-1.5">
+          {pickupLocation && dropoffLocation && fareBreakdown ? (
+            <>
+              {/* Luggage prompt — shown once, right after drop-off is picked */}
+              {luggagePromptOpen && (
+                <div className="mb-1.5 flex items-center justify-between gap-2 px-3 py-1.5 rounded-xl bg-accent/10 border border-accent/30">
+                  <span className="text-[12px] font-semibold text-foreground">🧳 Travelling with luggage?</span>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => { setLuggagePromptOpen(false); setLuggageOpen(true); }}
+                      className="px-3 py-1 rounded-full bg-primary text-accent text-[11px] font-bold active:scale-95 transition-transform">
+                      Yes
+                    </button>
+                    <button
+                      onClick={() => { setLuggagePromptOpen(false); setPaymentPopupOpen(true); }}
+                      className="px-3 py-1 rounded-full bg-muted text-muted-foreground text-[11px] font-semibold active:scale-95 transition-transform">
+                      No
+                    </button>
                   </div>
-                )}
-                <div className="mb-2">
-                  <PaymentMethodSelector
-                    selected={paymentMethod}
-                    onSelect={setPaymentMethod}
-                    walletBalance={walletBalance}
-                    estimatedFare={totalFare}
-                  />
                 </div>
+              )}
+              <button
+                type="button"
+                onClick={() => setPaymentPopupOpen(true)}
+                className="mb-1.5 w-full h-9 flex items-center justify-between gap-2 px-1 border-b border-border/50 active:opacity-70 transition-opacity">
+                <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                  <CreditCard className="w-4 h-4 text-muted-foreground" />
+                  {paymentMethodConfirmed ? (paymentMethod === 'wallet' ? 'Wallet' : 'Cash') : 'Select payment method'}
+                </span>
+                <ChevronDown className="w-4 h-4 text-muted-foreground" />
+              </button>
+
+              <div className="flex items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setSchedulePickerOpen(true)}
+                  className="h-11 px-4 shrink-0 rounded-2xl border-2 border-primary text-primary font-bold text-[14px] flex items-center gap-1.5 active:scale-[0.97] transition-transform">
+                  <Calendar className="w-4 h-4" />
+                  {scheduledAt ? 'Scheduled' : 'Schedule'}
+                </button>
                 <PrimaryButton
-                  onClick={() => handleSendOffer(totalFare)}
+                  onClick={() => handleSendOffer(selectedTierPrice)}
                   disabled={isRequesting}
-                  className="w-full h-[48px] text-[15px] font-semibold rounded-2xl gap-2 inline-flex items-center justify-center active:scale-[0.97] transition-transform !bg-primary !text-accent">
+                  className="flex-1 h-11 text-[15px] font-semibold rounded-2xl gap-2 inline-flex items-center justify-center active:scale-[0.97] transition-transform !bg-primary !text-primary-foreground">
 
                   {isRequesting ? (
                     <>
@@ -1370,18 +1331,15 @@ export default function RideView() {
                       Finding your ride…
                     </>
                   ) : (
-                    <>
-                      <Car className="w-4 h-4" />
-                      {`Find Drivers • ${fmt(totalFare)}`}
-                    </>
+                    `Choose ${RIDE_TIER_LABELS[selectedTier]}`
                   )}
                 </PrimaryButton>
-              </>
-            );
-          })() :
+              </div>
+            </>
+          ) :
           <SecondaryButton
             disabled
-            className="w-full h-[48px] text-[15px] font-semibold rounded-2xl bg-primary/30 text-primary-foreground border-transparent">
+            className="w-full h-11 text-[15px] font-semibold rounded-2xl bg-primary/30 text-primary-foreground border-transparent">
               {pickupLocation && dropoffLocation ? <><div className="w-4 h-4 border-2 border-primary-foreground/50 border-t-transparent rounded-full animate-spin mr-2" />Calculating…</> : 'Find Drivers'}
             </SecondaryButton>
           }
@@ -1398,7 +1356,15 @@ export default function RideView() {
           dropoffName={dropoffLocation?.name || ''}
           query={searchQuery}
           onQueryChange={handleSearchChange}
-          onClose={() => {setActiveField(null);setSearchQuery('');setNominatimResults([]);}}
+          onClose={() => {
+            setActiveField(null);
+            setSearchQuery('');
+            setNominatimResults([]);
+            // Dropoff not chosen yet means we're still in the initial "Where to?"
+            // flow, where pickup was auto-filled by ensurePickup() — undo that too
+            // so back returns to the home greeting instead of the summary pill.
+            if (!dropoffLocation) setPickupLocation(null);
+          }}
           onUseMyLocation={() => handleUseMyLocation()}
           gpsLoading={gpsState.status === 'loading'}
           onChooseOnMap={() => setMapPickMode(true)}
@@ -1407,22 +1373,89 @@ export default function RideView() {
             if (activeField === 'pickup') {setPickupLocation(loc);setActiveField('dropoff');}
             else {setDropoffLocation(loc);setActiveField(null);}
             setSearchQuery('');
+            saveFavoriteIfSetting(loc);
           }}
-          loading={landmarksLoading || cachedPlacesLoading || nominatimLoading}
+          loading={landmarksLoading || streetsLoading || cachedPlacesLoading || nominatimLoading}
           results={searchResultRows}
+          settingFavorite={settingFavorite}
+          onRequestSetFavorite={setSettingFavorite}
         />
       )}
 
       {/* Modals */}
       <OffersModal isOpen={offersOpen} tripId={currentRideId || ''} viewing={viewingDrivers} offers={offers} onAcceptOffer={handleAcceptOffer} onDeclineOffer={handleDeclineOffer} onCancelRide={handleCancelRide} onClose={() => setOffersOpen(false)} />
       <AuthModalWrapper isOpen={authModalOpen} onClose={() => setAuthModalOpen(false)} mode={authMode} onSwitchMode={() => setAuthMode((m) => m === 'login' ? 'signup' : 'login')} />
+      {gpsPermissionState === 'prompt' && !locationPromptDismissed && gpsState.status === 'idle' && (
+        <LocationPermissionPrompt
+          onAllow={() => { setLocationPromptDismissed(true); handleUseMyLocation(true); }}
+          onDismiss={() => setLocationPromptDismissed(true)}
+        />
+      )}
       <ContactPickerSheet open={contactPickerOpen} onClose={() => setContactPickerOpen(false)} onSelect={handleContactSelected} />
       <LuggageSheet
         open={luggageOpen}
-        onClose={() => setLuggageOpen(false)}
+        onClose={() => { setLuggageOpen(false); setPaymentPopupOpen(true); }}
         initial={luggageDraft}
         onSave={setLuggageDraft}
       />
+      <Sheet open={paymentPopupOpen} onOpenChange={setPaymentPopupOpen}>
+        <SheetContent side="bottom" className="rounded-t-3xl border-t border-border/40 p-4" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 16px)' }}>
+          <SheetHeader className="mb-3">
+            <SheetTitle>Choose payment</SheetTitle>
+          </SheetHeader>
+          {/* onClick closes on the raw DOM click (fires even when the tapped
+              method is already selected, since PaymentMethodSelector's own
+              onSelect no-ops in that case) — a disabled Wallet tap never
+              bubbles a click at all, so it won't close the sheet. */}
+          <div onClick={() => setPaymentPopupOpen(false)}>
+            <PaymentMethodSelector
+              selected={paymentMethod}
+              onSelect={(method) => { setPaymentMethod(method); setPaymentMethodConfirmed(true); }}
+              walletBalance={walletBalance}
+              estimatedFare={fareBreakdown?.totalFare ?? 0}
+            />
+          </div>
+        </SheetContent>
+      </Sheet>
+      <Sheet open={schedulePickerOpen} onOpenChange={setSchedulePickerOpen}>
+        <SheetContent side="bottom" className="rounded-t-3xl border-t border-border/40 p-4" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 16px)' }}>
+          <SheetHeader className="mb-3">
+            <SheetTitle>Schedule ride</SheetTitle>
+          </SheetHeader>
+          {scheduledAt ? (
+            <div className="flex items-center justify-between bg-primary/10 rounded-2xl p-3">
+              <div className="flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-primary" />
+                <div>
+                  <p className="text-sm font-semibold text-foreground">Scheduled ride</p>
+                  <p className="text-xs text-muted-foreground">
+                    {scheduledAt.toLocaleDateString()} at {scheduledAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                </div>
+              </div>
+              <button onClick={() => { setScheduledAt(null); setSchedulePickerOpen(false); }} className="p-1.5 hover:bg-muted rounded-full transition-colors">
+                <X className="h-4 w-4 text-muted-foreground" />
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <input
+                type="datetime-local"
+                min={new Date(Date.now() + 30 * 60 * 1000).toISOString().slice(0, 16)}
+                max={new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 16)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (!val) return;
+                  const d = new Date(val);
+                  if (d > new Date()) { setScheduledAt(d); setSchedulePickerOpen(false); }
+                }}
+                className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground text-sm"
+              />
+              <p className="text-xs text-muted-foreground">Schedule up to 7 days in advance</p>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>);
 
 }

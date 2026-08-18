@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Car, Clock, MapPin, MessageCircle, Phone, Star, X } from 'lucide-react';
+import { ArrowLeft, Car, Clock, MapPin, MessageCircle, Minus, Phone, Plus, Star, Users, X } from 'lucide-react';
 import LazyMapboxMap from '@/components/map/LazyMapboxMap';
 import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/hooks/useAuth';
@@ -14,12 +14,19 @@ import {
   fetchAssignedDriver,
   fetchDriverLocation,
   fetchRideById,
+  updateRideFare,
   type MatchedDriver,
   type MatchingRide,
 } from '@/lib/rideMatching';
+import { useRideViewerCount } from '@/lib/rideViewerPresence';
+import carSearchSide from '@/assets/cars/car-search-side.png';
+import CancelReasonSheet from '@/components/ride/CancelReasonSheet';
 
 const SEARCH_TIMEOUT_MS = 60_000;
-const RADIUS_STEPS_KM = [1, 3, 6, 10];
+// 5 steps × 60s = 5 minutes total search time before we give up and show
+// "No drivers available" — each step also widens the search radius.
+const RADIUS_STEPS_KM = [1, 3, 6, 10, 15];
+const FARE_STEP = 1;
 
 /** Placeholder cars scattered inside the current search radius (not real data). */
 function makePlaceholderCars(center: { lat: number; lng: number } | null, radiusKm: number, count: number) {
@@ -49,11 +56,14 @@ export default function RideMatching() {
   const [radiusIndex, setRadiusIndex] = useState(0);
   const [timedOut, setTimedOut] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [cancelSheetOpen, setCancelSheetOpen] = useState(false);
   const [accepting, setAccepting] = useState<string | null>(null);
+  const [fareBumping, setFareBumping] = useState(false);
   const waitStartedAt = useRef(Date.now());
   const announced = useRef(false);
 
   const isMatched = !!ride && ACCEPTED_STATUSES.includes(ride.status);
+  const viewerCount = useRideViewerCount(!isMatched ? rideId : null);
 
   /* ── Load ride ─────────────────────────────────────────────── */
   const loadRide = useCallback(async () => {
@@ -159,11 +169,11 @@ export default function RideMatching() {
   }, [driver?.user_id]);
 
   /* ── Actions ───────────────────────────────────────────────── */
-  const handleCancel = async () => {
+  const handleCancel = async (reason?: string) => {
     if (!rideId) return;
     setCancelling(true);
     try {
-      await cancelRideRequest(rideId);
+      await cancelRideRequest(rideId, reason);
       haptic('light');
       toast({ title: 'Request cancelled' });
       navigate('/ride', { replace: true });
@@ -171,12 +181,14 @@ export default function RideMatching() {
       toast({ title: 'Could not cancel', description: (e as Error).message, variant: 'destructive' });
     } finally {
       setCancelling(false);
+      setCancelSheetOpen(false);
     }
   };
 
   const handleKeepWaiting = () => {
     waitStartedAt.current = Date.now();
     setRemaining(60);
+    setRadiusIndex(0);
     setTimedOut(false);
   };
 
@@ -190,6 +202,23 @@ export default function RideMatching() {
       toast({ title: 'Could not accept offer', description: (e as Error).message, variant: 'destructive' });
     } finally {
       setAccepting(null);
+    }
+  };
+
+  const handleFareChange = async (delta: number) => {
+    if (!rideId || !ride || fareBumping) return;
+    const nextFare = Math.max(FARE_STEP, Math.round((Number(ride.fare) + delta) * 100) / 100);
+    if (nextFare === Number(ride.fare)) return;
+    setFareBumping(true);
+    setRide((prev) => (prev ? { ...prev, fare: nextFare } : prev));
+    haptic('light');
+    try {
+      await updateRideFare(rideId, nextFare);
+    } catch (e) {
+      setRide((prev) => (prev ? { ...prev, fare: Number(ride.fare) } : prev));
+      toast({ title: 'Could not update fare', description: (e as Error).message, variant: 'destructive' });
+    } finally {
+      setFareBumping(false);
     }
   };
 
@@ -255,11 +284,11 @@ export default function RideMatching() {
         <motion.div
           initial={{ y: 40, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
-          className="mx-auto max-w-md bg-card rounded-[24px] shadow-[0_-4px_28px_rgba(0,0,0,0.14)] overflow-hidden"
+          className="mx-auto max-w-md bg-card rounded-3xl shadow-[0_-4px_28px_rgba(0,0,0,0.14)] overflow-hidden"
         >
           {/* Blue ribbon with yellow drag handle */}
-          <div className="bg-[#1B3FA0] rounded-t-[24px] pt-2.5 pb-2.5 flex items-center justify-center">
-            <div className="h-1.5 w-12 rounded-full bg-[#FFC107]" />
+          <div className="bg-primary rounded-t-3xl pt-2.5 pb-2.5 flex items-center justify-center">
+            <div className="h-1.5 w-12 rounded-full bg-accent" />
           </div>
 
           <AnimatePresence mode="wait">
@@ -324,7 +353,7 @@ export default function RideMatching() {
                   Open full trip view
                 </button>
                 <button
-                  onClick={handleCancel}
+                  onClick={() => setCancelSheetOpen(true)}
                   disabled={cancelling}
                   className="w-full py-2 text-xs font-semibold text-destructive disabled:opacity-50"
                 >
@@ -343,7 +372,7 @@ export default function RideMatching() {
                   Keep waiting
                 </button>
                 <button
-                  onClick={handleCancel}
+                  onClick={() => setCancelSheetOpen(true)}
                   disabled={cancelling}
                   className="w-full py-2.5 rounded-2xl border border-border text-sm font-semibold text-foreground disabled:opacity-50"
                 >
@@ -352,23 +381,70 @@ export default function RideMatching() {
               </motion.div>
             ) : (
               /* ───────── Searching ───────── */
-              <motion.div key="searching" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-4 space-y-3">
-                <div className="flex items-center gap-2">
-                  <h2 className="text-lg font-extrabold text-foreground">Finding your driver</h2>
-                  <span className="relative flex-1 h-6 overflow-hidden">
-                    <motion.span
-                      className="absolute top-1/2 -translate-y-1/2 flex items-center justify-center w-6 h-6 rounded-full bg-[#1B3FA0]"
-                      initial={{ x: '-120%' }}
-                      animate={{ x: ['-120%', '420%'] }}
-                      transition={{ repeat: Infinity, duration: 2.2, ease: 'linear' }}
-                    >
-                      <Car className="w-3.5 h-3.5 text-white" />
-                    </motion.span>
-                  </span>
+              <motion.div key="searching" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-3.5 space-y-2">
+                {/* Title + status share one row — keeps the card short so
+                    the map behind it stays visible. */}
+                <div className="flex items-center justify-between gap-2">
+                  <h2 className="text-base font-extrabold text-foreground">Finding your driver</h2>
+                  <p className="text-xs text-muted-foreground whitespace-nowrap">
+                    Searching within {searchRadiusKm} km · <span className="font-bold text-primary">{remaining}s</span>
+                  </p>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Searching within {searchRadiusKm} km · <span className="font-bold text-[#1B3FA0]">{remaining}s</span>
-                </p>
+
+                {/* Car drives the full lane once per 60s search cycle, then
+                    resets to the start when radiusIndex advances (key
+                    remount) — same cadence as the search-radius widening. */}
+                <div className="relative h-12 w-full overflow-hidden rounded-full bg-muted/60">
+                  <div className="absolute inset-x-3 top-1/2 -translate-y-1/2 border-t-2 border-dashed border-border" />
+                  <motion.img
+                    key={radiusIndex}
+                    src={carSearchSide}
+                    alt=""
+                    className="absolute top-1/2 h-9 w-auto -translate-y-1/2 object-contain"
+                    style={{ filter: 'drop-shadow(0 3px 5px rgb(0 0 0 / 0.35))' }}
+                    initial={{ left: '-28%' }}
+                    animate={{ left: '105%' }}
+                    transition={{ duration: 60, ease: 'linear' }}
+                  />
+                </div>
+
+                {viewerCount > 0 && (
+                  <p className="flex items-center gap-1.5 text-xs font-semibold text-primary">
+                    <Users className="w-3.5 h-3.5" />
+                    {viewerCount} driver{viewerCount > 1 ? 's' : ''} viewing your request
+                  </p>
+                )}
+
+                {/* Bump the offered fare to reach more drivers */}
+                <div className="flex items-center justify-between gap-3 rounded-2xl border border-border p-2.5">
+                  <div>
+                    <p className="text-xs font-semibold text-foreground">Offered fare</p>
+                    <p className="text-[11px] text-muted-foreground">Raise it to attract drivers faster</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleFareChange(-FARE_STEP)}
+                      disabled={fareBumping || !ride || Number(ride.fare) <= FARE_STEP}
+                      aria-label="Decrease fare"
+                      className="flex h-8 w-8 items-center justify-center rounded-full border border-border text-foreground disabled:opacity-40 active:scale-90 transition-transform"
+                    >
+                      <Minus className="w-4 h-4" />
+                    </button>
+                    <span className="w-14 text-center text-sm font-black tabular-nums text-foreground">
+                      ${ride ? Number(ride.fare).toFixed(2) : '0.00'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleFareChange(FARE_STEP)}
+                      disabled={fareBumping}
+                      aria-label="Increase fare"
+                      className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground disabled:opacity-40 active:scale-90 transition-transform"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
 
                 <TripSummary ride={ride} />
 
@@ -398,9 +474,9 @@ export default function RideMatching() {
                 )}
 
                 <button
-                  onClick={handleCancel}
+                  onClick={() => setCancelSheetOpen(true)}
                   disabled={cancelling}
-                  className="w-full py-2.5 rounded-2xl border border-border text-sm font-semibold text-foreground flex items-center justify-center gap-2 disabled:opacity-50"
+                  className="w-full py-2 rounded-2xl border border-border text-sm font-semibold text-foreground flex items-center justify-center gap-2 disabled:opacity-50"
                 >
                   <X className="w-4 h-4" /> Cancel request
                 </button>
@@ -409,6 +485,13 @@ export default function RideMatching() {
           </AnimatePresence>
         </motion.div>
       </div>
+
+      <CancelReasonSheet
+        open={cancelSheetOpen}
+        onClose={() => setCancelSheetOpen(false)}
+        onConfirm={handleCancel}
+        cancelling={cancelling}
+      />
     </div>
   );
 }
@@ -416,7 +499,7 @@ export default function RideMatching() {
 function TripSummary({ ride }: { ride: MatchingRide | null }) {
   if (!ride) return null;
   return (
-    <div className="rounded-2xl bg-muted/50 p-3 space-y-2">
+    <div className="rounded-2xl bg-muted/50 p-2.5 space-y-1.5">
       <Row icon={<span className="w-2.5 h-2.5 rounded-full bg-accent block" />} label={ride.pickup_address} />
       <Row icon={<span className="w-2.5 h-2.5 rounded-sm bg-primary block" />} label={ride.dropoff_address} />
       <div className="flex items-center justify-between pt-1 border-t border-border/60 text-xs">

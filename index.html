@@ -8,14 +8,14 @@
     <meta name="author" content="PickMe Technologies" />
 
     <!-- PWA Meta Tags -->
-    <meta name="theme-color" content="#0B3D91" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#0d1b3e" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#B81104" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#7F0B02" media="(prefers-color-scheme: dark)" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="PickMe" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="application-name" content="PickMe" />
-    <meta name="msapplication-TileColor" content="#0B3D91" />
+    <meta name="msapplication-TileColor" content="#B81104" />
     <meta name="msapplication-tap-highlight" content="no" />
     <meta name="format-detection" content="telephone=no" />
 
@@ -76,14 +76,18 @@
 </head>
 
   <body>
-    <div id="instant-splash" style="position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:#ffffff;transition:opacity 0.4s ease;opacity:1;">
+    <div id="instant-splash" style="position:fixed;inset:0;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#ffffff;transition:opacity 0.4s ease;opacity:1;">
       <img src="/icons/pickme-app-icon.png" alt="PickMe" style="width:220px;height:220px;object-fit:contain;" fetchpriority="high" />
+      <div style="width:140px;height:4px;border-radius:999px;background:rgba(184,17,4,0.12);overflow:hidden;margin-top:28px;">
+        <div id="instant-splash-bar" style="height:100%;width:8%;border-radius:999px;background:#B81104;transition:width 0.35s ease;"></div>
+      </div>
     </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
     <script>
-      // inDrive-style splash: stays visible until React app signals ready,
-      // with a minimum display time so it never "flashes".
+      // inDrive-style splash: stays visible until the app's data bootstrap
+      // signals ready (see src/hooks/useAppBootstrap.tsx), with a minimum
+      // display time so it never "flashes".
       (function () {
         window.__splashReady = false;
         window.__splashMinDone = false;
@@ -102,23 +106,28 @@
           tryHide();
         }, 400);
 
-        // React calls window.__dismissSplash() when the app is mounted
+        // React calls window.__setSplashProgress(0-100) as each bootstrap
+        // step (session, profile, favorites, trips, config, map) resolves.
+        window.__setSplashProgress = function (pct) {
+          var bar = document.getElementById('instant-splash-bar');
+          if (bar) bar.style.width = Math.max(8, Math.min(100, pct)) + '%';
+        };
+
+        // React calls window.__dismissSplash() once the bootstrap resolves
+        // (or its own ~6s timeout elapses and continues with cached data).
         window.__dismissSplash = function () {
           window.__splashReady = true;
           tryHide();
         };
 
-        // Safety: dismiss once the page has fully loaded
-        window.addEventListener('load', function () {
-          setTimeout(function () { window.__dismissSplash(); }, 300);
-        });
-
-        // Hard fallback: never leave splash stuck
+        // Hard fallback only — the real dismiss is data-driven above. This
+        // just guarantees the splash never gets stuck if React itself fails
+        // to mount/bootstrap for some reason.
         setTimeout(function () {
           window.__splashMinDone = true;
           window.__splashReady = true;
           tryHide();
-        }, 2000);
+        }, 7000);
 
       })();
     </script>

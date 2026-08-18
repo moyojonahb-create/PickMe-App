@@ -1,6 +1,6 @@
 // Bump cache name to force clients to pick up fresh assets after updates
 const CACHE_NAME = 'pickme-shell-v10';
-const TILE_CACHE = 'voyex-tiles-v1';
+const TILE_CACHE = 'pickme-tiles-v1';
 const STATIC_ASSETS = [
   '/ride',
   '/manifest.json',
@@ -71,7 +71,7 @@ self.addEventListener('push', (event) => {
     vibrate: data.type === 'ride_request'
       ? [200, 100, 200, 100, 400]
       : [200, 100, 200],
-    tag: data.tag || 'voyex-push-' + Date.now(),
+    tag: data.tag || 'pickme-push-' + Date.now(),
     renotify: true,
     data: { url: data.url, rideId: data.rideId || null, type: data.type || 'general' },
     requireInteraction: data.type === 'ride_request',

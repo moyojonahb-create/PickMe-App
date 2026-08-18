@@ -202,7 +202,7 @@ const Signup = () => {
     if (isVerified) {
       return (
         <div className="min-h-[100dvh] bg-primary flex items-center justify-center p-4">
-          <div className="w-full max-w-[520px] bg-background rounded-[26px] p-5 shadow-[0_18px_40px_rgba(0,0,0,0.22)]">
+          <div className="w-full max-w-[520px] bg-background rounded-3xl p-5 shadow-[0_18px_40px_rgba(0,0,0,0.22)]">
             <div className="flex flex-col items-center justify-center py-8 space-y-4">
               <div className="w-16 h-16 rounded-full bg-accent/20 flex items-center justify-center">
                 <CheckCircle2 className="h-10 w-10 text-accent" />
@@ -220,7 +220,7 @@ const Signup = () => {
 
     return (
       <div className="min-h-[100dvh] bg-primary flex items-center justify-center p-4 pt-[calc(16px+env(safe-area-inset-top))] pb-[calc(16px+env(safe-area-inset-bottom))]">
-        <div className="w-full max-w-[520px] bg-background rounded-[26px] p-5 shadow-[0_18px_40px_rgba(0,0,0,0.22)]">
+        <div className="w-full max-w-[520px] bg-background rounded-3xl p-5 shadow-[0_18px_40px_rgba(0,0,0,0.22)]">
           <div className="space-y-6">
             <div className="text-center space-y-2">
               <h2 className="text-xl font-bold text-foreground">Verify your phone</h2>
@@ -245,7 +245,7 @@ const Signup = () => {
             <Button
               onClick={verifyOtp}
               disabled={otp.length !== 6 || isVerifying}
-              className="w-full h-[52px] rounded-2xl bg-foreground hover:bg-foreground/90 text-background font-black text-base"
+              className="w-full h-12 rounded-2xl bg-foreground hover:bg-foreground/90 text-background font-black text-base"
             >
               {isVerifying ? (
                 <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Verifying...</>
@@ -285,7 +285,7 @@ const Signup = () => {
 
   return (
     <div className="min-h-[100dvh] bg-primary flex items-center justify-center p-4 pt-[calc(16px+env(safe-area-inset-top))] pb-[calc(16px+env(safe-area-inset-bottom))]">
-      <div className="w-full max-w-[520px] bg-background backdrop-blur-[10px] rounded-[26px] p-5 shadow-[0_18px_40px_rgba(0,0,0,0.22)]">
+      <div className="w-full max-w-[520px] bg-background backdrop-blur-[10px] rounded-3xl p-5 shadow-[0_18px_40px_rgba(0,0,0,0.22)]">
         <div className="flex items-center gap-3 mb-4">
           <Link to="/" className="p-2 -ml-2 rounded-full hover:bg-muted transition-colors">
             <ArrowLeft className="h-5 w-5 text-foreground" />
@@ -377,7 +377,7 @@ const Signup = () => {
               </FormItem>
             )} />
 
-            <Button type="submit" className="w-full h-[52px] rounded-2xl bg-foreground hover:bg-foreground/90 text-background font-black text-base mt-2" disabled={isSubmitting}>
+            <Button type="submit" className="w-full h-12 rounded-2xl bg-foreground hover:bg-foreground/90 text-background font-black text-base mt-2" disabled={isSubmitting}>
               {isSubmitting ? (<><Loader2 className="h-4 w-4 animate-spin mr-2" /> Sending code...</>) : 'Continue'}
             </Button>
           </form>
