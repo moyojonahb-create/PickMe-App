@@ -24,14 +24,23 @@ export default function TownSelectorSheet({ currentTown, onSelect }: TownSelecto
 
   return (
     <>
-      {/* Trigger button */}
+      {/* Trigger button — glass pill per the /ride redesign spec */}
       <button
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-2 px-4 py-2 rounded-full glass-card text-sm font-medium text-primary active:scale-95 transition-all glass-glow-blue"
+        className="inline-flex items-center gap-1.5 shrink-0 active:scale-95 transition-transform"
+        style={{
+          height: 38,
+          padding: '0 12px',
+          borderRadius: 999,
+          background: 'rgba(255,255,255,.62)',
+          backdropFilter: 'blur(20px) saturate(180%)',
+          WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+          boxShadow: 'inset 0 .5px 0 rgba(255,255,255,.9), inset 0 0 0 .5px rgba(255,255,255,.6), 0 6px 14px rgba(0,0,0,.06)',
+        }}
       >
-        <MapPin className="w-4 h-4" />
-        <span>{currentTown.name}</span>
-        <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
+        <MapPin className="w-3.5 h-3.5" fill="currentColor" style={{ color: '#B81104' }} />
+        <span className="text-[12.5px] font-semibold" style={{ color: '#111111' }}>{currentTown.name}</span>
+        <ChevronDown className="w-3.5 h-3.5" style={{ color: '#666666' }} />
       </button>
 
       {/* Sheet overlay */}

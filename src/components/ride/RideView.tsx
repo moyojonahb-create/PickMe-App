@@ -38,7 +38,7 @@ import {
   Loader2, MapPin, Navigation, Crosshair, ArrowLeft, User, X, Search,
   Star, Phone, MessageCircle, Clock, ChevronRight, Locate,
   Banknote, Wallet, Zap, CarFront, Menu, History, ContactRound,
-  Calendar, CreditCard, ChevronDown } from
+  Calendar, CreditCard, ChevronDown, Sparkles } from
 'lucide-react';
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle } from
@@ -49,11 +49,8 @@ import RideStatusBanner, { type RideStatus } from './RideStatusBanner';
 import OffersModal, { type DriverViewing, type DriverOffer } from '@/components/OffersModal';
 import AuthModalWrapper from '@/components/auth/AuthModalWrapper';
 import PickMeLogo from '@/components/PickMeLogo';
-import { GlassSheet } from '@/components/ui/glass-sheet';
-import { SecondaryButton } from '@/components/ui/secondary-button';
-import { PrimaryButton } from '@/components/ui/primary-button';
-import { InputField } from '@/components/ui/input-field';
-import { IconPillButton } from '@/components/ui/icon-pill-button';
+import RideGlassPanel from './RideGlassPanel';
+import { glassSurface, redCta, RIDE_RED, RIDE_TEXT, RIDE_TEXT_2 } from './rideGlass';
 import QuickPickChips from './QuickPickChips';
 import ProximityFilter from './ProximityFilter';
 import EmergencyButton from './EmergencyButton';
@@ -1041,14 +1038,24 @@ export default function RideView() {
       <div className="absolute inset-0">
         <MapboxMap pickup={pickupLocation} dropoff={dropoffLocation} routeGeometry={routeData?.geometry} onMapClick={handleMapClick} defaultCenter={mapCenter} preferredCenter={preferredCenter} defaultZoom={mapZoom} className="w-full h-full" height="100%" drivers={nearbyDrivers} stops={rideStops.filter(s => s.lat && s.lng)} riderGender={(riderPrefs?.gender as "male" | "female" | undefined) ?? null} />
 
-        {/* Floating map buttons */}
+        {/* Floating map buttons — 52px glass Locate + Navigation stack */}
         <div className="absolute right-3 z-20" style={{ bottom: sheetExpanded ? 'calc(70vh + 16px)' : 'calc(48vh + 16px)', transition: 'bottom 0.3s cubic-bezier(0.32,0.72,0,1)' }}>
-          <div className="flex flex-col gap-2.5">
-            <button onClick={() => handleUseMyLocation()} className="w-11 h-11 rounded-full glass-card flex items-center justify-center active:scale-90 transition-all glass-glow-blue">
-              {gpsState.status === 'loading' ? <Loader2 className="w-5 h-5 animate-spin text-primary" /> : <Locate className="w-5 h-5 text-primary" />}
+          <div className="flex flex-col gap-3">
+            <button
+              onClick={() => handleUseMyLocation()}
+              aria-label="Use my location"
+              className="flex items-center justify-center rounded-full active:scale-90 transition-transform"
+              style={{ width: 52, height: 52, ...glassSurface }}
+            >
+              {gpsState.status === 'loading' ? <Loader2 className="w-5 h-5 animate-spin" style={{ color: RIDE_RED }} /> : <Locate className="w-5 h-5" style={{ color: RIDE_TEXT }} />}
             </button>
-            <button onClick={() => handleUseMyLocation()} className="w-11 h-11 rounded-full glass-card flex items-center justify-center active:scale-90 transition-all glass-glow-yellow">
-              <Navigation className="w-5 h-5 text-accent" />
+            <button
+              onClick={() => handleUseMyLocation()}
+              aria-label="Recenter navigation"
+              className="flex items-center justify-center rounded-full active:scale-90 transition-transform"
+              style={{ width: 52, height: 52, ...glassSurface }}
+            >
+              <Navigation className="w-5 h-5" style={{ color: RIDE_TEXT }} />
             </button>
           </div>
         </div>
@@ -1181,29 +1188,26 @@ export default function RideView() {
       </Sheet>
 
       {/* ── BOTTOM SHEET ── */}
-      <GlassSheet
-        className="absolute left-0 right-0 z-50 flex flex-col overflow-hidden"
+      <RideGlassPanel
+        className="absolute left-0 right-0 z-50"
+        onRibbonClick={() => setSheetExpanded((e) => !e)}
         style={{
           bottom: 0,
           maxHeight: sheetExpanded ? '60vh' : '38vh',
           transition: 'max-height 0.3s cubic-bezier(0.32,0.72,0,1)',
           paddingBottom: 'env(safe-area-inset-bottom)',
-          borderTopLeftRadius: 24,
-          borderTopRightRadius: 24
         }}>
 
-        {/* Blue ribbon with yellow drag handle */}
-        <button
-          onClick={() => setSheetExpanded((e) => !e)}
-          aria-label="Expand booking sheet"
-          className="w-full py-1.5 flex justify-center shrink-0 bg-primary rounded-t-3xl">
-          <div className="w-11 h-1 rounded-full bg-accent" />
-        </button>
-
-        {/* Town / scope row — pinned above the greeting, always visible, never scrolls */}
-        <div className="shrink-0 flex items-center justify-between text-muted-foreground px-4 pt-1.5 pb-1">
+        {/* Location pills row — pinned above the content, always visible, never scrolls */}
+        <div className="shrink-0 flex items-center gap-2.5 px-4 pt-2 pb-1">
           <TownSelectorSheet currentTown={selectedTown} onSelect={(town) => {setSelectedTown(town);setPickupLocation(null);setDropoffLocation(null);setPreferredCenter(town.center);}} />
-          <p className="text-[11px]">{selectedTown.radiusKm} km area</p>
+          <span
+            className="ml-auto inline-flex items-center gap-1.5 shrink-0"
+            style={{ height: 38, padding: '0 12px', borderRadius: 999, ...glassSurface }}
+          >
+            <Sparkles className="w-[13px] h-[13px]" style={{ color: RIDE_TEXT }} />
+            <span className="text-[12.5px] font-medium" style={{ color: RIDE_TEXT }}>{selectedTown.radiusKm}+ km area</span>
+          </span>
         </div>
 
         {/* Scrollable content */}
@@ -1304,47 +1308,73 @@ export default function RideView() {
               <button
                 type="button"
                 onClick={() => setPaymentPopupOpen(true)}
-                className="mb-1.5 w-full h-9 flex items-center justify-between gap-2 px-1 border-b border-border/50 active:opacity-70 transition-opacity">
-                <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                  <CreditCard className="w-4 h-4 text-muted-foreground" />
+                className="w-full flex items-center gap-2.5 px-3.5 mb-2.5 active:opacity-80 transition-opacity"
+                style={{ height: 44, borderRadius: 15, ...glassSurface }}>
+                <CreditCard className="w-[18px] h-[18px]" style={{ color: RIDE_TEXT }} />
+                <span className="flex-1 text-left text-[14.5px] font-medium" style={{ color: RIDE_TEXT }}>
                   {paymentMethodConfirmed ? (paymentMethod === 'wallet' ? 'Wallet' : 'Cash') : 'Select payment method'}
                 </span>
-                <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                <ChevronRight className="w-[17px] h-[17px]" style={{ color: RIDE_TEXT_2 }} />
               </button>
 
-              <div className="flex items-center gap-2.5">
+              <div className="flex items-center gap-3">
                 <button
                   type="button"
                   onClick={() => setSchedulePickerOpen(true)}
-                  className="h-11 px-4 shrink-0 rounded-2xl border-2 border-primary text-primary font-bold text-[14px] flex items-center gap-1.5 active:scale-[0.97] transition-transform">
-                  <Calendar className="w-4 h-4" />
-                  {scheduledAt ? 'Scheduled' : 'Schedule'}
+                  className="shrink-0 flex items-center justify-center gap-2 active:scale-[0.97] transition-transform"
+                  style={{
+                    width: 132,
+                    height: 48,
+                    borderRadius: 15,
+                    background: 'rgba(255,255,255,.55)',
+                    backdropFilter: 'blur(20px) saturate(180%)',
+                    WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+                    boxShadow: 'inset 0 .5px 0 rgba(255,255,255,.9), inset 0 0 0 1px rgba(184,17,4,.22), 0 6px 14px rgba(0,0,0,.05)',
+                  }}>
+                  <Calendar className="w-[18px] h-[18px]" style={{ color: RIDE_RED }} />
+                  <span className="text-[14.5px] font-bold" style={{ color: RIDE_RED }}>{scheduledAt ? 'Scheduled' : 'Schedule'}</span>
                 </button>
-                <PrimaryButton
+                <button
+                  type="button"
                   onClick={() => handleSendOffer(selectedTierPrice)}
                   disabled={isRequesting}
-                  className="flex-1 h-11 text-[15px] font-semibold rounded-2xl gap-2 inline-flex items-center justify-center active:scale-[0.97] transition-transform !bg-primary !text-primary-foreground">
-
+                  className="relative flex-1 flex items-center justify-center gap-2 overflow-hidden active:scale-[0.97] transition-transform disabled:opacity-70"
+                  style={{ height: 48, borderRadius: 15, ...redCta }}>
+                  <span className="pointer-events-none absolute inset-x-0 top-0 h-1/2" style={{ background: 'linear-gradient(180deg, rgba(255,255,255,.2), rgba(255,255,255,0))' }} />
                   {isRequesting ? (
                     <>
-                      <div className="w-4 h-4 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin" />
-                      Finding your ride…
+                      <div className="relative w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span className="relative text-[15.5px] font-bold text-white">Finding your ride…</span>
                     </>
                   ) : (
-                    `Choose ${RIDE_TIER_LABELS[selectedTier]}`
+                    <>
+                      <span className="relative text-[15.5px] font-bold text-white">Choose {RIDE_TIER_LABELS[selectedTier]}</span>
+                      <span className="relative flex items-center justify-center rounded-full" style={{ width: 23, height: 23, background: 'rgba(255,255,255,.24)', boxShadow: 'inset 0 .5px 0 rgba(255,255,255,.5)' }}>
+                        <ChevronRight className="w-[15px] h-[15px] text-white" strokeWidth={2.6} />
+                      </span>
+                    </>
                   )}
-                </PrimaryButton>
+                </button>
               </div>
             </>
-          ) :
-          <SecondaryButton
-            disabled
-            className="w-full h-11 text-[15px] font-semibold rounded-2xl bg-primary/30 text-primary-foreground border-transparent">
-              {pickupLocation && dropoffLocation ? <><div className="w-4 h-4 border-2 border-primary-foreground/50 border-t-transparent rounded-full animate-spin mr-2" />Calculating…</> : 'Find Drivers'}
-            </SecondaryButton>
-          }
+          ) : (
+            <button
+              type="button"
+              disabled
+              className="w-full flex items-center justify-center"
+              style={{ height: 48, borderRadius: 15, ...redCta, opacity: 0.55 }}>
+              {pickupLocation && dropoffLocation ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white/60 border-t-transparent rounded-full animate-spin mr-2" />
+                  <span className="text-[15.5px] font-bold text-white">Calculating…</span>
+                </>
+              ) : (
+                <span className="text-[15.5px] font-bold text-white">Find Drivers</span>
+              )}
+            </button>
+          )}
         </div>
-      </GlassSheet>
+      </RideGlassPanel>
 
 
       {/* ═══ DESTINATION SEARCH SCREEN ═══ */}
