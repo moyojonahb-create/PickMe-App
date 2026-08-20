@@ -1,6 +1,6 @@
 import { ReactNode, CSSProperties } from 'react';
 import { cn } from '@/lib/utils';
-import { glassPanel, RIDE_RED_GRADIENT, RIDE_YELLOW, RIDE_FONT } from './rideGlass';
+import { glassPanel, RIDE_RED_GRADIENT, RIDE_FONT } from './rideGlass';
 
 interface RideGlassPanelProps {
   children: ReactNode;
@@ -11,9 +11,14 @@ interface RideGlassPanelProps {
 }
 
 /**
- * Frosted glass sheet with the branded red ribbon + yellow grab handle on top.
+ * Frosted glass sheet with the branded red ribbon + white grab handle on top.
  * Shared by the ride-selection sheet and the finding-drivers card so both
  * screens read as one surface.
+ *
+ * The ribbon is a soft red glow that sits BEHIND the glass panel — it curves
+ * with the sheet's rounded top corners and fades out under the panel, rather
+ * than a flat bar stacked in front of it. The panel keeps its own white/
+ * frosted fill on top, so red never bleeds through the glass.
  */
 export default function RideGlassPanel({
   children,
@@ -23,32 +28,56 @@ export default function RideGlassPanel({
 }: RideGlassPanelProps) {
   return (
     <div
-      className={cn('flex flex-col overflow-hidden', className)}
+      className={cn('relative flex flex-col overflow-hidden', className)}
       style={{
-        ...glassPanel,
-        borderTopLeftRadius: 28,
-        borderTopRightRadius: 28,
+        borderTopLeftRadius: 26,
+        borderTopRightRadius: 26,
         fontFamily: RIDE_FONT,
         ...style,
       }}
     >
+      {/* Red glow — behind the glass panel, curves with the top corners and
+          fades toward the bottom so only a curved sliver shows above/around
+          the panel. */}
+      <div
+        className="absolute top-0 left-0 right-0 z-0 pointer-events-none"
+        style={{
+          height: 40,
+          background: RIDE_RED_GRADIENT,
+          borderTopLeftRadius: 26,
+          borderTopRightRadius: 26,
+          WebkitMaskImage: 'linear-gradient(180deg, #000 40%, rgba(0,0,0,0) 100%)',
+          maskImage: 'linear-gradient(180deg, #000 40%, rgba(0,0,0,0) 100%)',
+        }}
+      />
+
+      {/* White grab handle — floats on the exposed curve, generous tap target */}
       <button
         type="button"
         onClick={onRibbonClick}
         aria-label="Toggle sheet"
-        className="w-full shrink-0 flex items-center justify-center py-2 active:opacity-90 transition-opacity"
-        style={{
-          background: RIDE_RED_GRADIENT,
-          borderTopLeftRadius: 28,
-          borderTopRightRadius: 28,
-        }}
+        className="absolute left-1/2 -translate-x-1/2 z-20 flex items-center justify-center active:opacity-90 transition-opacity"
+        style={{ top: -4, width: 64, height: 24 }}
       >
         <span
           className="block rounded-full"
-          style={{ width: 46, height: 5, background: RIDE_YELLOW }}
+          style={{ width: 44, height: 5, background: '#FFFFFF', boxShadow: '0 1px 2px rgba(0,0,0,.18)' }}
         />
       </button>
-      {children}
+
+      {/* Frosted glass panel — sits in front of the red glow, offset down so
+          the glow's curved top edge peeks out from behind it. */}
+      <div
+        className="relative z-10 flex-1 min-h-0 flex flex-col overflow-hidden"
+        style={{
+          ...glassPanel,
+          marginTop: 16,
+          borderTopLeftRadius: 22,
+          borderTopRightRadius: 22,
+        }}
+      >
+        {children}
+      </div>
     </div>
   );
 }

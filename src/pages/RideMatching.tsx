@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Car, Clock, MapPin, MessageCircle, Minus, Phone, Plus, Radar, Star, User } from 'lucide-react';
+import { ArrowLeft, Car, Clock, Locate, MapPin, MessageCircle, Minus, Phone, Plus, Radar, Star, User } from 'lucide-react';
 import LazyMapboxMap from '@/components/map/LazyMapboxMap';
 import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/hooks/useAuth';
@@ -78,6 +78,7 @@ export default function RideMatching() {
   const [noteOpen, setNoteOpen] = useState(false);
   const [noteValue, setNoteValue] = useState('');
   const [noteSaving, setNoteSaving] = useState(false);
+  const [preferredCenter, setPreferredCenter] = useState<{ lat: number; lng: number } | null>(null);
   const waitStartedAt = useRef(Date.now());
   const searchStartedAt = useRef(Date.now());
   const announced = useRef(false);
@@ -301,6 +302,7 @@ export default function RideMatching() {
           driverLocation={driverLocation}
           drivers={isMatched ? undefined : placeholderCars}
           routeGeometry={ride?.route_polyline ?? null}
+          preferredCenter={preferredCenter}
           className="w-full h-full"
           height="100%"
         />
@@ -316,13 +318,22 @@ export default function RideMatching() {
         </div>
       )}
 
-      {/* Back */}
+      {/* Map chrome — back (top-left) + locate (top-right) only, per the reference */}
       <button
         onClick={() => navigate('/ride')}
         aria-label="Back"
-        className="absolute top-4 left-4 z-20 w-10 h-10 rounded-full bg-card/90 backdrop-blur shadow-md flex items-center justify-center"
+        className="absolute left-3 z-20 flex items-center justify-center rounded-full active:scale-90 transition-transform"
+        style={{ top: 'calc(env(safe-area-inset-top) + 7px)', width: 52, height: 52, ...glassSurface }}
       >
-        <ArrowLeft className="w-5 h-5 text-foreground" />
+        <ArrowLeft className="w-5 h-5" style={{ color: RIDE_TEXT }} />
+      </button>
+      <button
+        onClick={() => pickup && setPreferredCenter({ ...pickup })}
+        aria-label="Use my location"
+        className="absolute right-3 z-20 flex items-center justify-center rounded-full active:scale-90 transition-transform"
+        style={{ top: 'calc(env(safe-area-inset-top) + 7px)', width: 52, height: 52, ...glassSurface }}
+      >
+        <Locate className="w-5 h-5" style={{ color: RIDE_TEXT }} />
       </button>
 
       {/* Bottom sheet — same glass ribbon treatment as the ride-selection screen */}

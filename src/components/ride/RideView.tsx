@@ -27,7 +27,6 @@ import { cachePlaceFromNominatim } from '@/lib/placeCache';
 import { searchCachedPlacesPrefix } from '@/lib/placeCache';
 import { useToast } from '@/hooks/use-toast';
 import { useTownPricing, calculateRecommendedFare, formatFare } from '@/hooks/useTownPricing';
-import { uuid } from '@/lib/uuid';
 import { useStudentDiscountAvailable } from '@/hooks/useStudentProfile';
 
 import BottomNavBar from '@/components/BottomNavBar';
@@ -60,6 +59,8 @@ import RideHomeGreeting from './RideHomeGreeting';
 import DropoffAutocomplete from './DropoffAutocomplete';
 
 import QuickShortcutsRow from './QuickShortcutsRow';
+import RecentDestinations from './RecentDestinations';
+import NearbyDriversSummary from './NearbyDriversSummary';
 import { type RideStop } from './MultiStopInput';
 import { useLandmarks as useLandmarksSearch, type Landmark } from '@/hooks/useLandmarks';
 import { useStreets, type Street } from '@/hooks/useStreets';
@@ -80,7 +81,6 @@ import LuggageSheet from '@/components/luggage/LuggageSheet';
 import LocationPermissionPrompt from '@/components/ride/LocationPermissionPrompt';
 import DestinationSearchScreen, { type SearchResultRow } from '@/components/ride/DestinationSearchScreen';
 import RideTierSelector, { type RideTierId, type RideTierOption } from './RideTierSelector';
-import LocationSummaryPill from './LocationSummaryPill';
 
 interface SelectedLocation {name: string;lat: number;lng: number;}
 interface GPSState {status: 'idle' | 'loading' | 'success' | 'denied' | 'unavailable';coords: {lat: number;lng: number;} | null;error: string | null;}
@@ -115,7 +115,7 @@ export default function RideView() {
   const [gpsState, setGpsState] = useState<GPSState>({ status: 'idle', coords: null, error: null });
   const [activeField, setActiveField] = useState<'pickup' | 'dropoff' | null>(null);
   const [mapPickMode, setMapPickMode] = useState(false);
-  const [settingFavorite, setSettingFavorite] = useState<'home' | 'work' | null>(null);
+  const [settingFavorite, setSettingFavorite] = useState<'home' | 'work' | 'custom' | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [proximityRadius, setProximityRadius] = useState<number | null>(null);
   const [nominatimResults, setNominatimResults] = useState<Array<{name: string;lat?: number;lng?: number;displayName: string;placeId?: string;source?: 'google' | 'osm';}>>([]);
@@ -387,7 +387,7 @@ export default function RideView() {
     const parcelPrice = Math.max(fareBreakdown.baseFare, fareBreakdown.baseFare + fareBreakdown.distanceFare * 0.6);
     const etaMinutes = Math.max(1, Math.round(fareEstimate.durationMinutes));
     return [
-      { id: 'economy', name: 'Economy', capacity: 4, etaMinutes, price: economyPrice, badge: 'Affordable', badgeVariant: 'primary' },
+      { id: 'economy', name: 'Economy', capacity: 4, etaMinutes, price: economyPrice, badge: 'Fast pickup', badgeVariant: 'primary' },
       { id: 'share', name: 'Share Ride', capacity: 4, etaMinutes: etaMinutes + 2, price: sharePrice, badge: 'Save more', badgeVariant: 'accent' },
       { id: 'parcel', name: 'Parcel', capacity: 1, etaMinutes: Math.max(etaMinutes, 10), price: parcelPrice, badge: 'Send anything', badgeVariant: 'accent' },
     ];
@@ -493,7 +493,7 @@ export default function RideView() {
   const saveFavoriteIfSetting = useCallback((loc: SelectedLocation) => {
     if (!settingFavorite || !user?.id) return;
     const key = settingFavorite;
-    const label = key === 'home' ? 'Home' : 'Work';
+    const label = key === 'home' ? 'Home' : key === 'work' ? 'Work' : loc.name;
     setSettingFavorite(null);
     supabase
       .from('favorite_locations')
@@ -586,6 +586,13 @@ export default function RideView() {
     setDropoffLocation(pickupLocation);
     haptic('light');
   };
+
+  const handleTownSelect = useCallback((town: TownConfig) => {
+    setSelectedTown(town);
+    setPickupLocation(null);
+    setDropoffLocation(null);
+    setPreferredCenter(town.center);
+  }, []);
 
   const handleRecentPlaceSelect = (loc: {name: string;lat: number;lng: number;}) => {
     const selected: SelectedLocation = { name: loc.name, lat: loc.lat, lng: loc.lng };
@@ -919,18 +926,6 @@ export default function RideView() {
     } catch (error: unknown) {toast({ title: 'Failed to send offer', description: (error as Error).message, variant: 'destructive' });setRideStatus('idle');} finally {setIsRequesting(false);}
   };
 
-  // Add-a-stop now lives solely in the top floating bar's "+" — since there's
-  // no stop-list row to tap afterward, jump straight into the search overlay
-  // for the new stop so it's immediately fillable.
-  const handleAddStop = () => {
-    if (rideStops.length >= 3) return;
-    const id = uuid();
-    setRideStops((prev) => [...prev, { id, address: '', lat: 0, lng: 0 }]);
-    setActiveStopId(id);
-    setActiveField('dropoff');
-    setSearchQuery('');
-  };
-
   const handleAcceptOffer = async (offerId: string) => {
     if (!currentRideId) return;
     try {
@@ -1021,7 +1016,6 @@ export default function RideView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [landmarks, streets, cachedPlaceResults, nominatimResults, activeField, activeStopId]);
 
-  const estimatedWaitMinutes = Math.max(2, Math.min(8, Math.round(8 - nearbyDrivers.length * 0.6)));
   const showHomeContent = rideStatus === 'idle' && !pickupLocation && !dropoffLocation;
   const unifiedPlaceResults = [...cachedPlaceResults, ...nominatimResults.map((item) => ({ ...item, source: 'nominatim' as const }))]
     .filter((item, index, arr) => {
@@ -1038,17 +1032,41 @@ export default function RideView() {
       <div className="absolute inset-0">
         <MapboxMap pickup={pickupLocation} dropoff={dropoffLocation} routeGeometry={routeData?.geometry} onMapClick={handleMapClick} defaultCenter={mapCenter} preferredCenter={preferredCenter} defaultZoom={mapZoom} className="w-full h-full" height="100%" drivers={nearbyDrivers} stops={rideStops.filter(s => s.lat && s.lng)} riderGender={(riderPrefs?.gender as "male" | "female" | undefined) ?? null} />
 
-        {/* Floating map buttons — 52px glass Locate + Navigation stack */}
-        <div className="absolute right-3 z-20" style={{ bottom: sheetExpanded ? 'calc(70vh + 16px)' : 'calc(48vh + 16px)', transition: 'bottom 0.3s cubic-bezier(0.32,0.72,0,1)' }}>
-          <div className="flex flex-col gap-3">
+        {/* Map chrome — back button (top-left) + menu/notifications/locate/navigation
+            stack (top-right). Nothing else floats over the map, per the reference. */}
+        <button
+          onClick={() => showHomeContent ? setMenuOpen(true) : navigate(-1)}
+          aria-label={showHomeContent ? 'Menu' : 'Back'}
+          className="absolute left-3 z-40 flex items-center justify-center rounded-full active:scale-90 transition-transform"
+          style={{ top: 'calc(env(safe-area-inset-top) + 7px)', width: 52, height: 52, ...glassSurface }}
+        >
+          {showHomeContent ? <Menu className="w-5 h-5" style={{ color: RIDE_TEXT }} /> : <ArrowLeft className="w-5 h-5" style={{ color: RIDE_TEXT }} />}
+        </button>
+
+        <div className="absolute right-3 z-40 flex flex-col gap-3" style={{ top: 'calc(env(safe-area-inset-top) + 7px)' }}>
+          {!showHomeContent && (
             <button
-              onClick={() => handleUseMyLocation()}
-              aria-label="Use my location"
+              onClick={() => setMenuOpen(true)}
+              aria-label="Menu"
               className="flex items-center justify-center rounded-full active:scale-90 transition-transform"
               style={{ width: 52, height: 52, ...glassSurface }}
             >
-              {gpsState.status === 'loading' ? <Loader2 className="w-5 h-5 animate-spin" style={{ color: RIDE_RED }} /> : <Locate className="w-5 h-5" style={{ color: RIDE_TEXT }} />}
+              <Menu className="w-5 h-5" style={{ color: RIDE_TEXT }} />
             </button>
+          )}
+          <NotificationBell
+            className="active:scale-90 transition-transform"
+            style={{ width: 52, height: 52, ...glassSurface }}
+          />
+          <button
+            onClick={() => handleUseMyLocation()}
+            aria-label="Use my location"
+            className="flex items-center justify-center rounded-full active:scale-90 transition-transform"
+            style={{ width: 52, height: 52, ...glassSurface }}
+          >
+            {gpsState.status === 'loading' ? <Loader2 className="w-5 h-5 animate-spin" style={{ color: RIDE_RED }} /> : <Locate className="w-5 h-5" style={{ color: RIDE_TEXT }} />}
+          </button>
+          {!showHomeContent && (
             <button
               onClick={() => handleUseMyLocation()}
               aria-label="Recenter navigation"
@@ -1057,7 +1075,7 @@ export default function RideView() {
             >
               <Navigation className="w-5 h-5" style={{ color: RIDE_TEXT }} />
             </button>
-          </div>
+          )}
         </div>
 
         {/* Reverse geocode loading overlay */}
@@ -1091,51 +1109,6 @@ export default function RideView() {
             </div>
           </div>
         }
-      </div>
-
-      {/* ── FLOATING TOP HEADER (transparent — map shows through) ── */}
-      <div
-        className="absolute top-0 left-0 right-0 z-40 flex flex-col pointer-events-none"
-        style={{ paddingTop: 'env(safe-area-inset-top)' }}
-      >
-        <div className="h-14 flex items-center gap-2 px-3">
-          <button onClick={() => setMenuOpen(true)} className="pointer-events-auto w-11 h-11 shrink-0 flex items-center justify-center rounded-full bg-card/90 backdrop-blur-md shadow-lg active:scale-95 transition-all">
-            <Menu className="w-5 h-5 text-foreground" />
-          </button>
-
-          {/* Location summary card — sole pickup/drop-off entry point once a
-              trip is being planned; tapping drop-off before it's set opens the
-              destination search directly, so there's no separate mid-step card.
-              Sits level with the menu/notification buttons, sized to the gap
-              between them. */}
-          {!showHomeContent && pickupLocation ? (
-            <div className="flex-1 min-w-0 pointer-events-auto">
-              <LocationSummaryPill
-                pickupName={pickupLocation.name}
-                dropoffName={dropoffLocation?.name ?? ''}
-                onPickupClick={() => { setActiveField('pickup'); setSearchQuery(''); }}
-                onDropoffClick={() => { setActiveField('dropoff'); setSearchQuery(''); }}
-                onAddStop={handleAddStop}
-                canAddStop={rideStops.length < 3}
-                className="rounded-xl w-full"
-              />
-            </div>
-          ) : (
-            <div className="flex-1" />
-          )}
-
-          <div className="pointer-events-auto flex items-center gap-2 shrink-0">
-            <NotificationBell />
-            <button onClick={() => user ? navigate(location.pathname.startsWith('/mapp') ? '/mapp/profile' : '/profile') : setAuthModalOpen(true)} className="w-11 h-11 flex items-center justify-center rounded-full bg-card/90 backdrop-blur-md shadow-lg active:scale-95 transition-all">
-              <User className="w-5 h-5 text-foreground" />
-            </button>
-          </div>
-        </div>
-
-        {/* Logo — sits below the button/card row instead of competing with it for space */}
-        <div className="flex justify-center pb-2 pointer-events-none">
-          <PickMeLogo size="sm" />
-        </div>
       </div>
 
       {/* ── HAMBURGER MENU ── */}
@@ -1192,23 +1165,26 @@ export default function RideView() {
         className="absolute left-0 right-0 z-50"
         onRibbonClick={() => setSheetExpanded((e) => !e)}
         style={{
-          bottom: 0,
-          maxHeight: sheetExpanded ? '60vh' : '38vh',
-          transition: 'max-height 0.3s cubic-bezier(0.32,0.72,0,1)',
+          bottom: showHomeContent ? 'calc(64px + env(safe-area-inset-bottom))' : 0,
+          maxHeight: showHomeContent ? (sheetExpanded ? '70vh' : '46vh') : (sheetExpanded ? '60vh' : '38vh'),
+          transition: 'max-height 0.3s cubic-bezier(0.32,0.72,0,1), bottom 0.3s cubic-bezier(0.32,0.72,0,1)',
           paddingBottom: 'env(safe-area-inset-bottom)',
         }}>
 
-        {/* Location pills row — pinned above the content, always visible, never scrolls */}
-        <div className="shrink-0 flex items-center gap-2.5 px-4 pt-2 pb-1">
-          <TownSelectorSheet currentTown={selectedTown} onSelect={(town) => {setSelectedTown(town);setPickupLocation(null);setDropoffLocation(null);setPreferredCenter(town.center);}} />
-          <span
-            className="ml-auto inline-flex items-center gap-1.5 shrink-0"
-            style={{ height: 38, padding: '0 12px', borderRadius: 999, ...glassSurface }}
-          >
-            <Sparkles className="w-[13px] h-[13px]" style={{ color: RIDE_TEXT }} />
-            <span className="text-[12.5px] font-medium" style={{ color: RIDE_TEXT }}>{selectedTown.radiusKm}+ km area</span>
-          </span>
-        </div>
+        {/* Location pills row — pinned above the content, always visible, never scrolls.
+            Idle state folds the town pill into RideHomeGreeting's greeting row instead. */}
+        {!showHomeContent && (
+          <div className="shrink-0 flex items-center gap-2.5 px-4 pt-2 pb-1">
+            <TownSelectorSheet currentTown={selectedTown} onSelect={handleTownSelect} />
+            <span
+              className="ml-auto inline-flex items-center gap-1.5 shrink-0"
+              style={{ height: 38, padding: '0 12px', borderRadius: 999, ...glassSurface }}
+            >
+              <Sparkles className="w-[13px] h-[13px]" style={{ color: RIDE_TEXT }} />
+              <span className="text-[12.5px] font-medium" style={{ color: RIDE_TEXT }}>{selectedTown.radiusKm}+ km area</span>
+            </span>
+          </div>
+        )}
 
         {/* Scrollable content */}
         <div className="flex-1 px-4 pt-1 pb-1.5 space-y-2 min-h-0 overflow-y-auto overscroll-contain">
@@ -1231,13 +1207,36 @@ export default function RideView() {
               haptic('light');
               setSheetExpanded(true);
             };
+            const requestSetShortcut = (key: 'home' | 'work' | 'custom') => {
+              setSettingFavorite(key);
+              ensurePickup();
+              setActiveField('dropoff');
+              setSearchQuery('');
+              setSheetExpanded(true);
+            };
+            const hasLocationSignal = !!(gpsState.coords || pickupLocation);
+            const closestDriverKm = nearbyDrivers[0]?.distanceKm;
+            // Same 25km/h urban-speed heuristic DriverETABanner uses for live driver ETAs.
+            const closestEtaMinutes = closestDriverKm != null ? Math.max(1, Math.round(closestDriverKm / 25 * 60)) : null;
+            const demandHint = townPricing.demand_multiplier > 1 ? 'Busy — fares higher than usual' : null;
             return (
               <div className="space-y-4">
                 <RideHomeGreeting
                   name={firstName}
+                  town={selectedTown}
+                  onTownSelect={handleTownSelect}
                   onSearchClick={() => { ensurePickup(); setActiveField('dropoff'); setSearchQuery(''); setSheetExpanded(true); }}
                 />
-                <QuickShortcutsRow onSelect={pickDropoff} />
+                <QuickShortcutsRow onSelect={pickDropoff} onRequestSet={requestSetShortcut} />
+                {hasLocationSignal && (
+                  <NearbyDriversSummary
+                    driverCount={nearbyDrivers.length}
+                    closestEtaMinutes={closestEtaMinutes}
+                    demandHint={demandHint}
+                    onSchedule={() => setSchedulePickerOpen(true)}
+                  />
+                )}
+                <RecentDestinations field="dropoff" onSelect={pickDropoff} />
               </div>
             );
           })()}
@@ -1255,23 +1254,14 @@ export default function RideView() {
 
           {/* Ride tier list — Economy / Share Ride / Parcel */}
           {pickupLocation && dropoffLocation && rideTierOptions.length > 0 && (
-            <div className="space-y-1">
-              <div className="flex items-center justify-between px-0.5">
-                <p className="text-[13px] font-semibold text-foreground">Choose a ride</p>
-                <span className="flex items-center gap-1 text-[12px] text-muted-foreground">
-                  <Clock className="w-3.5 h-3.5" />
-                  {estimatedWaitMinutes} min away
-                </span>
-              </div>
-              <RideTierSelector
-                options={rideTierOptions}
-                selected={selectedTier}
-                onSelect={handleSelectTier}
-                currencySymbol={fareBreakdown?.sym ?? '$'}
-                passengerCount={passengerCount}
-                onPassengerCountChange={setPassengerCount}
-              />
-            </div>
+            <RideTierSelector
+              options={rideTierOptions}
+              selected={selectedTier}
+              onSelect={handleSelectTier}
+              currencySymbol={fareBreakdown?.sym ?? '$'}
+              passengerCount={passengerCount}
+              onPassengerCountChange={setPassengerCount}
+            />
           )}
 
           {/* Rider preferences live in Profile only; they are attached to the ride
@@ -1283,7 +1273,9 @@ export default function RideView() {
           )}
         </div>
 
-        {/* ── PINNED FIND DRIVERS BUTTON ── always visible at bottom */}
+        {/* ── PINNED FIND DRIVERS BUTTON ── visible at bottom whenever booking is underway.
+            The idle screen replaces this with the bottom tab bar (rendered below the panel). */}
+        {!showHomeContent && (
         <div className="shrink-0 px-4 pb-2 pt-1.5">
           {pickupLocation && dropoffLocation && fareBreakdown ? (
             <>
@@ -1374,8 +1366,11 @@ export default function RideView() {
             </button>
           )}
         </div>
+        )}
       </RideGlassPanel>
 
+      {/* Bottom tab bar — idle screen only; booking states keep the pinned CTA above. */}
+      {showHomeContent && <BottomNavBar />}
 
       {/* ═══ DESTINATION SEARCH SCREEN ═══ */}
       {activeField && !mapPickMode && (

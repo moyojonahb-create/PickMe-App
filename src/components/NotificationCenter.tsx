@@ -1,5 +1,5 @@
 /* eslint-disable react-hooks/exhaustive-deps */
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, type CSSProperties } from 'react';
 import { Bell, X, Check, Car, DollarSign, AlertTriangle, Star, Gift, MapPin, CheckCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/integrations/supabase/client';
@@ -55,7 +55,15 @@ function getNotificationCategory(type: string): Exclude<NotificationCategory, 'a
   }
 }
 
-export function NotificationBell() {
+interface NotificationBellProps {
+  /** Overrides the trigger button's default 44px glass-card look — used when
+   * the bell is placed inside a differently-styled button stack (e.g. the
+   * /ride map chrome's 52px glass circles). */
+  className?: string;
+  style?: CSSProperties;
+}
+
+export function NotificationBell({ className, style }: NotificationBellProps = {}) {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -131,7 +139,11 @@ export function NotificationBell() {
       <motion.button
         whileTap={{ scale: 0.9 }}
         onClick={() => setOpen(true)}
-        className="relative w-11 h-11 flex items-center justify-center rounded-full glass-card-heavy hover:shadow-[0_8px_20px_-8px_hsl(224_71%_37%/0.35)] transition-shadow"
+        className={cn(
+          'relative flex items-center justify-center rounded-full transition-shadow',
+          className ?? 'w-11 h-11 glass-card-heavy hover:shadow-[0_8px_20px_-8px_hsl(224_71%_37%/0.35)]'
+        )}
+        style={style}
         aria-label="Notifications"
       >
         <Bell className="w-5 h-5 text-foreground" strokeWidth={2.2} />
