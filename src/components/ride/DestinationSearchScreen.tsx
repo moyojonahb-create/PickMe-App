@@ -40,7 +40,7 @@ interface DestinationSearchScreenProps {
   /** Set while the rider is picking an address to save as Home/Work (tapped
    * the shortcut before one was ever saved) — see RideView.tsx's
    * saveFavoriteIfSetting, which every selection path funnels through. */
-  settingFavorite?: 'home' | 'work' | 'custom' | null;
+  settingFavorite?: 'home' | 'work' | null;
   onRequestSetFavorite: (key: 'home' | 'work') => void;
 }
 
@@ -187,9 +187,7 @@ export default function DestinationSearchScreen({
           </button>
           <h1 className="text-[16px] font-semibold text-primary-foreground">
             {settingFavorite
-              ? settingFavorite === 'custom'
-                ? 'Search for a place to save'
-                : `Search for your ${settingFavorite === 'home' ? 'Home' : 'Work'} address`
+              ? `Search for your ${settingFavorite === 'home' ? 'Home' : 'Work'} address`
               : activeField === 'pickup' ? 'Set pickup' : 'Set destination'}
           </h1>
         </div>

@@ -29,7 +29,6 @@ import { useToast } from '@/hooks/use-toast';
 import { useTownPricing, calculateRecommendedFare, formatFare } from '@/hooks/useTownPricing';
 import { useStudentDiscountAvailable } from '@/hooks/useStudentProfile';
 
-import BottomNavBar from '@/components/BottomNavBar';
 import { useWallet } from '@/hooks/useWallet';
 import PaymentMethodSelector from './PaymentMethodSelector';
 import { Button } from '@/components/ui/button';
@@ -59,8 +58,6 @@ import RideHomeGreeting from './RideHomeGreeting';
 import DropoffAutocomplete from './DropoffAutocomplete';
 
 import QuickShortcutsRow from './QuickShortcutsRow';
-import RecentDestinations from './RecentDestinations';
-import NearbyDriversSummary from './NearbyDriversSummary';
 import { type RideStop } from './MultiStopInput';
 import { useLandmarks as useLandmarksSearch, type Landmark } from '@/hooks/useLandmarks';
 import { useStreets, type Street } from '@/hooks/useStreets';
@@ -115,7 +112,7 @@ export default function RideView() {
   const [gpsState, setGpsState] = useState<GPSState>({ status: 'idle', coords: null, error: null });
   const [activeField, setActiveField] = useState<'pickup' | 'dropoff' | null>(null);
   const [mapPickMode, setMapPickMode] = useState(false);
-  const [settingFavorite, setSettingFavorite] = useState<'home' | 'work' | 'custom' | null>(null);
+  const [settingFavorite, setSettingFavorite] = useState<'home' | 'work' | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [proximityRadius, setProximityRadius] = useState<number | null>(null);
   const [nominatimResults, setNominatimResults] = useState<Array<{name: string;lat?: number;lng?: number;displayName: string;placeId?: string;source?: 'google' | 'osm';}>>([]);
@@ -493,7 +490,7 @@ export default function RideView() {
   const saveFavoriteIfSetting = useCallback((loc: SelectedLocation) => {
     if (!settingFavorite || !user?.id) return;
     const key = settingFavorite;
-    const label = key === 'home' ? 'Home' : key === 'work' ? 'Work' : loc.name;
+    const label = key === 'home' ? 'Home' : 'Work';
     setSettingFavorite(null);
     supabase
       .from('favorite_locations')
@@ -1165,30 +1162,32 @@ export default function RideView() {
         className="absolute left-0 right-0 z-50"
         onRibbonClick={() => setSheetExpanded((e) => !e)}
         style={{
-          bottom: showHomeContent ? 'calc(64px + env(safe-area-inset-bottom))' : 0,
-          maxHeight: showHomeContent ? (sheetExpanded ? '70vh' : '46vh') : (sheetExpanded ? '60vh' : '38vh'),
-          transition: 'max-height 0.3s cubic-bezier(0.32,0.72,0,1), bottom 0.3s cubic-bezier(0.32,0.72,0,1)',
+          bottom: 0,
+          // Idle content is fixed and compact (three row-2 tiles + row-3 buttons) —
+          // size to it exactly instead of capping by viewport height, so nothing
+          // in row 2 or row 3 ever needs a scroll to come into view.
+          maxHeight: showHomeContent ? 'none' : (sheetExpanded ? '60vh' : '38vh'),
+          transition: 'max-height 0.3s cubic-bezier(0.32,0.72,0,1)',
           paddingBottom: 'env(safe-area-inset-bottom)',
         }}>
 
         {/* Location pills row — pinned above the content, always visible, never scrolls.
-            Idle state folds the town pill into RideHomeGreeting's greeting row instead. */}
-        {!showHomeContent && (
-          <div className="shrink-0 flex items-center gap-2.5 px-4 pt-2 pb-1">
-            <TownSelectorSheet currentTown={selectedTown} onSelect={handleTownSelect} />
-            <span
-              className="ml-auto inline-flex items-center gap-1.5 shrink-0"
-              style={{ height: 38, padding: '0 12px', borderRadius: 999, ...glassSurface }}
-            >
-              <Sparkles className="w-[13px] h-[13px]" style={{ color: RIDE_TEXT }} />
-              <span className="text-[12.5px] font-medium" style={{ color: RIDE_TEXT }}>{selectedTown.radiusKm}+ km area</span>
-            </span>
-          </div>
-        )}
+            Same treatment on every screen, including idle (row 1 of the 4e layout). */}
+        <div className="shrink-0 flex items-center gap-2.5 px-4 pt-2 pb-1">
+          <TownSelectorSheet currentTown={selectedTown} onSelect={handleTownSelect} />
+          <span
+            className="ml-auto inline-flex items-center gap-1.5 shrink-0"
+            style={{ height: 38, padding: '0 12px', borderRadius: 999, ...glassSurface }}
+          >
+            <Sparkles className="w-[13px] h-[13px]" style={{ color: RIDE_TEXT }} />
+            <span className="text-[12.5px] font-medium" style={{ color: RIDE_TEXT }}>{selectedTown.radiusKm}+ km area</span>
+          </span>
+        </div>
 
         {/* Scrollable content */}
         <div className="flex-1 px-4 pt-1 pb-1.5 space-y-2 min-h-0 overflow-y-auto overscroll-contain">
-          {/* ── HOME CONTENT (idle state, before booking starts) ── */}
+          {/* ── HOME CONTENT (idle state, before booking starts) ──
+              Row 2 of the 4e layout: Where-to card + Home/Work tiles, one row, fixed height. */}
           {showHomeContent && (() => {
             const ensurePickup = () => {
               if (pickupLocation) return;
@@ -1207,36 +1206,20 @@ export default function RideView() {
               haptic('light');
               setSheetExpanded(true);
             };
-            const requestSetShortcut = (key: 'home' | 'work' | 'custom') => {
+            const requestSetShortcut = (key: 'home' | 'work') => {
               setSettingFavorite(key);
               ensurePickup();
               setActiveField('dropoff');
               setSearchQuery('');
               setSheetExpanded(true);
             };
-            const hasLocationSignal = !!(gpsState.coords || pickupLocation);
-            const closestDriverKm = nearbyDrivers[0]?.distanceKm;
-            // Same 25km/h urban-speed heuristic DriverETABanner uses for live driver ETAs.
-            const closestEtaMinutes = closestDriverKm != null ? Math.max(1, Math.round(closestDriverKm / 25 * 60)) : null;
-            const demandHint = townPricing.demand_multiplier > 1 ? 'Busy — fares higher than usual' : null;
             return (
-              <div className="space-y-4">
+              <div className="flex items-stretch gap-2" style={{ minHeight: 78 }}>
                 <RideHomeGreeting
                   name={firstName}
-                  town={selectedTown}
-                  onTownSelect={handleTownSelect}
                   onSearchClick={() => { ensurePickup(); setActiveField('dropoff'); setSearchQuery(''); setSheetExpanded(true); }}
                 />
                 <QuickShortcutsRow onSelect={pickDropoff} onRequestSet={requestSetShortcut} />
-                {hasLocationSignal && (
-                  <NearbyDriversSummary
-                    driverCount={nearbyDrivers.length}
-                    closestEtaMinutes={closestEtaMinutes}
-                    demandHint={demandHint}
-                    onSchedule={() => setSchedulePickerOpen(true)}
-                  />
-                )}
-                <RecentDestinations field="dropoff" onSelect={pickDropoff} />
               </div>
             );
           })()}
@@ -1273,11 +1256,44 @@ export default function RideView() {
           )}
         </div>
 
-        {/* ── PINNED FIND DRIVERS BUTTON ── visible at bottom whenever booking is underway.
-            The idle screen replaces this with the bottom tab bar (rendered below the panel). */}
-        {!showHomeContent && (
+        {/* ── PINNED BOTTOM ROW ── row 3 of the 4e layout when idle (schedule + Find
+            Drivers); the payment/schedule/CTA stack for every other booking state. */}
         <div className="shrink-0 px-4 pb-2 pt-1.5">
-          {pickupLocation && dropoffLocation && fareBreakdown ? (
+          {showHomeContent ? (
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setSchedulePickerOpen(true)}
+                aria-label="Schedule a ride"
+                className="shrink-0 flex items-center justify-center gap-2 active:scale-[0.97] transition-transform"
+                style={{
+                  width: 124,
+                  height: 56,
+                  borderRadius: 16,
+                  background: 'rgba(255,255,255,.55)',
+                  backdropFilter: 'blur(20px) saturate(180%)',
+                  WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+                  boxShadow: 'inset 0 .5px 0 rgba(255,255,255,.9), inset 0 0 0 1px rgba(184,17,4,.22), 0 6px 14px rgba(0,0,0,.05)',
+                }}>
+                <Calendar className="w-[18px] h-[18px]" style={{ color: RIDE_RED }} />
+                <span className="text-[14.5px] font-bold" style={{ color: RIDE_RED }}>{scheduledAt ? 'Scheduled' : 'Schedule'}</span>
+              </button>
+              {/* onClick intentionally left unwired — no destination is set yet on
+                  this screen, and what this "PickMe" CTA should do here (open
+                  search? no-op with a nudge? stay disabled?) is an open product
+                  question. */}
+              <button
+                type="button"
+                className="relative flex-1 min-w-0 flex items-center justify-center gap-2 overflow-hidden active:scale-[0.97] transition-transform"
+                style={{ height: 56, borderRadius: 16, ...redCta }}>
+                <span className="pointer-events-none absolute inset-x-0 top-0 h-1/2" style={{ background: 'linear-gradient(180deg, rgba(255,255,255,.2), rgba(255,255,255,0))' }} />
+                <span className="relative text-[16px] font-bold text-white">PickMe</span>
+                <span className="relative flex items-center justify-center rounded-full" style={{ width: 23, height: 23, background: 'rgba(255,255,255,.24)', boxShadow: 'inset 0 .5px 0 rgba(255,255,255,.5)' }}>
+                  <ChevronRight className="w-[15px] h-[15px] text-white" strokeWidth={2.6} />
+                </span>
+              </button>
+            </div>
+          ) : pickupLocation && dropoffLocation && fareBreakdown ? (
             <>
               {/* Luggage prompt — shown once, right after drop-off is picked */}
               {luggagePromptOpen && (
@@ -1366,11 +1382,7 @@ export default function RideView() {
             </button>
           )}
         </div>
-        )}
       </RideGlassPanel>
-
-      {/* Bottom tab bar — idle screen only; booking states keep the pinned CTA above. */}
-      {showHomeContent && <BottomNavBar />}
 
       {/* ═══ DESTINATION SEARCH SCREEN ═══ */}
       {activeField && !mapPickMode && (

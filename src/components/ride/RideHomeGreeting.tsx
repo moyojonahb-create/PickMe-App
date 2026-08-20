@@ -1,13 +1,10 @@
 import { motion } from 'framer-motion';
-import { Search, ChevronRight } from 'lucide-react';
-import TownSelectorSheet from './TownSelectorSheet';
-import { type TownConfig } from '@/lib/towns';
-import { RIDE_RED, RIDE_TEXT, RIDE_TEXT_2, tintBlue } from './rideGlass';
+import { Search } from 'lucide-react';
+import pickMeCarIcon from '@/assets/pickme-car-icon.png';
+import { RIDE_TEXT, RIDE_TEXT_2, RIDE_TEXT_3, tintBlue } from './rideGlass';
 
 interface RideHomeGreetingProps {
   name: string;
-  town: TownConfig;
-  onTownSelect: (town: TownConfig) => void;
   onSearchClick: () => void;
 }
 
@@ -18,38 +15,38 @@ function timeGreeting(): string {
   return 'Good evening';
 }
 
-export default function RideHomeGreeting({ name, town, onTownSelect, onSearchClick }: RideHomeGreetingProps) {
+/** The "Where to?" card — row 2's wide tile, alongside the Home/Work
+ * squares from QuickShortcutsRow. Fixed height so all three tiles align. */
+export default function RideHomeGreeting({ name, onSearchClick }: RideHomeGreetingProps) {
   return (
-    <div className="space-y-2.5">
-      <motion.div
-        initial={{ opacity: 0, y: 6 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="flex items-center justify-between gap-2 px-1"
-      >
-        <p className="text-[19px] font-bold truncate" style={{ color: RIDE_TEXT, letterSpacing: '-.02em' }}>
+    <motion.button
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      onClick={onSearchClick}
+      className="flex-1 min-w-0 h-full flex items-center gap-1 px-2 rounded-2xl active:scale-[0.98] transition-transform text-left"
+      style={{
+        ...tintBlue,
+        boxShadow: 'inset 0 0 0 .5px rgba(26,115,232,.18), 0 6px 14px rgba(0,0,0,.05)',
+      }}
+    >
+      <img src={pickMeCarIcon} alt="" className="h-10 w-auto shrink-0 object-contain" />
+      {/* min-w-0 lets this shrink inside the flex row; no truncate on the
+          greeting — the rider's name always renders in full, wrapping to a
+          second line rather than being cut off if it's ever long. */}
+      <div className="flex-1 min-w-0">
+        <p className="text-[10.5px] font-medium leading-[1.2]" style={{ color: RIDE_TEXT_2 }}>
           {timeGreeting()}{name ? `, ${name}` : ''}
         </p>
-        <TownSelectorSheet currentTown={town} onSelect={onTownSelect} />
-      </motion.div>
-      <motion.button
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.05 }}
-        onClick={onSearchClick}
-        className="w-full flex items-center gap-3 px-4 active:scale-[0.98] transition-transform text-left"
-        style={{
-          height: 56,
-          borderRadius: 16,
-          ...tintBlue,
-          boxShadow: 'inset 0 0 0 .5px rgba(26,115,232,.18), 0 6px 14px rgba(0,0,0,.05)',
-        }}
+        <p className="text-[15px] font-bold leading-[1.2]" style={{ color: RIDE_TEXT, letterSpacing: '-.01em' }}>
+          Where to?
+        </p>
+      </div>
+      <span
+        className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center"
+        style={{ background: 'rgba(26,115,232,.1)' }}
       >
-        <div className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center" style={{ background: 'rgba(184,17,4,.1)' }}>
-          <Search className="w-4 h-4" style={{ color: RIDE_RED }} />
-        </div>
-        <span className="flex-1 text-[16px] font-medium" style={{ color: RIDE_TEXT }}>Where to?</span>
-        <ChevronRight className="w-[18px] h-[18px]" style={{ color: RIDE_TEXT_2 }} />
-      </motion.button>
-    </div>
+        <Search className="w-3.5 h-3.5" style={{ color: RIDE_TEXT_3 }} />
+      </span>
+    </motion.button>
   );
 }
