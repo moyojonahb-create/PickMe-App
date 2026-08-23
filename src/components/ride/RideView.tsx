@@ -33,10 +33,10 @@ import { useWallet } from '@/hooks/useWallet';
 import PaymentMethodSelector from './PaymentMethodSelector';
 import { Button } from '@/components/ui/button';
 import {
-  Loader2, MapPin, Navigation, Crosshair, ArrowLeft, User, X, Search,
+  Loader2, MapPin, Navigation, Crosshair, ArrowLeft, User, Search,
   Star, Phone, MessageCircle, Clock, ChevronRight, Locate,
   Banknote, Wallet, Zap, CarFront, Menu, History, ContactRound,
-  Calendar, CreditCard, ChevronDown, Sparkles } from
+  Calendar, CreditCard, ChevronDown, Sparkles, UserPlus, X } from
 'lucide-react';
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle } from
@@ -64,6 +64,13 @@ import { useStreets, type Street } from '@/hooks/useStreets';
 import { DEFAULT_TOWN, detectTown, type TownConfig } from '@/lib/towns';
 import TownSelectorSheet from './TownSelectorSheet';
 import ShareTripButton from './ShareTripButton';
+import ScheduleRide from './ScheduleRide';
+import { requestNotificationPermission, showLocalNotification } from '@/lib/push';
+import ParcelBookingSheet, { type ParcelBookingData } from './ParcelBookingSheet';
+import ShareRideSheet from './ShareRideSheet';
+import NoteToDriverSheet from './NoteToDriverSheet';
+import BookingForSomeoneElse from './BookingForSomeoneElse';
+import { normalizePhoneZW } from '@/lib/region';
 import { useRiderPreferences } from '@/components/settings/RiderPreferencesSettings';
 
 // ── types ──
@@ -72,7 +79,7 @@ import IntercitySelector from './IntercitySelector';
 import { type IntercityRoute } from '@/lib/intercityRoutes';
 import { useNearbyDrivers } from '@/hooks/useNearbyDrivers';
 import GenderPreferenceToggle, { type GenderPreference } from './GenderPreferenceToggle';
-import ContactPickerSheet from './ContactPickerSheet';
+import { pickNativeContact } from '@/lib/nativeContactPicker';
 import PilotReadinessCard from '@/components/pilot/PilotReadinessCard';
 import LuggageSheet from '@/components/luggage/LuggageSheet';
 import LocationPermissionPrompt from '@/components/ride/LocationPermissionPrompt';
@@ -126,6 +133,15 @@ export default function RideView() {
   const googleSessionTokenRef = useRef<string | null>(null);
   const [reverseGeoLoading, setReverseGeoLoading] = useState(false);
   const [selectedTier, setSelectedTier] = useState<VehicleTier>('economy');
+  const [parcelSheetOpen, setParcelSheetOpen] = useState(false);
+  const [shareSheetOpen, setShareSheetOpen] = useState(false);
+  // Ride-type selection now happens BEFORE the destination is picked (tap
+  // "Where to?"/PickMe → choose a tier → then enter pickup/dropoff), not
+  // after. A tier's fare genuinely can't be computed without a route yet,
+  // so this step shows tiers with no price ("See fare next") — the same
+  // RideTierSelector re-renders with real fares once destination is known.
+  const [tierPickerOpen, setTierPickerOpen] = useState(false);
+  const [parcelSize, setParcelSize] = useState<'small' | 'medium' | 'large'>('medium');
   const [schedulePickerOpen, setSchedulePickerOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
   // Payment method row is only shown until the rider explicitly confirms a
@@ -136,7 +152,9 @@ export default function RideView() {
   const [bookForSomeoneElse, setBookForSomeoneElse] = useState(false);
   const [passengerName, setPassengerName] = useState('');
   const [passengerPhone, setPassengerPhone] = useState('');
-  const [contactPickerOpen, setContactPickerOpen] = useState(false);
+  const [thirdPartyPayer, setThirdPartyPayer] = useState<'booker' | 'passenger'>('booker');
+  const [notifyBooker, setNotifyBooker] = useState(true);
+  const [bookingForSomeoneElseOpen, setBookingForSomeoneElseOpen] = useState(false);
   const [rideStatus, setRideStatus] = useState<RideStatus>('idle');
   const [isRequesting, setIsRequesting] = useState(false);
   const [currentRideId, setCurrentRideId] = useState<string | null>(null);
@@ -149,6 +167,9 @@ export default function RideView() {
   const [luggagePromptOpen, setLuggagePromptOpen] = useState(false);
   const [luggagePromptShown, setLuggagePromptShown] = useState(false);
   const [paymentPopupOpen, setPaymentPopupOpen] = useState(false);
+  const [riderNote, setRiderNote] = useState('');
+  const [noteReuseEveryTrip, setNoteReuseEveryTrip] = useState(false);
+  const [noteSheetOpen, setNoteSheetOpen] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
   const [sheetExpanded, setSheetExpanded] = useState(false);
@@ -193,17 +214,19 @@ export default function RideView() {
     }
   }, []);
 
-  // One-time luggage prompt as soon as a drop-off is chosen for this booking
+  // One-time luggage prompt as soon as a drop-off is chosen for this booking.
+  // Never fires for Parcel — a parcel is not a passenger, so "travelling
+  // with luggage?" doesn't apply.
   useEffect(() => {
-    if (dropoffLocation && !luggagePromptShown) {
+    if (dropoffLocation && !luggagePromptShown && selectedTier !== 'parcel') {
       setLuggagePromptShown(true);
       setLuggagePromptOpen(true);
     }
-    if (!dropoffLocation) {
+    if (!dropoffLocation || selectedTier === 'parcel') {
       setLuggagePromptShown(false);
       setLuggagePromptOpen(false);
     }
-  }, [dropoffLocation, luggagePromptShown]);
+  }, [dropoffLocation, luggagePromptShown, selectedTier]);
 
   // Check the browser's actual permission state before ever touching
   // navigator.geolocation, so a first-time visitor sees our explicit
@@ -238,9 +261,12 @@ export default function RideView() {
   // 'granted' fetches location immediately; 'denied' fetches too (the
   // browser fails instantly with no dialog) purely so gpsState flips to
   // 'denied' and the existing GpsPermissionBanner + retry takes over.
+  // setPickup: false — this is a passive background fetch, not a rider tap,
+  // so it must only centre the map/detect the town, never silently fill in
+  // a pickup and knock the rider off the "Where to?" home screen.
   useEffect(() => {
     if ((gpsPermissionState === 'granted' || gpsPermissionState === 'denied') && gpsState.status === 'idle') {
-      handleUseMyLocation(true);
+      handleUseMyLocation(true, false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gpsPermissionState]);
@@ -262,10 +288,12 @@ export default function RideView() {
     (async () => {
       const { data } = await supabase
         .from('profiles')
-        .select('full_name')
+        .select('full_name, default_ride_note')
         .eq('user_id', user.id)
         .maybeSingle();
-      if (!cancelled && data?.full_name) setProfileName(data.full_name);
+      if (cancelled) return;
+      if (data?.full_name) setProfileName(data.full_name);
+      if (data?.default_ride_note) { setRiderNote(data.default_ride_note); setNoteReuseEveryTrip(true); }
     })();
     return () => { cancelled = true; };
   }, [user?.id]);
@@ -373,6 +401,11 @@ export default function RideView() {
     };
   }, [fareEstimate, townPricing, passengerCount, rideStops, studentDiscountAvailable]);
 
+  // Larger packages take up more of a driver's boot and are worth more to
+  // carry — a flat surcharge on top of the same distance-derived base every
+  // size shares, not a separate fare model.
+  const PARCEL_SIZE_SURCHARGE: Record<'small' | 'medium' | 'large', number> = { small: 0, medium: 0.5, large: 1.5 };
+
   // Ride tier list — Economy is the real priced fare (fareBreakdown); Share and
   // Parcel are derived client-side from the same base numbers, same pattern the
   // app already uses to build fareBreakdown itself. Their fare is sent as-is in
@@ -380,17 +413,31 @@ export default function RideView() {
   const rideTierOptions: RideTierOption[] = useMemo(() => {
     if (!fareBreakdown || !fareEstimate) return [];
     const economyPrice = fareBreakdown.totalFare;
-    const sharePrice = Math.max(economyPrice + 2, economyPrice * 1.4);
-    const parcelPrice = Math.max(fareBreakdown.baseFare, fareBreakdown.baseFare + fareBreakdown.distanceFare * 0.6);
+    // Was Math.max(economy + 2, economy * 1.4) — priced ABOVE Economy while
+    // badged "Save more" (a $5 economy trip came out at $7). Share only
+    // makes sense as a real discount: 30% off, matching the 4s mockup's
+    // $5.00 → $3.50 example exactly, floored at the town's base fare so it
+    // never undercuts the minimum any trip is allowed to cost.
+    const sharePrice = Math.max(economyPrice * 0.7, fareBreakdown.baseFare);
+    const parcelBasePrice = Math.max(fareBreakdown.baseFare, fareBreakdown.baseFare + fareBreakdown.distanceFare * 0.6);
+    const parcelPrice = parcelBasePrice + PARCEL_SIZE_SURCHARGE[parcelSize];
     const etaMinutes = Math.max(1, Math.round(fareEstimate.durationMinutes));
     return [
       { id: 'economy', name: 'Economy', capacity: 4, etaMinutes, price: economyPrice, badge: 'Fast pickup', badgeVariant: 'primary' },
       { id: 'share', name: 'Share Ride', capacity: 4, etaMinutes: etaMinutes + 2, price: sharePrice, badge: 'Save more', badgeVariant: 'accent' },
       { id: 'parcel', name: 'Parcel', capacity: 1, etaMinutes: Math.max(etaMinutes, 10), price: parcelPrice, badge: 'Send anything', badgeVariant: 'accent' },
     ];
-  }, [fareBreakdown, fareEstimate]);
+  }, [fareBreakdown, fareEstimate, parcelSize]);
 
   const selectedTierPrice = rideTierOptions.find((t) => t.id === selectedTier)?.price ?? fareBreakdown?.totalFare ?? 0;
+
+  // Pre-destination tier picker — same three tiers, no fare/ETA yet (both
+  // need a real route). Never fabricate a number here.
+  const rideTierOptionsNoFare: RideTierOption[] = useMemo(() => [
+    { id: 'economy', name: 'Economy', capacity: 4, etaMinutes: null, price: null, badge: 'Fast pickup', badgeVariant: 'primary' },
+    { id: 'share', name: 'Share Ride', capacity: 4, etaMinutes: null, price: null, badge: 'Save more', badgeVariant: 'accent' },
+    { id: 'parcel', name: 'Parcel', capacity: 1, etaMinutes: null, price: null, badge: 'Send anything', badgeVariant: 'accent' },
+  ], []);
 
   const handleSelectTier = (id: RideTierId) => {
     setSelectedTier(id);
@@ -399,11 +446,13 @@ export default function RideView() {
   };
 
   // ── handlers ──
-  const applyPosition = useCallback(async (pos: GeolocationPosition, reverseGeocode: boolean) => {
+  const applyPosition = useCallback(async (pos: GeolocationPosition, reverseGeocode: boolean, setPickup = true) => {
     const c = { lat: pos.coords.latitude, lng: pos.coords.longitude };
     setGpsState({ status: 'success', coords: c, error: null });
-    setPickupLocation((prev) => prev && prev.name !== 'My location' ? prev : { name: 'My location', lat: c.lat, lng: c.lng });
-    setActiveField(null);
+    if (setPickup) {
+      setPickupLocation((prev) => prev && prev.name !== 'My location' ? prev : { name: 'My location', lat: c.lat, lng: c.lng });
+      setActiveField(null);
+    }
 
     // Use detected town
     const detected = detectTown(c.lat, c.lng);
@@ -414,7 +463,7 @@ export default function RideView() {
     try {
       const result = await reverseZW(c.lat, c.lng);
       const name = result?.name || result?.display_name?.split(',')[0] || 'My location';
-      setPickupLocation({ name, lat: c.lat, lng: c.lng });
+      if (setPickup) setPickupLocation({ name, lat: c.lat, lng: c.lng });
     } catch (e) {
       console.error('Reverse geocode error:', e);
     }
@@ -424,8 +473,15 @@ export default function RideView() {
    * `fast` = coarse/cached fix used on mount so the map can centre almost
    * immediately (high-accuracy GPS can take several seconds on low-end
    * devices). A precise fix is requested straight after in the background.
+   *
+   * `setPickup` = false for passive/background fetches (initial mount,
+   * granting permission) — those should only centre the map and detect the
+   * town, never silently fill in a pickup and shove the rider off the
+   * "Where to?" home screen. Only an explicit rider tap (search card, a
+   * shortcut tile, or the on-screen "use my location" buttons) is allowed
+   * to set pickupLocation and advance the flow.
    */
-  const handleUseMyLocation = useCallback((fast = false) => {
+  const handleUseMyLocation = useCallback((fast = false, setPickup = true) => {
     // An explicit "use my location" ask (or the initial already-decided-
     // permission fetch, where this is a no-op since nothing's been picked
     // yet) always wins back over a manually-selected town's center. The
@@ -453,7 +509,7 @@ export default function RideView() {
 
     if (!fast) {
       navigator.geolocation.getCurrentPosition(
-        (pos) => { void applyPosition(pos, true); },
+        (pos) => { void applyPosition(pos, true, setPickup); },
         onError,
         { enableHighAccuracy: true, timeout: 10000 },
       );
@@ -462,10 +518,10 @@ export default function RideView() {
 
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        void applyPosition(pos, false);
+        void applyPosition(pos, false, setPickup);
         // Upgrade to a precise fix + street-level label once painted.
         navigator.geolocation.getCurrentPosition(
-          (precise) => { void applyPosition(precise, true); },
+          (precise) => { void applyPosition(precise, true, setPickup); },
           () => {},
           { enableHighAccuracy: true, timeout: 10000 },
         );
@@ -473,7 +529,7 @@ export default function RideView() {
       // Coarse attempt failed (or timed out) — fall back to the precise one.
       () => {
         navigator.geolocation.getCurrentPosition(
-          (pos) => { void applyPosition(pos, true); },
+          (pos) => { void applyPosition(pos, true, setPickup); },
           onError,
           { enableHighAccuracy: true, timeout: 10000 },
         );
@@ -481,6 +537,19 @@ export default function RideView() {
       { enableHighAccuracy: false, timeout: 4000, maximumAge: 60000 },
     );
   }, [applyPosition]);
+
+  // Lifted to component scope so both the home-content row (Where-to card,
+  // Home/Work tiles) and the pinned-row PickMe CTA below can share it,
+  // instead of each having their own copy of "how do we get a pickup."
+  const ensurePickup = useCallback(() => {
+    if (pickupLocation) return;
+    if (gpsState.coords) {
+      setPickupLocation({ name: 'My location', lat: gpsState.coords.lat, lng: gpsState.coords.lng });
+    } else {
+      if (gpsState.status === 'idle') handleUseMyLocation();
+      setPickupLocation({ name: `${selectedTown.name} centre`, lat: selectedTown.center.lat, lng: selectedTown.center.lng });
+    }
+  }, [pickupLocation, gpsState.coords, gpsState.status, selectedTown, handleUseMyLocation]);
 
   // Runs on every "a place was picked" path (landmark/street/nominatim
   // search results, recents, an existing Home/Work shortcut) — when the
@@ -745,18 +814,45 @@ export default function RideView() {
     } finally {setReverseGeoLoading(false);}
   }, [activeField]);
 
-  const handlePickPassengerFromContacts = () => {
-    setContactPickerOpen(true);
+  const handlePickPassengerFromContacts = async () => {
+    const result = await pickNativeContact();
+    if (result.status === 'picked') {
+      setPassengerName(result.name);
+      setPassengerPhone(result.phone);
+      haptic('light');
+      toast({ title: '✅ Contact selected', description: `${result.name} — ${result.phone}` });
+    } else if (result.status === 'unsupported') {
+      toast({ title: 'Contacts unavailable', description: 'Type the name and number in below instead.' });
+    }
   };
 
-  const handleContactSelected = (name: string, phone: string) => {
-    setPassengerName(name);
-    setPassengerPhone(phone);
-    haptic('light');
-    toast({ title: '✅ Contact selected', description: `${name} — ${phone}` });
+  // Same trip_events / event_type: 'rider_note' log RideMatching.tsx and
+  // FullScreenNavigation.tsx already read — this is the driver-visible
+  // source of truth for the note, not a column on rides.
+  const handleSaveNote = (note: string, reuseEveryTrip: boolean) => {
+    if (currentRideId && note) {
+      supabase.from('trip_events').insert([{
+        ride_id: currentRideId,
+        actor_id: user?.id ?? null,
+        event_type: 'rider_note',
+        payload: { note },
+      }] as never).then(({ error }) => {
+        if (error) console.error('Rider note insert failed:', error.message);
+      });
+    }
+    if (!user?.id) return;
+    supabase.from('profiles').update({ default_ride_note: reuseEveryTrip ? (note || null) : null } as never).eq('user_id', user.id).then(({ error }) => {
+      if (error) console.error('Saving default note failed:', error.message);
+    });
   };
 
-  const handleSendOffer = async (customFare: number) => {
+  const handleSendOffer = async (customFare: number, scheduledOverride?: Date | null) => {
+    // The schedule sheet's Confirm button calls this in the same handler
+    // that just set `scheduledAt` via setState — reading the state variable
+    // here would see the pre-update value (React batches the update to the
+    // next render), so an explicit override lets the caller pass the exact
+    // date it just picked instead of racing its own setState.
+    const effectiveScheduledAt = scheduledOverride !== undefined ? scheduledOverride : scheduledAt;
     if (!user) {setAuthMode('login');setAuthModalOpen(true);return;}
     if (!pickupLocation || !dropoffLocation || !fareEstimate) {toast({ title: 'Select pickup and destination', variant: 'destructive' });return;}
     if (paymentMethod === 'wallet' && walletBalance < customFare) {
@@ -799,11 +895,26 @@ export default function RideView() {
         payment_method: paymentMethod, vehicle_type: selectedTier,
         town_id: selectedTown?.id ?? null,
         gender_preference: genderPreference,
+        // passenger_phone deliberately NOT sent here — the backend writes
+        // it straight onto the broadly-readable rides row. It goes into
+        // ride_passenger_contacts (RLS-restricted to the rider + matched
+        // driver) via the explicit upsert below instead. passenger_name
+        // alone is fine to carry through — it's already how the driver's
+        // pre-accept request card knows this is a third-party booking.
         ...(bookForSomeoneElse && passengerName.trim() ? { passenger_name: passengerName.trim() } : {}),
-        ...(bookForSomeoneElse && passengerPhone.trim() ? { passenger_phone: passengerPhone.trim() } : {}),
-        ...(scheduledAt ? { scheduled_at: scheduledAt.toISOString() } : {})
+        ...(effectiveScheduledAt ? { scheduled_at: effectiveScheduledAt.toISOString() } : {})
       });
       if (!result.ok) throw new Error(result.error);
+
+      if (bookForSomeoneElse && passengerName.trim() && passengerPhone.trim() && result.ride.id) {
+        await supabase.from('ride_passenger_contacts').upsert([{
+          ride_id: result.ride.id,
+          passenger_name: passengerName.trim(),
+          passenger_phone: normalizePhoneZW(passengerPhone),
+          payer: thirdPartyPayer,
+          notify_booker: notifyBooker,
+        }] as never);
+      }
 
       // Record student discount usage (best-effort)
       if (studentDiscountAvailable && result.ride?.id && user?.id) {
@@ -879,7 +990,7 @@ export default function RideView() {
                     'Authorization': `Bearer ${session.access_token}`,
                   },
                   body: JSON.stringify({
-                    phone: passengerPhone.trim(),
+                    phone: normalizePhoneZW(passengerPhone),
                     bookerName,
                     pickup: pickupLocation!.name,
                     dropoff: dropoffLocation!.name,
@@ -899,6 +1010,22 @@ export default function RideView() {
 
       setCurrentRideId(result.ride.id);
 
+      // The note has to reach the driver before they accept — logged as a
+      // trip_events row (the same source RideMatching.tsx and
+      // FullScreenNavigation.tsx already read), not a field on the ride
+      // request itself, so requestRide()/the Go backend don't need to know
+      // about it.
+      if (riderNote.trim() && result.ride.id) {
+        supabase.from('trip_events').insert([{
+          ride_id: result.ride.id,
+          actor_id: user?.id ?? null,
+          event_type: 'rider_note',
+          payload: { note: riderNote.trim() },
+        }] as never).then(({ error }) => {
+          if (error) console.error('Rider note insert failed:', error.message);
+        });
+      }
+
       // Attach luggage info if set
       if (luggageDraft && result.ride.id && user?.id) {
         supabase.from('luggage_requests').insert([{
@@ -914,13 +1041,113 @@ export default function RideView() {
       }
 
       // ⚡ Navigate instantly — the ride detail page renders map immediately
-      if (!scheduledAt) {
+      if (!effectiveScheduledAt) {
         navigate(`/ride/${result.ride.id}/matching`, { replace: true });
       } else {
         toast({ title: 'Ride scheduled!', description: 'Your ride has been scheduled for later.' });
-        setRideStatus('idle');setScheduledAt(null);setRideStops([]);
+        setRideStatus('idle');setRideStops([]);
       }
     } catch (error: unknown) {toast({ title: 'Failed to send offer', description: (error as Error).message, variant: 'destructive' });setRideStatus('idle');} finally {setIsRequesting(false);}
+  };
+
+  const handleSendParcelOffer = async (data: ParcelBookingData) => {
+    if (!user) { setAuthMode('login'); setAuthModalOpen(true); return; }
+    if (!pickupLocation || !dropoffLocation || !fareEstimate) { toast({ title: 'Select pickup and destination', variant: 'destructive' }); return; }
+    const parcelFare = rideTierOptions.find((t) => t.id === 'parcel')?.price ?? selectedTierPrice;
+    if (paymentMethod === 'wallet' && walletBalance < parcelFare) {
+      toast({
+        title: 'Insufficient wallet balance',
+        description: `You need $${parcelFare.toFixed(2)} but only have $${walletBalance.toFixed(2)}. Please top up or select Cash Payment.`,
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    haptic('medium');
+    setIsRequesting(true);
+    setRideStatus('searching');
+    try {
+      const result = await requestRide({
+        pickup_address: pickupLocation.name, pickup_lat: pickupLocation.lat, pickup_lng: pickupLocation.lng,
+        dropoff_address: dropoffLocation.name, dropoff_lat: dropoffLocation.lat, dropoff_lng: dropoffLocation.lng,
+        distance_km: fareEstimate.distanceKm, duration_minutes: fareEstimate.durationMinutes,
+        fare: parcelFare,
+        route_polyline: routeData?.geometry || null,
+        passenger_count: 1,
+        payment_method: paymentMethod, vehicle_type: 'parcel',
+        town_id: selectedTown?.id ?? null,
+        gender_preference: 'any',
+      });
+      if (!result.ok) throw new Error(result.error);
+      const rideId = result.ride.id;
+      setCurrentRideId(rideId);
+
+      const recipientPhone = normalizePhoneZW(data.recipientPhone);
+
+      // Judging fields (size/note/who-pays/photo) are openly readable so a
+      // browsing driver can decide whether to accept before matching — only
+      // the recipient's phone lives in the separate, matched-only table.
+      await supabase.from('ride_parcel_details').insert([{
+        ride_id: rideId,
+        package_size: data.packageSize,
+        recipient_name: data.recipientName.trim(),
+        delivery_note: data.deliveryNote.trim() || null,
+        who_pays: data.whoPays,
+        photo_path: data.photoPath,
+      }] as never);
+      await supabase.from('ride_parcel_contacts').insert([{
+        ride_id: rideId,
+        recipient_phone: recipientPhone,
+      }] as never);
+
+      // Best-effort SMS — the recipient isn't an app user, SMS is the only
+      // channel that reaches them. Never blocks the booking on failure.
+      supabase.auth.getSession().then(({ data: sessionData }) => {
+        const token = sessionData.session?.access_token;
+        if (!token) return;
+        const bookerName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Someone';
+        fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/sms-invite`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            phone: recipientPhone,
+            messageType: 'parcel_booked',
+            bookerName,
+            pickup: pickupLocation.name,
+            dropoff: dropoffLocation.name,
+          }),
+        }).catch(() => {});
+      }).catch(() => {});
+
+      setParcelSheetOpen(false);
+      navigate(`/ride/${rideId}/matching`, { replace: true });
+    } catch (error: unknown) {
+      toast({ title: 'Failed to send parcel', description: (error as Error).message, variant: 'destructive' });
+      setRideStatus('idle');
+    } finally {
+      setIsRequesting(false);
+    }
+  };
+
+  const handleScheduleConfirm = (date: Date, remindMe: boolean) => {
+    setScheduledAt(date);
+    setSchedulePickerOpen(false);
+    if (remindMe) {
+      requestNotificationPermission().then((granted) => {
+        if (!granted) return;
+        const delay = date.getTime() - 30 * 60 * 1000 - Date.now();
+        // Best-effort only: a plain in-tab timer, not a server-scheduled
+        // push — it's lost if the tab/app closes before it fires. There's
+        // no backend job yet that could deliver this reliably hours later;
+        // see the scheduled-dispatch gap noted alongside this feature.
+        if (delay > 0) {
+          setTimeout(() => {
+            showLocalNotification('Ride reminder', 'Your scheduled ride is in 30 minutes.');
+          }, delay);
+        }
+      });
+    }
+    void handleSendOffer(selectedTierPrice, date);
   };
 
   const handleAcceptOffer = async (offerId: string) => {
@@ -1161,6 +1388,7 @@ export default function RideView() {
       <RideGlassPanel
         className="absolute left-0 right-0 z-50"
         onRibbonClick={() => setSheetExpanded((e) => !e)}
+        handleWidth={showHomeContent ? 140 : undefined}
         style={{
           bottom: 0,
           // Idle content is fixed and compact (three row-2 tiles + row-3 buttons) —
@@ -1177,7 +1405,7 @@ export default function RideView() {
           <TownSelectorSheet currentTown={selectedTown} onSelect={handleTownSelect} />
           <span
             className="ml-auto inline-flex items-center gap-1.5 shrink-0"
-            style={{ height: 38, padding: '0 12px', borderRadius: 999, ...glassSurface }}
+            style={{ height: 36, padding: '0 12px', borderRadius: 999, ...glassSurface }}
           >
             <Sparkles className="w-[13px] h-[13px]" style={{ color: RIDE_TEXT }} />
             <span className="text-[12.5px] font-medium" style={{ color: RIDE_TEXT }}>{selectedTown.radiusKm}+ km area</span>
@@ -1185,19 +1413,13 @@ export default function RideView() {
         </div>
 
         {/* Scrollable content */}
-        <div className="flex-1 px-4 pt-1 pb-1.5 space-y-2 min-h-0 overflow-y-auto overscroll-contain">
+        <div
+          className="flex-1 px-4 pt-1 pb-1.5 space-y-2 min-h-0 overflow-y-auto overscroll-contain"
+          style={showHomeContent ? { paddingBottom: 4 } : undefined}
+        >
           {/* ── HOME CONTENT (idle state, before booking starts) ──
               Row 2 of the 4e layout: Where-to card + Home/Work tiles, one row, fixed height. */}
-          {showHomeContent && (() => {
-            const ensurePickup = () => {
-              if (pickupLocation) return;
-              if (gpsState.coords) {
-                setPickupLocation({ name: 'My location', lat: gpsState.coords.lat, lng: gpsState.coords.lng });
-              } else {
-                if (gpsState.status === 'idle') handleUseMyLocation();
-                setPickupLocation({ name: `${selectedTown.name} centre`, lat: selectedTown.center.lat, lng: selectedTown.center.lng });
-              }
-            };
+          {showHomeContent && !tierPickerOpen && (() => {
             const pickDropoff = (loc: { name: string; lat: number; lng: number }) => {
               ensurePickup();
               setDropoffLocation(loc);
@@ -1214,15 +1436,49 @@ export default function RideView() {
               setSheetExpanded(true);
             };
             return (
-              <div className="flex items-stretch gap-2" style={{ minHeight: 78 }}>
+              <div className="flex items-center gap-2" style={{ height: 62 }}>
                 <RideHomeGreeting
                   name={firstName}
-                  onSearchClick={() => { ensurePickup(); setActiveField('dropoff'); setSearchQuery(''); setSheetExpanded(true); }}
+                  onSearchClick={() => setTierPickerOpen(true)}
                 />
                 <QuickShortcutsRow onSelect={pickDropoff} onRequestSet={requestSetShortcut} />
               </div>
             );
           })()}
+
+          {/* ── RIDE TYPE PICKER (idle state, before destination is known) ──
+              Choosing a tier here just records the choice and moves on to
+              destination entry; RideTierSelector re-renders with real fares
+              once pickup/dropoff (and so a route) exist, below. */}
+          {showHomeContent && tierPickerOpen && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between px-1">
+                <p className="text-[13px] font-bold" style={{ color: RIDE_TEXT }}>Choose a ride</p>
+                <button
+                  type="button"
+                  onClick={() => setTierPickerOpen(false)}
+                  aria-label="Close"
+                  className="flex items-center justify-center rounded-full active:scale-90 transition-transform"
+                  style={{ width: 28, height: 28, background: 'rgba(17,17,17,.06)' }}
+                >
+                  <X className="w-3.5 h-3.5" style={{ color: RIDE_TEXT }} />
+                </button>
+              </div>
+              <RideTierSelector
+                options={rideTierOptionsNoFare}
+                selected={selectedTier}
+                onSelect={(id) => {
+                  handleSelectTier(id);
+                  setTierPickerOpen(false);
+                  ensurePickup();
+                  setActiveField('dropoff');
+                  setSearchQuery('');
+                  setSheetExpanded(true);
+                }}
+                currencySymbol={fareBreakdown?.sym ?? '$'}
+              />
+            </div>
+          )}
 
           {/* Service type indicator */}
           {serviceType !== 'ride' &&
@@ -1258,34 +1514,28 @@ export default function RideView() {
 
         {/* ── PINNED BOTTOM ROW ── row 3 of the 4e layout when idle (schedule + Find
             Drivers); the payment/schedule/CTA stack for every other booking state. */}
-        <div className="shrink-0 px-4 pb-2 pt-1.5">
+        <div
+          className="shrink-0 px-4 pb-2 pt-1.5"
+          style={showHomeContent ? { paddingTop: 4 } : undefined}
+        >
           {showHomeContent ? (
             <div className="flex items-center gap-3">
               <button
                 type="button"
                 onClick={() => setSchedulePickerOpen(true)}
-                aria-label="Schedule a ride"
-                className="shrink-0 flex items-center justify-center gap-2 active:scale-[0.97] transition-transform"
-                style={{
-                  width: 124,
-                  height: 56,
-                  borderRadius: 16,
-                  background: 'rgba(255,255,255,.55)',
-                  backdropFilter: 'blur(20px) saturate(180%)',
-                  WebkitBackdropFilter: 'blur(20px) saturate(180%)',
-                  boxShadow: 'inset 0 .5px 0 rgba(255,255,255,.9), inset 0 0 0 1px rgba(184,17,4,.22), 0 6px 14px rgba(0,0,0,.05)',
-                }}>
+                aria-label={scheduledAt ? 'Scheduled ride' : 'Schedule a ride'}
+                className="shrink-0 flex items-center justify-center active:scale-95 transition-transform"
+                style={{ width: 44, height: 44, borderRadius: 16, ...glassSurface }}>
                 <Calendar className="w-[18px] h-[18px]" style={{ color: RIDE_RED }} />
-                <span className="text-[14.5px] font-bold" style={{ color: RIDE_RED }}>{scheduledAt ? 'Scheduled' : 'Schedule'}</span>
               </button>
-              {/* onClick intentionally left unwired — no destination is set yet on
-                  this screen, and what this "PickMe" CTA should do here (open
-                  search? no-op with a nudge? stay disabled?) is an open product
-                  question. */}
+              {/* Same "start booking" action as tapping the Where-to card
+                  above — this is the idle screen's primary CTA, not a
+                  decorative brand mark, so it needs to actually do that. */}
               <button
                 type="button"
+                onClick={() => setTierPickerOpen(true)}
                 className="relative flex-1 min-w-0 flex items-center justify-center gap-2 overflow-hidden active:scale-[0.97] transition-transform"
-                style={{ height: 56, borderRadius: 16, ...redCta }}>
+                style={{ height: 44, borderRadius: 16, ...redCta }}>
                 <span className="pointer-events-none absolute inset-x-0 top-0 h-1/2" style={{ background: 'linear-gradient(180deg, rgba(255,255,255,.2), rgba(255,255,255,0))' }} />
                 <span className="relative text-[16px] font-bold text-white">PickMe</span>
                 <span className="relative flex items-center justify-center rounded-full" style={{ width: 23, height: 23, background: 'rgba(255,255,255,.24)', boxShadow: 'inset 0 .5px 0 rgba(255,255,255,.5)' }}>
@@ -1325,26 +1575,64 @@ export default function RideView() {
                 <ChevronRight className="w-[17px] h-[17px]" style={{ color: RIDE_TEXT_2 }} />
               </button>
 
-              <div className="flex items-center gap-3">
+              {selectedTier !== 'parcel' && (
                 <button
                   type="button"
-                  onClick={() => setSchedulePickerOpen(true)}
-                  className="shrink-0 flex items-center justify-center gap-2 active:scale-[0.97] transition-transform"
-                  style={{
-                    width: 132,
-                    height: 48,
-                    borderRadius: 15,
-                    background: 'rgba(255,255,255,.55)',
-                    backdropFilter: 'blur(20px) saturate(180%)',
-                    WebkitBackdropFilter: 'blur(20px) saturate(180%)',
-                    boxShadow: 'inset 0 .5px 0 rgba(255,255,255,.9), inset 0 0 0 1px rgba(184,17,4,.22), 0 6px 14px rgba(0,0,0,.05)',
-                  }}>
-                  <Calendar className="w-[18px] h-[18px]" style={{ color: RIDE_RED }} />
-                  <span className="text-[14.5px] font-bold" style={{ color: RIDE_RED }}>{scheduledAt ? 'Scheduled' : 'Schedule'}</span>
+                  onClick={() => setBookingForSomeoneElseOpen(true)}
+                  className="w-full flex items-center gap-2.5 px-3.5 mb-2.5 active:opacity-80 transition-opacity"
+                  style={{ height: 44, borderRadius: 15, ...glassSurface }}>
+                  <UserPlus className="w-[18px] h-[18px]" style={{ color: RIDE_TEXT }} />
+                  <span className="flex-1 text-left text-[14.5px] font-medium" style={{ color: RIDE_TEXT }}>
+                    {bookForSomeoneElse && passengerName.trim() ? `Riding: ${passengerName.trim().split(' ')[0]}` : 'Who is riding? · Myself'}
+                  </span>
+                  <ChevronRight className="w-[17px] h-[17px]" style={{ color: RIDE_TEXT_2 }} />
                 </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setNoteSheetOpen(true)}
+                className="w-full flex items-center gap-2.5 px-3.5 mb-2.5 active:opacity-80 transition-opacity"
+                style={{ height: 44, borderRadius: 15, ...glassSurface }}>
+                <MessageCircle className="w-[18px] h-[18px]" style={{ color: RIDE_TEXT }} />
+                <span className="flex-1 text-left text-[14.5px] font-medium truncate" style={{ color: RIDE_TEXT }}>
+                  {riderNote.trim() ? riderNote.trim() : 'Note for your driver · optional'}
+                </span>
+                <ChevronRight className="w-[17px] h-[17px]" style={{ color: RIDE_TEXT_2 }} />
+              </button>
+
+              <div className="flex items-center gap-3">
+                {/* Scheduling a Parcel isn't supported yet — ScheduleRide's
+                    confirm goes straight to handleSendOffer, which has no
+                    idea about recipient/size/photo, so a scheduled parcel
+                    would silently skip ParcelBookingSheet entirely. Hiding
+                    this here until scheduled parcels have their own path,
+                    rather than letting that gap through. */}
+                {selectedTier !== 'parcel' && (
+                  <button
+                    type="button"
+                    onClick={() => setSchedulePickerOpen(true)}
+                    className="shrink-0 flex items-center justify-center gap-2 active:scale-[0.97] transition-transform"
+                    style={{
+                      width: 132,
+                      height: 48,
+                      borderRadius: 15,
+                      background: 'rgba(255,255,255,.55)',
+                      backdropFilter: 'blur(20px) saturate(180%)',
+                      WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+                      boxShadow: 'inset 0 .5px 0 rgba(255,255,255,.9), inset 0 0 0 1px rgba(184,17,4,.22), 0 6px 14px rgba(0,0,0,.05)',
+                    }}>
+                    <Calendar className="w-[18px] h-[18px]" style={{ color: RIDE_RED }} />
+                    <span className="text-[14.5px] font-bold" style={{ color: RIDE_RED }}>{scheduledAt ? 'Scheduled' : 'Schedule'}</span>
+                  </button>
+                )}
                 <button
                   type="button"
-                  onClick={() => handleSendOffer(selectedTierPrice)}
+                  onClick={() => {
+                    if (selectedTier === 'parcel') { setParcelSheetOpen(true); return; }
+                    if (selectedTier === 'share') { setShareSheetOpen(true); return; }
+                    handleSendOffer(selectedTierPrice);
+                  }}
                   disabled={isRequesting}
                   className="relative flex-1 flex items-center justify-center gap-2 overflow-hidden active:scale-[0.97] transition-transform disabled:opacity-70"
                   style={{ height: 48, borderRadius: 15, ...redCta }}>
@@ -1424,75 +1712,95 @@ export default function RideView() {
       <AuthModalWrapper isOpen={authModalOpen} onClose={() => setAuthModalOpen(false)} mode={authMode} onSwitchMode={() => setAuthMode((m) => m === 'login' ? 'signup' : 'login')} />
       {gpsPermissionState === 'prompt' && !locationPromptDismissed && gpsState.status === 'idle' && (
         <LocationPermissionPrompt
-          onAllow={() => { setLocationPromptDismissed(true); handleUseMyLocation(true); }}
+          onAllow={() => { setLocationPromptDismissed(true); handleUseMyLocation(true, false); }}
           onDismiss={() => setLocationPromptDismissed(true)}
         />
       )}
-      <ContactPickerSheet open={contactPickerOpen} onClose={() => setContactPickerOpen(false)} onSelect={handleContactSelected} />
       <LuggageSheet
         open={luggageOpen}
         onClose={() => { setLuggageOpen(false); setPaymentPopupOpen(true); }}
         initial={luggageDraft}
         onSave={setLuggageDraft}
       />
-      <Sheet open={paymentPopupOpen} onOpenChange={setPaymentPopupOpen}>
-        <SheetContent side="bottom" className="rounded-t-3xl border-t border-border/40 p-4" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 16px)' }}>
-          <SheetHeader className="mb-3">
-            <SheetTitle>Choose payment</SheetTitle>
-          </SheetHeader>
-          {/* onClick closes on the raw DOM click (fires even when the tapped
-              method is already selected, since PaymentMethodSelector's own
-              onSelect no-ops in that case) — a disabled Wallet tap never
-              bubbles a click at all, so it won't close the sheet. */}
-          <div onClick={() => setPaymentPopupOpen(false)}>
-            <PaymentMethodSelector
-              selected={paymentMethod}
-              onSelect={(method) => { setPaymentMethod(method); setPaymentMethodConfirmed(true); }}
-              walletBalance={walletBalance}
-              estimatedFare={fareBreakdown?.totalFare ?? 0}
-            />
-          </div>
-        </SheetContent>
-      </Sheet>
-      <Sheet open={schedulePickerOpen} onOpenChange={setSchedulePickerOpen}>
-        <SheetContent side="bottom" className="rounded-t-3xl border-t border-border/40 p-4" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 16px)' }}>
-          <SheetHeader className="mb-3">
-            <SheetTitle>Schedule ride</SheetTitle>
-          </SheetHeader>
-          {scheduledAt ? (
-            <div className="flex items-center justify-between bg-primary/10 rounded-2xl p-3">
-              <div className="flex items-center gap-2">
-                <Calendar className="h-4 w-4 text-primary" />
-                <div>
-                  <p className="text-sm font-semibold text-foreground">Scheduled ride</p>
-                  <p className="text-xs text-muted-foreground">
-                    {scheduledAt.toLocaleDateString()} at {scheduledAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </p>
-                </div>
-              </div>
-              <button onClick={() => { setScheduledAt(null); setSchedulePickerOpen(false); }} className="p-1.5 hover:bg-muted rounded-full transition-colors">
-                <X className="h-4 w-4 text-muted-foreground" />
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <input
-                type="datetime-local"
-                min={new Date(Date.now() + 30 * 60 * 1000).toISOString().slice(0, 16)}
-                max={new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 16)}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  if (!val) return;
-                  const d = new Date(val);
-                  if (d > new Date()) { setScheduledAt(d); setSchedulePickerOpen(false); }
-                }}
-                className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground text-sm"
-              />
-              <p className="text-xs text-muted-foreground">Schedule up to 7 days in advance</p>
-            </div>
-          )}
-        </SheetContent>
-      </Sheet>
+      <PaymentMethodSelector
+        open={paymentPopupOpen}
+        onClose={() => setPaymentPopupOpen(false)}
+        selected={paymentMethod}
+        onSelect={setPaymentMethod}
+        onConfirm={() => setPaymentMethodConfirmed(true)}
+        walletBalance={walletBalance}
+        estimatedFare={fareBreakdown?.totalFare ?? 0}
+        tierLabel={fareBreakdown ? `${RIDE_TIER_LABELS[selectedTier]} · ${fareBreakdown.fmt(selectedTierPrice)}` : RIDE_TIER_LABELS[selectedTier]}
+        restrictToCash={bookForSomeoneElse && thirdPartyPayer === 'passenger'}
+        restrictReason={bookForSomeoneElse && thirdPartyPayer === 'passenger' ? `${passengerName.trim().split(' ')[0] || 'They'} pays cash on arrival — only cash works for a third-party ride` : undefined}
+      />
+      <NoteToDriverSheet
+        open={noteSheetOpen}
+        onClose={() => setNoteSheetOpen(false)}
+        note={riderNote}
+        onNoteChange={setRiderNote}
+        reuseEveryTrip={noteReuseEveryTrip}
+        onReuseEveryTripChange={setNoteReuseEveryTrip}
+        onSave={handleSaveNote}
+      />
+      <ScheduleRide
+        open={schedulePickerOpen}
+        onClose={() => setSchedulePickerOpen(false)}
+        onConfirm={handleScheduleConfirm}
+        scheduledAt={scheduledAt}
+        onCancelScheduled={() => { setScheduledAt(null); setSchedulePickerOpen(false); }}
+        destinationName={dropoffLocation?.name ?? ''}
+        tierLabel={RIDE_TIER_LABELS[selectedTier]}
+        fareLabel={fareBreakdown ? fareBreakdown.fmt(selectedTierPrice) : ''}
+      />
+      <ParcelBookingSheet
+        open={parcelSheetOpen}
+        onClose={() => setParcelSheetOpen(false)}
+        onConfirm={handleSendParcelOffer}
+        submitting={isRequesting}
+        pickupName={pickupLocation?.name ?? ''}
+        dropoffName={dropoffLocation?.name ?? ''}
+        distanceKm={fareEstimate?.distanceKm ?? 0}
+        fare={rideTierOptions.find((t) => t.id === 'parcel')?.price ?? 0}
+        currencySymbol={fareBreakdown?.sym ?? '$'}
+        paymentMethod={paymentMethod}
+        packageSize={parcelSize}
+        onPackageSizeChange={setParcelSize}
+      />
+      <ShareRideSheet
+        open={shareSheetOpen}
+        onClose={() => setShareSheetOpen(false)}
+        submitting={isRequesting}
+        shareFare={rideTierOptions.find((t) => t.id === 'share')?.price ?? 0}
+        soloFare={rideTierOptions.find((t) => t.id === 'economy')?.price ?? 0}
+        dropoffTown={dropoffLocation?.name ?? ''}
+        riderFirstName={firstName}
+        onConfirm={() => { setShareSheetOpen(false); handleSendOffer(selectedTierPrice); }}
+        onRideAlone={() => { setShareSheetOpen(false); handleSelectTier('economy'); }}
+      />
+      <BookingForSomeoneElse
+        open={bookingForSomeoneElseOpen}
+        onClose={() => setBookingForSomeoneElseOpen(false)}
+        enabled={bookForSomeoneElse}
+        onEnabledChange={setBookForSomeoneElse}
+        tierLabel={RIDE_TIER_LABELS[selectedTier]}
+        pickupName={pickupLocation?.name ?? ''}
+        dropoffName={dropoffLocation?.name ?? ''}
+        fare={selectedTierPrice}
+        currencySymbol={fareBreakdown?.sym ?? '$'}
+        paymentMethod={paymentMethod}
+        passengerName={passengerName}
+        onPassengerNameChange={setPassengerName}
+        passengerPhone={passengerPhone}
+        onPassengerPhoneChange={setPassengerPhone}
+        payer={thirdPartyPayer}
+        onPayerChange={setThirdPartyPayer}
+        notifyBooker={notifyBooker}
+        onNotifyBookerChange={setNotifyBooker}
+        submitting={isRequesting}
+        onOpenContacts={handlePickPassengerFromContacts}
+        onConfirm={() => { setBookingForSomeoneElseOpen(false); handleSendOffer(selectedTierPrice); }}
+      />
     </div>);
 
 }

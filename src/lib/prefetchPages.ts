@@ -37,8 +37,6 @@ const riderPages: Loader[] = [
   () => import("@/pages/RiderWalletPage"),
   () => import("@/pages/DeleteAccount"),
   () => import("@/pages/StudentVerificationPage"),
-  () => import("@/pages/negotiate/RiderRequestScreen"),
-  () => import("@/pages/negotiate/RiderOffersScreen"),
 ];
 
 // ─── Driver pages (only for users who have applied / been approved) ───
@@ -50,7 +48,6 @@ const driverPages: Loader[] = [
   () => import("@/pages/DriverDepositPage"),
   () => import("@/pages/DriverLeaderboard"),
   () => import("@/pages/DriverWalletPage"),
-  () => import("@/pages/negotiate/DriverRequestsScreen"),
 ];
 
 // ─── Admin pages (only for the single admin email) ───

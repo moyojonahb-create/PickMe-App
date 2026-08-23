@@ -66,8 +66,10 @@ export default function QuickShortcutsRow({ onSelect, onRequestSet }: QuickShort
     { key: 'work', label: 'Work', Icon: Briefcase, glass: workGlass, fav: workFav },
   ] as const;
 
+  // Fragment, not a wrapping div — these render as direct flex items inside
+  // RideView's row-2 flex row, alongside RideHomeGreeting's card.
   return (
-    <div className="flex gap-2 h-full">
+    <>
       {tiles.map((tile, i) => (
         <motion.button
           key={tile.key}
@@ -78,13 +80,13 @@ export default function QuickShortcutsRow({ onSelect, onRequestSet }: QuickShort
           onClick={() => tile.fav
             ? onSelect({ name: tile.fav.name, lat: tile.fav.latitude, lng: tile.fav.longitude })
             : onRequestSet(tile.key)}
-          className="w-[56px] shrink-0 flex flex-col items-center justify-center gap-1 rounded-2xl active:scale-95 transition-transform disabled:opacity-60"
-          style={tile.glass}
+          className="shrink-0 flex flex-col items-center justify-center gap-1 rounded-2xl active:scale-95 transition-transform disabled:opacity-60"
+          style={{ width: 58, height: 62, padding: 0, ...tile.glass }}
         >
           <tile.Icon className="w-5 h-5" style={{ color: RIDE_RED }} />
           <span className="text-[11px] font-semibold" style={{ color: RIDE_TEXT }}>{tile.label}</span>
         </motion.button>
       ))}
-    </div>
+    </>
   );
 }

@@ -19,6 +19,8 @@ export interface EnrichedRideRequest {
   created_at?: string;
   passenger_name?: string | null;
   passenger_phone?: string | null;
+  /** Sent with the request, before the driver accepts — see NoteToDriverSheet. */
+  rider_note?: string | null;
   passenger_gender: string | null;
   preferences: {
     quiet_ride: boolean;
@@ -27,6 +29,16 @@ export interface EnrichedRideRequest {
     hearing_impaired: boolean;
   } | null;
   hasLuggage: boolean;
+  /** Parcel rides only — recipient/size/note/who-pays/photo are openly
+   * readable (a browsing driver needs them to judge the parcel before
+   * accepting); the recipient's phone stays hidden until matched. */
+  parcel: {
+    packageSize: 'small' | 'medium' | 'large';
+    recipientName: string;
+    deliveryNote: string | null;
+    whoPays: 'sender' | 'recipient';
+    photoPath: string | null;
+  } | null;
 }
 
 /** Open ride requests enriched with the passenger's gender and preferences
@@ -41,15 +53,27 @@ export async function fetchEnrichedOpenRides(driverGender?: string | null): Prom
   const rideIds = rides.map((r) => String(r.id));
   const userIds = Array.from(new Set(rides.map((r) => String(r.user_id ?? r.rider_id ?? '')).filter(Boolean)));
 
-  const [prefsRes, luggageRes, profilesRes] = await Promise.all([
+  const [prefsRes, luggageRes, profilesRes, parcelRes, noteRes] = await Promise.all([
     supabase.from('ride_preferences').select('ride_id, quiet_ride, cool_temperature, wav_required, hearing_impaired').in('ride_id', rideIds),
     supabase.from('luggage_requests').select('ride_id').in('ride_id', rideIds),
     userIds.length > 0 ? supabase.from('profiles').select('user_id, gender').in('user_id', userIds) : Promise.resolve({ data: [] as { user_id: string; gender: string | null }[] }),
+    supabase.from('ride_parcel_details').select('ride_id, package_size, recipient_name, delivery_note, who_pays, photo_path').in('ride_id', rideIds),
+    // Same trip_events / event_type: 'rider_note' log RideMatching.tsx and
+    // FullScreenNavigation.tsx read — a driver deciding whether to accept
+    // needs the same note the rider actually sent, not a separate copy.
+    supabase.from('trip_events').select('ride_id, payload, created_at').in('ride_id', rideIds).eq('event_type', 'rider_note').order('created_at', { ascending: false }),
   ]);
 
   const prefsMap = new Map((prefsRes.data ?? []).map((p) => [p.ride_id, p]));
   const luggageSet = new Set((luggageRes.data ?? []).map((l) => l.ride_id));
   const genderMap = new Map((profilesRes.data ?? []).map((p) => [p.user_id, p.gender]));
+  const parcelMap = new Map((parcelRes.data ?? []).map((p) => [p.ride_id, p]));
+  const noteMap = new Map<string, string>();
+  for (const row of noteRes.data ?? []) {
+    if (noteMap.has(row.ride_id)) continue; // rows are newest-first — keep only the latest per ride
+    const note = (row.payload as Record<string, unknown> | null)?.note;
+    if (typeof note === 'string' && note.trim()) noteMap.set(row.ride_id, note);
+  }
 
   return rides.map((r) => {
     const row = r as unknown as Record<string, unknown>;
@@ -73,6 +97,7 @@ export async function fetchEnrichedOpenRides(driverGender?: string | null): Prom
       created_at: row.created_at ? String(row.created_at) : undefined,
       passenger_name: (row.passenger_name as string | null | undefined) ?? null,
       passenger_phone: (row.passenger_phone as string | null | undefined) ?? null,
+      rider_note: noteMap.get(String(row.id)) ?? null,
       passenger_gender: genderMap.get(userId) ?? null,
       preferences: prefs
         ? {
@@ -83,6 +108,17 @@ export async function fetchEnrichedOpenRides(driverGender?: string | null): Prom
           }
         : null,
       hasLuggage: luggageSet.has(String(row.id)),
+      parcel: (() => {
+        const p = parcelMap.get(String(row.id));
+        if (!p) return null;
+        return {
+          packageSize: p.package_size as 'small' | 'medium' | 'large',
+          recipientName: p.recipient_name,
+          deliveryNote: p.delivery_note,
+          whoPays: p.who_pays as 'sender' | 'recipient',
+          photoPath: p.photo_path,
+        };
+      })(),
     };
   });
 }

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { AlertTriangle, MessageSquare, DollarSign, Clock, Navigation, Shield, Send, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -16,6 +16,9 @@ import {
 interface DisputeFormProps {
   rideId: string;
   role?: 'rider' | 'driver';
+  /** Custom trigger element — e.g. the Safety sheet's "Report a problem"
+   * row. Falls back to the default outline button when omitted. */
+  trigger?: ReactNode;
 }
 
 const categories = [
@@ -26,7 +29,7 @@ const categories = [
   { id: 'other', label: 'Other', icon: MessageSquare, description: 'Other issue' },
 ];
 
-export default function DisputeForm({ rideId, role = 'rider' }: DisputeFormProps) {
+export default function DisputeForm({ rideId, role = 'rider', trigger }: DisputeFormProps) {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [category, setCategory] = useState<string | null>(null);
@@ -59,10 +62,12 @@ export default function DisputeForm({ rideId, role = 'rider' }: DisputeFormProps
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-1.5 text-destructive border-destructive/20">
-          <AlertTriangle className="h-3.5 w-3.5" />
-          Report Issue
-        </Button>
+        {trigger ?? (
+          <Button variant="outline" size="sm" className="gap-1.5 text-destructive border-destructive/20">
+            <AlertTriangle className="h-3.5 w-3.5" />
+            Report Issue
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent className="max-w-md">
         <DialogHeader>

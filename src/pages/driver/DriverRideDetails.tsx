@@ -1,9 +1,10 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, RotateCcw, User, Car, Bus, Package, Users } from 'lucide-react';
+import { ArrowLeft, RotateCcw, User, Car, Bus, Package, Users, Banknote, UserPlus } from 'lucide-react';
 import { toast } from 'sonner';
 import { getDriverProfile, submitOffer, defaultNightMultiplier, clampTo5 } from '@/lib/offerHelpers';
 import { fetchEnrichedOpenRides, type EnrichedRideRequest } from '@/lib/driverRideRequests';
+import { getParcelSignedUrl } from '@/lib/parcelStorage';
 import RouteIndicator from '@/components/driver/RouteIndicator';
 import PreferenceList from '@/components/driver/PreferenceList';
 import FareEditor from '@/components/driver/FareEditor';
@@ -13,6 +14,7 @@ import StickyRideActions from '@/components/driver/StickyRideActions';
 
 const VEHICLE_ICON: Record<string, typeof Car> = { economy: Car, share: Bus, parcel: Package };
 const VEHICLE_LABEL: Record<string, string> = { economy: 'Economy', share: 'Comfort', parcel: 'Parcel' };
+const PARCEL_SIZE_LABEL: Record<string, string> = { small: 'Small · fits on a lap', medium: 'Medium · boot space', large: 'Large · back seat' };
 
 function fmtUSD(n: number): string {
   return n % 1 === 0 ? `$${n}` : `$${n.toFixed(2)}`;
@@ -27,6 +29,7 @@ export default function DriverRideDetails() {
   const [fare, setFare] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [driverCoords, setDriverCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [parcelPhotoUrl, setParcelPhotoUrl] = useState<string | null>(null);
 
   const baseFare = ride?.fare ?? 0;
 
@@ -58,6 +61,14 @@ export default function DriverRideDetails() {
   }, [rideId]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    const path = ride?.parcel?.photoPath;
+    if (!path) { setParcelPhotoUrl(null); return; }
+    let cancelled = false;
+    getParcelSignedUrl(path).then((url) => { if (!cancelled) setParcelPhotoUrl(url); });
+    return () => { cancelled = true; };
+  }, [ride?.parcel?.photoPath]);
 
   const minutesAway = useMemo(() => {
     if (!driverCoords || !ride?.pickup_lat || !ride?.pickup_lon) return null;
@@ -145,33 +156,50 @@ export default function DriverRideDetails() {
 
           <div className="flex items-start justify-between gap-3">
             <RouteIndicator pickupAddress={ride.pickup_address} dropoffAddress={ride.dropoff_address} className="flex-1 min-w-0" />
-            <div className="w-28 shrink-0 space-y-2">
-              <div>
-                <p className="text-[11px] font-semibold text-muted-foreground mb-1">Passenger</p>
-                <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-foreground">
-                  <span
-                    className="w-5 h-5 rounded-full flex items-center justify-center shrink-0"
-                    style={{ background: gender === 'female' ? '#FCE7F3' : '#DBEAFE', color: gender === 'female' ? '#DB2777' : '#2563EB' }}
-                  >
-                    <User className="w-3 h-3" />
-                  </span>
-                  {gender === 'female' ? 'Female' : gender === 'male' ? 'Male' : 'Rider'}
+            {vehicleType === 'parcel' && ride.parcel ? (
+              <div className="w-32 shrink-0 space-y-1.5">
+                <p className="text-[11px] font-semibold text-muted-foreground">{PARCEL_SIZE_LABEL[ride.parcel.packageSize] ?? ride.parcel.packageSize}</p>
+                <p className="text-[12px] font-semibold text-foreground truncate">To: {ride.parcel.recipientName}</p>
+                <span className="inline-flex items-center gap-1 text-[10.5px] font-semibold text-muted-foreground">
+                  <Banknote className="w-3 h-3" />
+                  {ride.parcel.whoPays === 'sender' ? 'Sender pays' : 'Recipient pays'}
                 </span>
               </div>
-              {ride.passenger_count && ride.passenger_count > 1 && (
-                <span className="flex items-center gap-1.5 text-[12px] font-semibold text-foreground">
-                  <Users className="w-3.5 h-3.5 text-muted-foreground" />
-                  {ride.passenger_count} passengers
-                </span>
-              )}
-              <PreferenceList
-                noLuggage={!ride.hasLuggage}
-                coolTemperature={ride.preferences?.cool_temperature}
-                quietRide={ride.preferences?.quiet_ride}
-                wavRequired={ride.preferences?.wav_required}
-                hearingImpaired={ride.preferences?.hearing_impaired}
-              />
-            </div>
+            ) : (
+              <div className="w-28 shrink-0 space-y-2">
+                <div>
+                  <p className="text-[11px] font-semibold text-muted-foreground mb-1">Passenger</p>
+                  <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-foreground">
+                    <span
+                      className="w-5 h-5 rounded-full flex items-center justify-center shrink-0"
+                      style={{ background: gender === 'female' ? '#FCE7F3' : '#DBEAFE', color: gender === 'female' ? '#DB2777' : '#2563EB' }}
+                    >
+                      <User className="w-3 h-3" />
+                    </span>
+                    {gender === 'female' ? 'Female' : gender === 'male' ? 'Male' : 'Rider'}
+                  </span>
+                  {ride.passenger_name && (
+                    <p className="mt-1 flex items-center gap-1 text-[10.5px] font-semibold text-amber-700 dark:text-amber-400">
+                      <UserPlus className="w-3 h-3 shrink-0" />
+                      <span className="truncate">For {ride.passenger_name} — booked by someone else</span>
+                    </p>
+                  )}
+                </div>
+                {ride.passenger_count && ride.passenger_count > 1 && (
+                  <span className="flex items-center gap-1.5 text-[12px] font-semibold text-foreground">
+                    <Users className="w-3.5 h-3.5 text-muted-foreground" />
+                    {ride.passenger_count} passengers
+                  </span>
+                )}
+                <PreferenceList
+                  noLuggage={!ride.hasLuggage}
+                  coolTemperature={ride.preferences?.cool_temperature}
+                  quietRide={ride.preferences?.quiet_ride}
+                  wavRequired={ride.preferences?.wav_required}
+                  hearingImpaired={ride.preferences?.hearing_impaired}
+                />
+              </div>
+            )}
           </div>
         </div>
 
@@ -183,7 +211,9 @@ export default function DriverRideDetails() {
               <p className="text-[15px] font-bold text-foreground">{ride.distance_km.toFixed(1)} km</p>
             </div>
             <div className="text-right">
-              <p className="text-[11px] font-semibold text-muted-foreground">Your Fare</p>
+              <p className="text-[11px] font-semibold text-muted-foreground">
+                Your Fare · {ride.payment_method === 'wallet' ? 'Wallet' : 'Cash'}
+              </p>
               <p className="text-xl font-black text-primary">{fmtUSD(fare)}</p>
             </div>
           </div>
@@ -191,10 +221,19 @@ export default function DriverRideDetails() {
           <FareEditor baseFare={baseFare} value={fare} onInc={handleInc} onDec={handleDec} fmtUSD={fmtUSD} />
         </div>
 
+        {/* Parcel photo — proof of what's being handed over, same photo the
+            sender attached, so a driver can judge it before accepting. */}
+        {vehicleType === 'parcel' && parcelPhotoUrl && (
+          <div className="rounded-2xl border border-border bg-card p-3">
+            <p className="text-[11px] font-semibold text-muted-foreground mb-2">Photo of the parcel</p>
+            <img src={parcelPhotoUrl} alt="Parcel" className="w-full h-40 object-cover rounded-xl" />
+          </div>
+        )}
+
         {/* Additional info */}
         <div className="rounded-2xl border border-border bg-card px-4 divide-y divide-border/60">
           <LanguageRow />
-          <NotesCard note={null} />
+          <NotesCard note={ride.rider_note || (vehicleType === 'parcel' ? ride.parcel?.deliveryNote ?? null : null)} />
         </div>
       </div>
 

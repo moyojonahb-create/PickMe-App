@@ -86,11 +86,27 @@ serve(async (req) => {
       );
     }
 
+    const messageType = sanitize(body.messageType, 20) || "ride_invite";
     const name = sanitize(body.bookerName, 40) || "Someone";
     const pickupText = sanitize(body.pickup, 80) || "a nearby location";
     const dropoffText = sanitize(body.dropoff, 80) || "your destination";
 
-    const message = `🚗 ${name} has booked a Voyex ride for you!\n\nFrom: ${pickupText}\nTo: ${dropoffText}\n\nDownload the app to track your ride: https://voyexride.lovable.app`;
+    let message: string;
+    if (messageType === "parcel_booked") {
+      message = `📦 ${name} is sending you a parcel via PickMe!\n\nFrom: ${pickupText}\nTo: ${dropoffText}\n\nWe'll text you again once a driver is on the way.`;
+    } else if (messageType === "parcel_matched") {
+      const driverName = sanitize(body.driverName, 40) || "Your driver";
+      const plate = sanitize(body.plate, 20);
+      const etaMinutes = sanitize(body.etaMinutes, 6);
+      message = `📦 Your PickMe parcel from ${name} is on the way!\n\nDriver: ${driverName}${plate ? ` · ${plate}` : ""}${etaMinutes ? `\nETA: ${etaMinutes} min` : ""}`;
+    } else if (messageType === "third_party_matched") {
+      const driverName = sanitize(body.driverName, 40) || "Your driver";
+      const plate = sanitize(body.plate, 20);
+      const etaMinutes = sanitize(body.etaMinutes, 6);
+      message = `🚗 Your PickMe ride booked by ${name} is on the way!\n\nDriver: ${driverName}${plate ? ` · ${plate}` : ""}${etaMinutes ? `\nETA: ${etaMinutes} min` : ""}`;
+    } else {
+      message = `🚗 ${name} has booked a PickMe ride for you!\n\nFrom: ${pickupText}\nTo: ${dropoffText}`;
+    }
 
     const response = await fetch(
       `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`,

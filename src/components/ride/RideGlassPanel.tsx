@@ -8,6 +8,13 @@ interface RideGlassPanelProps {
   onRibbonClick?: () => void;
   className?: string;
   style?: CSSProperties;
+  /** White grab-handle pill width. Defaults to 44px (ride-selection /
+   * finding-drivers screens); the idle screen's mockup measures 140px. */
+  handleWidth?: number;
+  /** Override/extend the frosted panel's own background/blur/shadow — e.g.
+   * the schedule-ride modal sheet uses a more opaque fill than the shared
+   * glassPanel token. Merged on top of glassPanel, not replacing it. */
+  panelStyle?: CSSProperties;
 }
 
 /**
@@ -25,6 +32,8 @@ export default function RideGlassPanel({
   onRibbonClick,
   className,
   style,
+  handleWidth = 44,
+  panelStyle,
 }: RideGlassPanelProps) {
   return (
     <div
@@ -61,7 +70,7 @@ export default function RideGlassPanel({
       >
         <span
           className="block rounded-full"
-          style={{ width: 44, height: 5, background: '#FFFFFF', boxShadow: '0 1px 2px rgba(0,0,0,.18)' }}
+          style={{ width: handleWidth, height: 5, background: '#FFFFFF', boxShadow: '0 1px 2px rgba(0,0,0,.18)' }}
         />
       </button>
 
@@ -71,6 +80,7 @@ export default function RideGlassPanel({
         className="relative z-10 flex-1 min-h-0 flex flex-col overflow-hidden"
         style={{
           ...glassPanel,
+          ...panelStyle,
           marginTop: 16,
           borderTopLeftRadius: 22,
           borderTopRightRadius: 22,

@@ -1316,6 +1316,9 @@ export type Database = {
           avatar_url: string | null
           cool_temperature: boolean
           created_at: string
+          default_ride_note: string | null
+          emergency_contact_name: string | null
+          emergency_contact_phone: string | null
           full_name: string | null
           gender: string | null
           gender_preference: string
@@ -1333,6 +1336,9 @@ export type Database = {
           avatar_url?: string | null
           cool_temperature?: boolean
           created_at?: string
+          default_ride_note?: string | null
+          emergency_contact_name?: string | null
+          emergency_contact_phone?: string | null
           full_name?: string | null
           gender?: string | null
           gender_preference?: string
@@ -1350,6 +1356,9 @@ export type Database = {
           avatar_url?: string | null
           cool_temperature?: boolean
           created_at?: string
+          default_ride_note?: string | null
+          emergency_contact_name?: string | null
+          emergency_contact_phone?: string | null
           full_name?: string | null
           gender?: string | null
           gender_preference?: string
@@ -1632,25 +1641,60 @@ export type Database = {
           },
         ]
       }
+      ride_passenger_ratings: {
+        Row: {
+          created_at: string
+          driver_id: string
+          rating: number
+          ride_id: string
+        }
+        Insert: {
+          created_at?: string
+          driver_id: string
+          rating: number
+          ride_id: string
+        }
+        Update: {
+          created_at?: string
+          driver_id?: string
+          rating?: number
+          ride_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ride_passenger_ratings_ride_id_fkey"
+            columns: ["ride_id"]
+            isOneToOne: true
+            referencedRelation: "rides"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ride_passenger_contacts: {
         Row: {
           created_at: string
+          notify_booker: boolean
           passenger_name: string | null
           passenger_phone: string | null
+          payer: string
           ride_id: string
           updated_at: string
         }
         Insert: {
           created_at?: string
+          notify_booker?: boolean
           passenger_name?: string | null
           passenger_phone?: string | null
+          payer?: string
           ride_id: string
           updated_at?: string
         }
         Update: {
           created_at?: string
+          notify_booker?: boolean
           passenger_name?: string | null
           passenger_phone?: string | null
+          payer?: string
           ride_id?: string
           updated_at?: string
         }
@@ -1659,11 +1703,74 @@ export type Database = {
             foreignKeyName: "ride_passenger_contacts_ride_id_fkey"
             columns: ["ride_id"]
             isOneToOne: true
-            referencedRelation: "pending_rides_safe"
+            referencedRelation: "rides"
             referencedColumns: ["id"]
           },
+        ]
+      }
+      ride_parcel_contacts: {
+        Row: {
+          created_at: string
+          recipient_phone: string
+          ride_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          recipient_phone: string
+          ride_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          recipient_phone?: string
+          ride_id?: string
+          updated_at?: string
+        }
+        Relationships: [
           {
-            foreignKeyName: "ride_passenger_contacts_ride_id_fkey"
+            foreignKeyName: "ride_parcel_contacts_ride_id_fkey"
+            columns: ["ride_id"]
+            isOneToOne: true
+            referencedRelation: "rides"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ride_parcel_details: {
+        Row: {
+          created_at: string
+          delivery_note: string | null
+          package_size: string
+          photo_path: string | null
+          recipient_name: string
+          ride_id: string
+          updated_at: string
+          who_pays: string
+        }
+        Insert: {
+          created_at?: string
+          delivery_note?: string | null
+          package_size: string
+          photo_path?: string | null
+          recipient_name: string
+          ride_id: string
+          updated_at?: string
+          who_pays?: string
+        }
+        Update: {
+          created_at?: string
+          delivery_note?: string | null
+          package_size?: string
+          photo_path?: string | null
+          recipient_name?: string
+          ride_id?: string
+          updated_at?: string
+          who_pays?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ride_parcel_details_ride_id_fkey"
             columns: ["ride_id"]
             isOneToOne: true
             referencedRelation: "rides"
@@ -1853,6 +1960,7 @@ export type Database = {
           cancellation_fee: number | null
           created_at: string
           distance_km: number
+          driver_collected_at: string | null
           driver_id: string | null
           dropoff_address: string
           dropoff_lat: number
@@ -1884,6 +1992,7 @@ export type Database = {
           cancellation_fee?: number | null
           created_at?: string
           distance_km: number
+          driver_collected_at?: string | null
           driver_id?: string | null
           dropoff_address: string
           dropoff_lat: number
@@ -1915,6 +2024,7 @@ export type Database = {
           cancellation_fee?: number | null
           created_at?: string
           distance_km?: number
+          driver_collected_at?: string | null
           driver_id?: string | null
           dropoff_address?: string
           dropoff_lat?: number

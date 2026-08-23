@@ -63,7 +63,14 @@ export const useWallet = () => {
     } finally {
       setLoading(false);
     }
-  }, [user]);
+    // Keyed on user?.id, not the user object: useAuth's onAuthStateChange
+    // fires more than once during startup (listener + the explicit
+    // getSession() check both set state), each handing back a new-but-
+    // equivalent session/user object. Depending on the object identity
+    // reruns this — and its network calls — on every one of those, even
+    // though the signed-in user hasn't actually changed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   useEffect(() => {
     fetchWallet();

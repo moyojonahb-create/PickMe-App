@@ -29,7 +29,7 @@ export default function TownSelectorSheet({ currentTown, onSelect }: TownSelecto
         onClick={() => setOpen(true)}
         className="inline-flex items-center gap-1.5 shrink-0 active:scale-95 transition-transform"
         style={{
-          height: 38,
+          height: 36,
           padding: '0 12px',
           borderRadius: 999,
           background: 'rgba(255,255,255,.62)',

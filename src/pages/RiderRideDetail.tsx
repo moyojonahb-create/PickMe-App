@@ -31,7 +31,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { ArrowLeft, MapPin, Users, Eye, Minus, Plus, MessageCircle, Phone, Clock, Star, Navigation, Car, ChevronUp, LifeBuoy } from "lucide-react";
 import CancellationPolicy from "@/components/ride/CancellationPolicy";
-import EmergencyButton from "@/components/ride/EmergencyButton";
+import SafetySheet from "@/components/ride/SafetySheet";
 import DriverRatingModal from "@/components/ride/DriverRatingModal";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { playAcceptedSound, playNewRequestSound, playArrivedSound, playCompletedSound } from "@/lib/notificationSounds";
@@ -93,6 +93,7 @@ export default function RiderRideDetail() {
   const [driverPhone, setDriverPhone] = useState<string | null>(null);
   const [driverName, setDriverName] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [safetyOpen, setSafetyOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [updatingFare, setUpdatingFare] = useState(false);
@@ -578,7 +579,7 @@ export default function RiderRideDetail() {
         </AnimatePresence>
 
         <button
-          onClick={() => nav("/safety")}
+          onClick={() => setSafetyOpen(true)}
           className="flex items-center gap-1.5 h-10 px-4 rounded-full bg-card/90 backdrop-blur-sm shadow-md active:scale-95 transition-transform"
         >
           <LifeBuoy className="w-4 h-4 text-primary" />
@@ -887,9 +888,10 @@ export default function RiderRideDetail() {
                 </div>
               </div>
 
-              {/* Quick actions row — Call, Message, Share, Safety */}
+              {/* Quick actions row — Call, Message, Share. Safety lives on the
+                  "Help" map button above (SafetySheet), not duplicated here. */}
               {driverPhone && (
-                <div className="grid grid-cols-4 gap-2">
+                <div className="grid grid-cols-3 gap-2">
                   <a href={`tel:${driverPhone}`} className="flex flex-col items-center gap-1.5 py-3 rounded-2xl border border-border active:scale-95 transition-transform">
                     <Phone className="h-5 w-5 text-foreground" />
                     <span className="text-[11px] font-medium text-foreground">Call</span>
@@ -899,7 +901,6 @@ export default function RiderRideDetail() {
                     <span className="text-[11px] font-medium text-foreground">Message</span>
                   </button>
                   <ShareTripButton rideId={ride.id} pickupAddress={ride.pickup_address} dropoffAddress={ride.dropoff_address} driverName={driverName ?? undefined} variant="square" />
-                  <EmergencyButton rideId={ride.id} pickupAddress={ride.pickup_address} dropoffAddress={ride.dropoff_address} driverName={driverName ?? undefined} variant="square" />
                 </div>
               )}
 
@@ -1089,6 +1090,21 @@ export default function RiderRideDetail() {
           rideId={ride.id} driverId={ride.driver_id} riderId={user.id}
           driverName={driverProfile ? `${(driverProfile as Record<string, unknown>).vehicle_make || ''} Driver`.trim() : undefined}
           onClose={() => { setShowRating(false); setHasRated(true); }} />
+      )}
+
+      {ride && (
+        <SafetySheet
+          open={safetyOpen}
+          onClose={() => setSafetyOpen(false)}
+          rideId={ride.id}
+          driverName={driverName || 'Your driver'}
+          driverAvatarUrl={driverProfile?.avatar_url}
+          vehicleLabel={[driverProfile?.vehicle_color, driverProfile?.vehicle_make, driverProfile?.vehicle_model].filter(Boolean).join(' ') || 'Vehicle details pending'}
+          plateNumber={driverProfile?.plate_number ?? null}
+          startedAt={null}
+          pickupAddress={ride.pickup_address}
+          dropoffAddress={ride.dropoff_address}
+        />
       )}
     </div>
   );

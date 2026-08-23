@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Share2, Copy, Check } from 'lucide-react';
+import { useState, type CSSProperties, type ReactNode } from 'react';
+import { Share2, Copy, Check, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface ShareTripProps {
@@ -9,11 +9,20 @@ interface ShareTripProps {
   driverName?: string;
   /** 'pill' (default) is the existing compact inline pill. 'square' matches
    * the bordered icon-over-label action-grid style used on the redesigned
-   * connected-ride screens. */
-  variant?: 'pill' | 'square';
+   * connected-ride screens. 'glass' is the flex-fill white-glass action-row
+   * button used on the in-trip (4f) screen. 'row' is the icon-tile +
+   * title/subtitle + chevron list row used on the Safety sheet (4l). Same
+   * share/copy logic in every case — only the trigger markup differs. */
+  variant?: 'pill' | 'square' | 'glass' | 'row';
+  /** 'glass'/'row' — inline style for the button (glass background/shadow
+   * tokens live with the caller, not duplicated into this component). */
+  style?: CSSProperties;
+  className?: string;
+  /** 'row' only — the pre-styled leading icon tile element. */
+  rowIcon?: ReactNode;
 }
 
-export default function ShareTripButton({ rideId, pickupAddress, dropoffAddress, driverName, variant = 'pill' }: ShareTripProps) {
+export default function ShareTripButton({ rideId, pickupAddress, dropoffAddress, driverName, variant = 'pill', style, className, rowIcon }: ShareTripProps) {
   const [copied, setCopied] = useState(false);
 
   const shareUrl = `${window.location.origin}/track/${rideId}`;
@@ -66,6 +75,40 @@ export default function ShareTripButton({ rideId, pickupAddress, dropoffAddress,
       setTimeout(() => setCopied(false), 3000);
     }
   };
+
+  if (variant === 'row') {
+    return (
+      <button
+        onClick={(e) => { e.stopPropagation(); handleShare(); }}
+        className={className}
+        style={style}
+      >
+        {rowIcon}
+        <div className="min-w-0 flex-1 text-left">
+          <p style={{ fontSize: 14.5, fontWeight: 600, lineHeight: 1.2 }}>
+            {copied ? 'Link copied' : 'Share live trip'}
+          </p>
+          <p style={{ fontSize: 11.5, fontWeight: 500, lineHeight: 1.2, marginTop: 2 }}>
+            {copied ? 'Trip link ready to paste' : 'Send your route and driver details'}
+          </p>
+        </div>
+        <ChevronRight style={{ width: 17, height: 17 }} className="shrink-0" />
+      </button>
+    );
+  }
+
+  if (variant === 'glass') {
+    return (
+      <button
+        onClick={(e) => { e.stopPropagation(); handleShare(); }}
+        className={className ?? 'flex items-center justify-center active:scale-[0.97] transition-transform'}
+        style={style}
+      >
+        {copied ? <Check style={{ width: 18, height: 18 }} /> : <Share2 style={{ width: 18, height: 18 }} />}
+        <span style={{ fontSize: 14.5, fontWeight: 700 }}>{copied ? 'Copied' : 'Share trip'}</span>
+      </button>
+    );
+  }
 
   if (variant === 'square') {
     return (

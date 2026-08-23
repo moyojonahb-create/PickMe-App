@@ -14,13 +14,22 @@ interface EmergencyButtonProps {
   driverName?: string;
   /** 'default' (existing) is the floating red circle. 'square' matches the
    * bordered icon-over-label action-grid style used on the redesigned
-   * connected-ride screens. Same panel/SOS logic either way. */
-  variant?: 'default' | 'square';
+   * connected-ride screens. 'none' renders no trigger at all — use it with
+   * `open`/`onOpenChange` when the caller supplies its own trigger button
+   * (e.g. a glass map-chrome circle) and just wants the safety panel. Same
+   * panel/SOS logic in every case. */
+  variant?: 'default' | 'square' | 'none';
+  /** Controlled-open mode — pairs with variant="none". When omitted, the
+   * panel manages its own open state internally (existing behaviour). */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
-export default function EmergencyButton({ rideId, pickupAddress, dropoffAddress, driverName, variant = 'default' }: EmergencyButtonProps) {
+export default function EmergencyButton({ rideId, pickupAddress, dropoffAddress, driverName, variant = 'default', open, onOpenChange }: EmergencyButtonProps) {
   const { user } = useAuth();
-  const [showPanel, setShowPanel] = useState(false);
+  const [uncontrolledShowPanel, setUncontrolledShowPanel] = useState(false);
+  const showPanel = open ?? uncontrolledShowPanel;
+  const setShowPanel = onOpenChange ?? setUncontrolledShowPanel;
   const [sosCountdown, setSosCountdown] = useState<number | null>(null);
   const [locationShared, setLocationShared] = useState(false);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -134,7 +143,7 @@ export default function EmergencyButton({ rideId, pickupAddress, dropoffAddress,
 
   return (
     <>
-      {variant === 'square' ? (
+      {variant === 'none' ? null : variant === 'square' ? (
         <button
           type="button"
           onClick={() => setShowPanel(true)}

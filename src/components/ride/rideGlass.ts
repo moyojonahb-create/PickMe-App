@@ -43,6 +43,14 @@ export const tintBlue: CSSProperties = {
   WebkitBackdropFilter: 'blur(18px) saturate(180%)',
 };
 
+/** Red-tinted glass pill (status chips, e.g. "Driver on the way"). */
+export const tintRed: CSSProperties = {
+  background:
+    'linear-gradient(135deg, rgba(255,248,247,.9), rgba(184,17,4,.06))',
+  boxShadow:
+    'inset 0 .5px 0 rgba(255,255,255,.85), inset 0 0 0 .5px rgba(184,17,4,.16)',
+};
+
 /** Yellow-tinted glass card (Share Ride). */
 export const tintYellow: CSSProperties = {
   background:
