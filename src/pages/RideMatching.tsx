@@ -20,6 +20,7 @@ import {
   type MatchingRide,
 } from '@/lib/rideMatching';
 import { useRideViewerCount } from '@/lib/rideViewerPresence';
+import { useNearbyDrivers } from '@/hooks/useNearbyDrivers';
 import { decodePolyline, trimRouteAhead } from '@/lib/routeProgress';
 import { submitDriverRating, createTip } from '@/lib/businessApi';
 import carSearchSide from '@/assets/cars/car-search-side.png';
@@ -106,19 +107,6 @@ const OFFER_TTL_SECONDS = 30;
 const TIER_LABELS: Record<string, string> = { economy: 'Economy', share: 'Share Ride', parcel: 'Parcel' };
 const TIER_ASSETS: Record<string, string> = { economy: carFrontEconomy, share: carSlantShare, parcel: carParcel };
 
-/** Placeholder cars scattered inside the current search radius (not real data). */
-function makePlaceholderCars(center: { lat: number; lng: number } | null, radiusKm: number, count: number) {
-  if (!center) return [];
-  const cars: Array<{ id: string; lat: number; lng: number; white: boolean }> = [];
-  for (let i = 0; i < count; i++) {
-    const angle = (i / count) * Math.PI * 2 + (i * 1.7);
-    const dist = radiusKm * (0.45 + ((i * 37) % 55) / 100);
-    const dLat = (dist * Math.cos(angle)) / 111;
-    const dLng = (dist * Math.sin(angle)) / (111 * Math.cos((center.lat * Math.PI) / 180));
-    cars.push({ id: `ph-${radiusKm}-${i}`, lat: center.lat + dLat, lng: center.lng + dLng, white: true });
-  }
-  return cars;
-}
 const ACCEPTED_STATUSES = ['accepted', 'enroute', 'enroute_pickup', 'arrived', 'in_progress'];
 
 export default function RideMatching() {
@@ -336,9 +324,15 @@ export default function RideMatching() {
   );
 
   const searchRadiusKm = RADIUS_STEPS_KM[radiusIndex];
-  const placeholderCars = useMemo(
-    () => makePlaceholderCars(ride ? { lat: ride.pickup_lat, lng: ride.pickup_lon } : null, searchRadiusKm, 2 + radiusIndex * 2),
-    [ride?.pickup_lat, ride?.pickup_lon, searchRadiusKm, radiusIndex]
+  // Real online drivers within the current search radius — this used to be
+  // a generator that scattered 2-10 fake car markers around the rider with
+  // no real driver behind any of them. A rider watching cars circle for
+  // minutes and then reading "no drivers available" is exactly the phantom-
+  // car pattern Uber was litigated over; show only what's actually there.
+  const nearbyDrivers = useNearbyDrivers(
+    !isMatched && !isComplete,
+    ride ? { lat: ride.pickup_lat, lng: ride.pickup_lon } : null,
+    searchRadiusKm
   );
 
   /* ── Bid stack: enrich each pending offer with its driver's profile and
@@ -679,7 +673,7 @@ export default function RideMatching() {
           // 4g: the map is inert once the trip is complete — no live driver
           // marker, just the completed route rendered statically.
           driverLocation={isComplete ? null : driverLocation}
-          drivers={isMatched ? undefined : placeholderCars}
+          drivers={isMatched ? undefined : nearbyDrivers}
           routeGeometry={ride?.route_polyline ?? null}
           preferredCenter={preferredCenter}
           className="w-full h-full"
@@ -739,7 +733,16 @@ export default function RideMatching() {
       ) : (
         <>
           <button
-            onClick={() => navigate(isMatched ? `/ride/${rideId}` : '/ride')}
+            onClick={() => {
+              // Matched: this just opens the fuller trip view, nothing to
+              // lose. Still searching: the ride is still `pending` on the
+              // server — navigating straight to /ride used to abandon it
+              // silently, so drivers kept receiving a request the rider had
+              // already walked away from. Route through the same cancel
+              // confirmation the explicit Cancel action uses instead.
+              if (isMatched) navigate(`/ride/${rideId}`);
+              else setCancelSheetOpen(true);
+            }}
             aria-label="Back"
             className="absolute left-3 z-20 flex items-center justify-center rounded-full active:scale-90 transition-transform"
             style={{ top: 'calc(env(safe-area-inset-top) + 7px)', width: 52, height: 52, ...glassSurface }}
@@ -1078,7 +1081,7 @@ export default function RideMatching() {
                     )}
                     <button
                       type="button"
-                      onClick={() => navigate(`/ride/${rideId}`)}
+                      onClick={() => navigate(`/ride/${rideId}`, { state: { openMessage: true } })}
                       aria-label="Message driver"
                       className="shrink-0 flex items-center justify-center rounded-full active:scale-90 transition-transform"
                       style={{ width: 36, height: 36, ...messageIconGlass }}
@@ -1225,7 +1228,7 @@ export default function RideMatching() {
                 <div className="flex items-center" style={{ gap: 12 }}>
                   <button
                     type="button"
-                    onClick={() => navigate(`/ride/${rideId}`)}
+                    onClick={() => navigate(`/ride/${rideId}`, { state: { openMessage: true } })}
                     className="shrink-0 flex items-center justify-center active:scale-[0.97] transition-transform"
                     style={{ width: 132, height: 48, borderRadius: 15, gap: 8, ...glassSurface, boxShadow: 'inset 0 .5px 0 rgba(255,255,255,.9), inset 0 0 0 1px rgba(184,17,4,.22), 0 6px 14px rgba(0,0,0,.05)' }}
                   >

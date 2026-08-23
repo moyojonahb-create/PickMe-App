@@ -38,16 +38,26 @@ const REQUEST_RIDE_TIMEOUT_MS = 30_000;
 // Bounds the whole ride-request flow (auth check, Go backend call, Supabase
 // fallback insert) so a stalled network condition can never leave the
 // caller's spinner running forever — see requestRideImpl for the actual work.
+//
+// The timeout used to just win a Promise.race without cancelling the loser:
+// requestRideImpl kept running in the background, and if it eventually
+// succeeded the rider — already told "request timed out" — had no way to
+// know a ride had actually been created, and would tap again, ending up
+// with two live rides. The AbortController below is threaded into every
+// underlying network call so the loser genuinely stops instead of finishing
+// silently after its caller has already given up on it.
 export async function requestRide(input: RequestRideInput) {
-  return Promise.race([
-    requestRideImpl(input),
-    new Promise<{ ok: false; error: string }>((resolve) => {
-      setTimeout(() => resolve({ ok: false, error: "Request timed out. Please check your connection and try again." }), REQUEST_RIDE_TIMEOUT_MS);
-    }),
-  ]);
+  const controller = new AbortController();
+  const timeoutPromise = new Promise<{ ok: false; error: string }>((resolve) => {
+    setTimeout(() => {
+      controller.abort();
+      resolve({ ok: false, error: "Request timed out. Please check your connection and try again." });
+    }, REQUEST_RIDE_TIMEOUT_MS);
+  });
+  return Promise.race([requestRideImpl(input, controller.signal), timeoutPromise]);
 }
 
-async function requestRideImpl(input: RequestRideInput) {
+async function requestRideImpl(input: RequestRideInput, signal: AbortSignal) {
   const { data: authData, error: authErr } = await supabase.auth.getUser();
   if (authErr) return { ok: false as const, error: `Auth error: ${authErr.message}` };
   const user = authData?.user;
@@ -140,7 +150,7 @@ async function requestRideImpl(input: RequestRideInput) {
       gender_preference: input.gender_preference ?? "any",
       ...(input.scheduled_at ? { scheduled_at: input.scheduled_at } : {}),
     };
-    const { data, error } = await supabase.from("rides").insert([row] as never).select("*").maybeSingle();
+    const { data, error } = await supabase.from("rides").insert([row] as never).select("*").abortSignal(signal).maybeSingle();
     if (error) throw new Error(error.message);
     if (!data) throw new Error("Ride request failed: no ride returned");
     const created = data as unknown as RideRow;
@@ -149,11 +159,15 @@ async function requestRideImpl(input: RequestRideInput) {
     if (created?.id && (contactName || contactPhone)) {
       // Passenger contact details are stored separately so that only the rider,
       // the assigned driver and admins can read them (never the open ride feed).
-      await supabase.from("ride_passenger_contacts").insert([{
+      // Best-effort: the ride itself already exists at this point, so a
+      // failure here must not make the caller believe ride creation failed
+      // and prompt a duplicate request — it previously did exactly that.
+      const { error: contactError } = await supabase.from("ride_passenger_contacts").insert([{
         ride_id: created.id,
         passenger_name: contactName || null,
         passenger_phone: contactPhone || null,
       }] as never);
+      if (contactError) console.error("Passenger contact insert failed (ride was still created):", contactError.message);
     }
     return created;
   };
@@ -171,7 +185,7 @@ async function requestRideImpl(input: RequestRideInput) {
   }
 
   try {
-    const created = await goBackend.post<GoRideResponse>("/api/rides", ridePayload);
+    const created = await goBackend.post<GoRideResponse>("/api/rides", ridePayload, signal);
     if (created.ok === false) {
       return { ok: false as const, error: created.reason || "Ride request failed" };
     }

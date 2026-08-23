@@ -50,6 +50,32 @@ export async function initNativePlatform() {
   }
 }
 
+// Without @capacitor/geolocation, nothing in the app ever triggers Android's
+// runtime ACCESS_FINE_LOCATION prompt — the manifest permission only grants
+// install-time visibility, not the runtime grant Android 6+ requires. Every
+// navigator.geolocation.getCurrentPosition() call was failing on a fresh
+// install with no prompt, no error, and an empty catch handler, so the map
+// just never centred. Call this once, at the moment the user has actually
+// opted in (e.g. LocationPermissionPrompt's "Allow location"), so the real
+// OS dialog appears with the app context already on screen — not blind at
+// boot. A no-op on web, where the browser owns its own permission prompt.
+let locationPermissionRequested: Promise<boolean> | null = null;
+export async function requestNativeLocationPermission(): Promise<boolean> {
+  if (!Capacitor.isNativePlatform()) return true;
+  if (locationPermissionRequested) return locationPermissionRequested;
+  locationPermissionRequested = (async () => {
+    try {
+      const { Geolocation } = await import('@capacitor/geolocation');
+      const status = await Geolocation.requestPermissions();
+      return status.location === 'granted' || status.coarseLocation === 'granted';
+    } catch (e) {
+      console.warn('[Native] Geolocation permission request failed:', e);
+      return false;
+    }
+  })();
+  return locationPermissionRequested;
+}
+
 /** Lock/unlock screen orientation (if plugin available) */
 export function isNative(): boolean {
   return Capacitor.isNativePlatform();

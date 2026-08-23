@@ -24,7 +24,6 @@ const Index = lazy(() => import("./pages/Index"));
 const Auth = lazy(() => import("./pages/Auth"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const Signup = lazy(() => import("./pages/Signup"));
-const RideDetail = lazy(() => import("./pages/RideDetail"));
 const DriverDashboard = lazy(() => import("./pages/DriverDashboard"));
 const RiderRideDetail = lazy(() => import("./pages/RiderRideDetail"));
 const RideMatching = lazy(() => import("./pages/RideMatching"));

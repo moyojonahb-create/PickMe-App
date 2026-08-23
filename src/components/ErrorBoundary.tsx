@@ -1,7 +1,7 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
-import * as Sentry from '@sentry/react';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { captureError } from '@/lib/telemetryBuffer';
 
 interface Props {
   children: ReactNode;
@@ -25,7 +25,12 @@ class ErrorBoundary extends Component<Props, State> {
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error('ErrorBoundary caught an error:', error, errorInfo);
-    Sentry.captureException(error, { extra: { componentStack: errorInfo.componentStack } });
+    // Routed through the same early-error buffer main.tsx's global handlers
+    // use, rather than calling Sentry directly — telemetry initializes after
+    // first paint, so a render crash during boot (the single most likely
+    // production failure) was previously calling into a not-yet-initialized
+    // SDK and being silently dropped.
+    captureError(error);
   }
 
   private handleRetry = () => {

@@ -162,9 +162,14 @@ async function authHeaders(): Promise<Record<string, string>> {
 // long hang that just delays the same failure.
 const REQUEST_TIMEOUT_MS = 8_000;
 
-async function doFetch(method: string, path: string, headers: Record<string, string>, body?: unknown): Promise<Response> {
+async function doFetch(method: string, path: string, headers: Record<string, string>, body?: unknown, externalSignal?: AbortSignal): Promise<Response> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  // A caller-provided signal (e.g. requestRide.ts's overall 30s budget)
+  // aborts the fetch immediately rather than leaving it running in the
+  // background after the caller has already given up — that's what let the
+  // Promise.race loser silently keep going and create a duplicate ride.
+  const signal = externalSignal ? AbortSignal.any([controller.signal, externalSignal]) : controller.signal;
   try {
     return await fetch(resolveUrl(path), {
       method,
@@ -173,7 +178,7 @@ async function doFetch(method: string, path: string, headers: Record<string, str
         ...(body === undefined ? {} : { "Content-Type": "application/json" }),
       },
       body: body === undefined ? undefined : JSON.stringify(body),
-      signal: controller.signal,
+      signal,
     });
   } catch (error) {
     const timedOut = (error as { name?: string })?.name === "AbortError";
@@ -189,12 +194,12 @@ async function doFetch(method: string, path: string, headers: Record<string, str
   }
 }
 
-async function request<T>(method: string, path: string, body?: unknown, isRetry = false): Promise<T> {
+async function request<T>(method: string, path: string, body?: unknown, isRetry = false, signal?: AbortSignal): Promise<T> {
   // Resolved outside the fetch try/catch below so an auth failure (no/expired
   // session) surfaces as UNAUTHENTICATED instead of being masked as a generic
   // network error.
   const headers = await authHeaders();
-  const response = await doFetch(method, path, headers, body);
+  const response = await doFetch(method, path, headers, body, signal);
 
   // The session looked valid client-side but the server rejected the token
   // (e.g. it expired between attach and receipt) — refresh once and retry
@@ -203,7 +208,7 @@ async function request<T>(method: string, path: string, body?: unknown, isRetry 
   if (response.status === 401 && !isRetry) {
     const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
     if (!refreshError && refreshed.session) {
-      return request<T>(method, path, body, true);
+      return request<T>(method, path, body, true, signal);
     }
   }
 
@@ -224,10 +229,10 @@ async function request<T>(method: string, path: string, body?: unknown, isRetry 
 }
 
 export const goBackend = {
-  get: <T>(path: string) => request<T>("GET", path),
-  post: <T>(path: string, body?: unknown) => request<T>("POST", path, body),
-  patch: <T>(path: string, body?: unknown) => request<T>("PATCH", path, body),
-  delete: <T>(path: string, body?: unknown) => request<T>("DELETE", path, body),
+  get: <T>(path: string, signal?: AbortSignal) => request<T>("GET", path, undefined, false, signal),
+  post: <T>(path: string, body?: unknown, signal?: AbortSignal) => request<T>("POST", path, body, false, signal),
+  patch: <T>(path: string, body?: unknown, signal?: AbortSignal) => request<T>("PATCH", path, body, false, signal),
+  delete: <T>(path: string, body?: unknown, signal?: AbortSignal) => request<T>("DELETE", path, body, false, signal),
 };
 
 export function getGoBackendBaseUrl(): string {

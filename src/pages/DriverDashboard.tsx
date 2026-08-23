@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/hooks/useAuth";
 import { useFemaleTheme } from "@/hooks/useFemaleTheme";
 import { useOpenRidesRealtime } from "@/hooks/useRideRealtime";
+import { requestNativeLocationPermission } from "@/lib/nativeBridge";
 import {
   fetchOpenRides,
   getDriverProfile,
@@ -364,9 +365,14 @@ export default function DriverDashboard() {
   // Location tracking for admin monitoring
   const prevLocationRef = useRef<{ lat: number; lng: number; time: number } | null>(null);
 
-  const startLocationTracking = () => {
+  const startLocationTracking = async () => {
     stopLocationTracking();
     if (!navigator.geolocation) return;
+    // A driver believing they're online while dispatch can't actually reach
+    // them (no runtime location permission granted) is the worst failure
+    // mode here — this is what makes Android's permission dialog actually
+    // appear, instead of getCurrentPosition below failing silently.
+    await requestNativeLocationPermission();
     const handlePos = (pos: GeolocationPosition) => {
       const { latitude, longitude } = pos.coords;
       updateDriverLocation(latitude, longitude);

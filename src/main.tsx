@@ -11,22 +11,10 @@ import { I18nProvider } from "./lib/i18n";
 import { FemaleThemeProvider } from "./hooks/useFemaleTheme";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { initNativePlatform } from "./lib/nativeBridge";
+import { captureError, markTelemetryReady } from "./lib/telemetryBuffer";
 import "./index.css";
 
 const SENTRY_DSN = "https://fae54652b1b4535904d5ca4d198008f7@o4511199932645376.ingest.de.sentry.io/4511200277692496";
-
-// ── Early error buffer ────────────────────────────────────────────────
-// Telemetry SDKs are initialized AFTER first paint (see initTelemetry).
-// Anything thrown before that is buffered here and replayed into Sentry
-// once it is ready, so deferring init never loses a crash.
-const earlyErrors: unknown[] = [];
-let telemetryReady = false;
-let reportTelemetryError: ((error: unknown) => void) | null = null;
-
-function captureError(err: unknown) {
-  if (telemetryReady && reportTelemetryError) reportTelemetryError(err);
-  else if (earlyErrors.length < 20) earlyErrors.push(err);
-}
 
 window.addEventListener('unhandledrejection', (event) => {
   captureError(event.reason);
@@ -56,19 +44,23 @@ async function initTelemetry() {
     environment: import.meta.env.MODE,
     enabled: import.meta.env.PROD,
     release: import.meta.env.VITE_APP_VERSION,
-    sendDefaultPii: true,
+    // Was `true` — this app records wallet PINs (WalletPinModal), driver
+    // licence/ID uploads, phone numbers and home addresses. Sending default
+    // PII (IP, cookies) alongside session replay is how that ends up
+    // readable in a third-party dashboard. Off unless a specific, deliberate
+    // need for it shows up.
+    sendDefaultPii: false,
     integrations: [Sentry.browserTracingIntegration()],
     tracesSampleRate: 0.3,
     replaysOnErrorSampleRate: 1.0,
     replaysSessionSampleRate: 0.1,
-    // Ignore noisy non-actionable errors
+    // 'Failed to fetch' / 'NetworkError' / 'AbortError' / 'Loading chunk'
+    // used to be filtered out here — on Econet/NetOne those aren't noise,
+    // they're the production failures this market actually needs visibility
+    // into. Only the two below are genuine non-actionable browser quirks.
     ignoreErrors: [
       'ResizeObserver loop',
       'Non-Error promise rejection',
-      'Loading chunk',
-      'Failed to fetch',
-      'NetworkError',
-      'AbortError',
     ],
     beforeSend(event) {
       // Enrich with device context
@@ -82,9 +74,7 @@ async function initTelemetry() {
     },
   });
 
-  reportTelemetryError = (error) => Sentry.captureException(error);
-  telemetryReady = true;
-  earlyErrors.splice(0).forEach((err) => Sentry.captureException(err));
+  markTelemetryReady((error) => Sentry.captureException(error));
 
   // Session replay is the heaviest integration (DOM mutation observers +
   // snapshotting) — load it separately, and only in production.
@@ -92,9 +82,14 @@ async function initTelemetry() {
     Sentry.lazyLoadIntegration('replayIntegration')
       .then((replayIntegration) => {
         Sentry.getClient()?.addIntegration(
+          // Was `false`/`false` — every error-containing session (100% of
+          // them) and 10% of all sessions were recorded with text masking
+          // off, meaning wallet PINs and any typed field were captured
+          // in plain text. Mask by default; unmask specific known-safe
+          // elements individually if a real debugging need ever justifies it.
           (replayIntegration as typeof Sentry.replayIntegration)({
-            maskAllText: false,
-            blockAllMedia: false,
+            maskAllText: true,
+            blockAllMedia: true,
           }),
         );
       })

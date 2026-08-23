@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { completeTrip } from "@/lib/completeTrip";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { resolveAvatarUrl } from "@/lib/avatarUrl";
 import { useAuth } from "@/hooks/useAuth";
@@ -84,6 +84,7 @@ type Ride = {
 export default function RiderRideDetail() {
   const { rideId } = useParams<{rideId: string;}>();
   const nav = useNavigate();
+  const location = useLocation();
   const { user, loading: authLoading } = useAuth();
 
   const [ride, setRide] = useState<Ride | null>(null);
@@ -97,7 +98,10 @@ export default function RiderRideDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [updatingFare, setUpdatingFare] = useState(false);
-  const [showCommunication, setShowCommunication] = useState(false);
+  // The "Message driver" affordance on the finding-drivers/matched screens
+  // navigates here with { state: { openMessage: true } } rather than
+  // dead-ending on this page requiring a second tap to actually open chat.
+  const [showCommunication, setShowCommunication] = useState(() => Boolean((location.state as { openMessage?: boolean } | null)?.openMessage));
   const [lastOfferCount, setLastOfferCount] = useState(0);
   const [showRating, setShowRating] = useState(false);
   const [hasRated, setHasRated] = useState(false);

@@ -2,7 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <application
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
@@ -49,8 +49,18 @@
     <!-- Permissions for location -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-    <uses-feature android:name="android.hardware.location.gps" />
+    <!-- required left unset here defaults to true, which filters the Play
+         listing off every device without GPS hardware (e.g. some tablets,
+         Wi-Fi-only devices) that could otherwise still use coarse/network
+         location for pickup. -->
+    <uses-feature android:name="android.hardware.location.gps" android:required="false" />
 
     <!-- Permissions for contacts -->
     <uses-permission android:name="android.permission.READ_CONTACTS" />
+
+    <!-- Required on Android 13+ (API 33) for any notification to show at
+         all, including a driver's incoming-ride alert. Requested at runtime
+         wherever the app wires up push/local notifications — declaring it
+         here only makes the request legal, it doesn't grant it. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 </manifest>

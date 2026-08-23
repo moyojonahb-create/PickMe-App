@@ -4,6 +4,7 @@ import { rankTownStreets } from '@/lib/streetSearchRank';
 import { motion } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { haptic } from '@/lib/haptics';
+import { requestNativeLocationPermission } from '@/lib/nativeBridge';
 import { useAuth } from '@/hooks/useAuth';
 import { useOSRMRoute } from '@/hooks/useOSRMRoute';
 import { usePricingSettings } from '@/hooks/usePricingSettings';
@@ -481,13 +482,18 @@ export default function RideView() {
    * shortcut tile, or the on-screen "use my location" buttons) is allowed
    * to set pickupLocation and advance the flow.
    */
-  const handleUseMyLocation = useCallback((fast = false, setPickup = true) => {
+  const handleUseMyLocation = useCallback(async (fast = false, setPickup = true) => {
     // An explicit "use my location" ask (or the initial already-decided-
     // permission fetch, where this is a no-op since nothing's been picked
     // yet) always wins back over a manually-selected town's center. The
     // background "upgrade to precise fix" request below does NOT re-enter
     // this function, so it can't undo a town selection made in the meantime.
     setPreferredCenter(null);
+    // On native, this is what actually makes Android's runtime permission
+    // dialog appear — without it, navigator.geolocation.getCurrentPosition
+    // below fails silently on a fresh install with nothing to show the user.
+    // No-op on web / once already resolved.
+    await requestNativeLocationPermission();
     if (!navigator.geolocation) {
       setGpsState({ status: 'unavailable', coords: null, error: 'Geolocation not supported' });
       // Fallback to the pilot town if no geolocation
