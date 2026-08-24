@@ -6,6 +6,9 @@ import LazyMapboxMap from '@/components/map/LazyMapboxMap';
 import { supabase } from '@/lib/supabaseClient';
 import { getDriverProfile, submitOffer, defaultNightMultiplier } from '@/lib/offerHelpers';
 import { fetchEnrichedOpenRides, type EnrichedRideRequest } from '@/lib/driverRideRequests';
+import { expireOldRides } from '@/lib/rideExpiry';
+import { playNewRequestSound } from '@/lib/notificationSounds';
+import { vibrateAlert, showBrowserNotification } from '@/lib/alerts';
 import RideGlassPanel from '@/components/ride/RideGlassPanel';
 import SwipeDismissCard from '@/components/driver/SwipeDismissCard';
 import DriverBottomNav from '@/components/driver/DriverBottomNav';
@@ -35,6 +38,7 @@ export default function DriverRideRequests() {
   const autoAcceptedIds = useRef<Set<string>>(new Set());
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [undoRide, setUndoRide] = useState<EnrichedRideRequest | null>(null);
+  const lastRideIds = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     navigator.geolocation?.getCurrentPosition(
@@ -44,9 +48,36 @@ export default function DriverRideRequests() {
     );
   }, []);
 
+  const [driverRowId, setDriverRowId] = useState<string | null>(null);
   useEffect(() => {
-    getDriverProfile().then((p) => setIsOnline(p?.is_online ?? false)).catch(() => {});
+    getDriverProfile().then((p) => { setIsOnline(p?.is_online ?? false); setDriverRowId(p?.id ?? null); }).catch(() => {});
   }, []);
+
+  // If a rider accepts this driver's offer while they're sitting on this
+  // screen (or the app relaunches mid-trip — force-quit recovery), bounce
+  // straight to /driver/dashboard, which owns rendering FullScreenNavigation
+  // for an active trip. Without this, an accepted ride only showed up if the
+  // driver happened to already be on the dashboard route.
+  useEffect(() => {
+    if (!driverRowId) return;
+    let cancelled = false;
+    const checkActiveTrip = async () => {
+      const { data } = await supabase
+        .from('rides')
+        .select('id')
+        .eq('driver_id', driverRowId)
+        .in('status', ['accepted', 'arrived', 'in_progress'])
+        .limit(1)
+        .maybeSingle();
+      if (!cancelled && data) navigate('/driver/dashboard', { replace: true });
+    };
+    checkActiveTrip();
+    const channel = supabase
+      .channel(`driver-active-trip-${driverRowId}`)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'rides', filter: `driver_id=eq.${driverRowId}` }, () => { checkActiveTrip(); })
+      .subscribe();
+    return () => { cancelled = true; supabase.removeChannel(channel); };
+  }, [driverRowId, navigate]);
 
   useEffect(() => {
     let cancelled = false;
@@ -61,9 +92,22 @@ export default function DriverRideRequests() {
 
   const refresh = useCallback(async () => {
     try {
+      await expireOldRides();
       const profile = await getDriverProfile();
       const list = await fetchEnrichedOpenRides(profile?.gender);
       setRides(list);
+
+      const currentIds = new Set(list.map((r) => r.id));
+      let hasNewRide = false;
+      for (const id of currentIds) {
+        if (!lastRideIds.current.has(id)) { hasNewRide = true; break; }
+      }
+      if (hasNewRide && isOnline) {
+        playNewRequestSound();
+        vibrateAlert();
+        showBrowserNotification('🚗 New Ride Request', 'A rider is looking for a driver near you', '/driver/requests');
+      }
+      lastRideIds.current = currentIds;
 
       if (autoAccept) {
         for (const ride of list) {
@@ -81,7 +125,7 @@ export default function DriverRideRequests() {
     } finally {
       setLoading(false);
     }
-  }, [autoAccept]);
+  }, [autoAccept, isOnline]);
 
   useEffect(() => {
     refresh();

@@ -18,6 +18,7 @@ import { useVoiceNavigation } from '@/hooks/useVoiceNavigation';
 import PhotoCropModal from '@/components/driver/PhotoCropModal';
 import LanguageRow from '@/components/driver/LanguageRow';
 import DriverFeedback from '@/components/driver/DriverFeedback';
+import DriverSettingsPanel from '@/components/settings/DriverSettingsPanel';
 import DriverBottomNav from '@/components/driver/DriverBottomNav';
 import defaultDriverAvatar from '@/assets/driver-avatar-jonah.png';
 import { RIDE_RED, RIDE_RED_GRADIENT, RIDE_YELLOW, RIDE_TEXT, RIDE_TEXT_2 } from '@/components/ride/rideGlass';
@@ -65,6 +66,8 @@ export default function DriverProfilePage() {
   const [loading, setLoading] = useState(true);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [pendingAvatarFile, setPendingAvatarFile] = useState<File | null>(null);
+  const [uploadingVehiclePhoto, setUploadingVehiclePhoto] = useState(false);
+  const [pendingVehiclePhotoFile, setPendingVehiclePhotoFile] = useState<File | null>(null);
   const [togglingOnline, setTogglingOnline] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
@@ -171,6 +174,35 @@ export default function DriverProfilePage() {
       toast.error('Upload failed', { description: (err as Error).message });
     } finally {
       setUploadingAvatar(false);
+    }
+  };
+
+  const handleVehiclePhotoFile = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (file.size > 8 * 1024 * 1024) { toast.error('Photo must be less than 8MB'); return; }
+    setPendingVehiclePhotoFile(file);
+  };
+
+  const handleVehiclePhotoCropped = async (blob: Blob) => {
+    setPendingVehiclePhotoFile(null);
+    if (!user) return;
+    setUploadingVehiclePhoto(true);
+    try {
+      const path = `${user.id}/car.jpg`;
+      const { error: uploadErr } = await supabase.storage.from('vehicle-photos').upload(path, blob, { upsert: true, contentType: 'image/jpeg' });
+      if (uploadErr) throw uploadErr;
+      const { data: signedData, error: signedErr } = await supabase.storage.from('vehicle-photos').createSignedUrl(path, 60 * 60 * 24 * 365);
+      if (signedErr || !signedData?.signedUrl) throw signedErr || new Error('Failed to get URL');
+      const { error: driverErr } = await supabase.from('drivers').update({ vehicle_photo_url: signedData.signedUrl } as never).eq('user_id', user.id);
+      if (driverErr) throw driverErr;
+      setProfile((prev) => (prev ? { ...prev, vehicle_photo_url: signedData.signedUrl } : prev));
+      toast.success('Car photo updated!');
+    } catch (err: unknown) {
+      toast.error('Upload failed', { description: (err as Error).message });
+    } finally {
+      setUploadingVehiclePhoto(false);
     }
   };
 
@@ -345,16 +377,17 @@ export default function DriverProfilePage() {
                 </span>
               )}
             </div>
-            <button type="button" onClick={() => navigate('/driver/dashboard')} className="flex items-center justify-between w-full text-left" style={{ padding: '10px 13px', borderTop: '.5px solid rgba(17,17,17,.07)' }}>
+            <label className="flex items-center justify-between w-full text-left cursor-pointer" style={{ padding: '10px 13px', borderTop: '.5px solid rgba(17,17,17,.07)' }}>
               <span className="flex items-center" style={{ gap: 8 }}>
-                <Camera style={{ width: 15, height: 15, color: RIDE_TEXT_2 }} />
+                {uploadingVehiclePhoto ? <Loader2 className="animate-spin" style={{ width: 15, height: 15, color: RIDE_TEXT_2 }} /> : <Camera style={{ width: 15, height: 15, color: RIDE_TEXT_2 }} />}
                 <span style={{ fontSize: 13, fontWeight: 600, color: RIDE_TEXT }}>Vehicle photo</span>
               </span>
               <span className="flex items-center" style={{ gap: 4, fontSize: 12, fontWeight: 700, color: profile.vehicle_photo_url ? '#22A447' : RIDE_TEXT_2 }}>
                 {profile.vehicle_photo_url ? 'Added' : 'Add'}
                 <ChevronRight style={{ width: 14, height: 14 }} />
               </span>
-            </button>
+              <input type="file" accept="image/*" className="hidden" onChange={handleVehiclePhotoFile} disabled={uploadingVehiclePhoto} />
+            </label>
           </div>
         </section>
 
@@ -434,7 +467,7 @@ export default function DriverProfilePage() {
             <AccountRow icon={ChartColumn} label="Earnings & trip history" onClick={() => navigate('/driver/trips')} />
             <AccountRow icon={Star} label="Ratings & feedback" onClick={() => setFeedbackOpen(true)} />
             <div style={{ padding: '0 14px' }}><LanguageRow /></div>
-            <AccountRow icon={Bell} label="Notifications" onClick={() => setNotificationsOpen(true)} />
+            <AccountRow icon={Bell} label="Settings & notifications" onClick={() => setNotificationsOpen(true)} />
             <AccountRow
               icon={Volume2}
               label="Voice navigation"
@@ -462,6 +495,7 @@ export default function DriverProfilePage() {
       </div>
 
       <PhotoCropModal file={pendingAvatarFile} shape="circle" title="Adjust your photo" onCancel={() => setPendingAvatarFile(null)} onCropped={handleAvatarCropped} />
+      <PhotoCropModal file={pendingVehiclePhotoFile} shape="rect" aspect={4 / 3} title="Adjust your car photo" onCancel={() => setPendingVehiclePhotoFile(null)} onCropped={handleVehiclePhotoCropped} />
 
       <Sheet open={feedbackOpen} onOpenChange={setFeedbackOpen}>
         <SheetContent side="bottom" className="h-[85dvh] rounded-t-3xl overflow-y-auto">
@@ -471,9 +505,14 @@ export default function DriverProfilePage() {
       </Sheet>
 
       <Sheet open={notificationsOpen} onOpenChange={setNotificationsOpen}>
-        <SheetContent side="bottom" className="rounded-t-3xl p-5" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 20px)' }}>
-          <SheetHeader className="mb-3"><SheetTitle>Notifications</SheetTitle></SheetHeader>
-          <p className="text-sm text-muted-foreground">Ride requests, earnings and account alerts are on by default. Notification preferences will be configurable here soon.</p>
+        <SheetContent side="bottom" className="h-[75dvh] rounded-t-3xl overflow-y-auto p-5">
+          <SheetHeader className="mb-3"><SheetTitle>Settings</SheetTitle></SheetHeader>
+          <DriverSettingsPanel
+            driverId={profile.id}
+            initialArea={profile.preferred_service_area ?? 'both'}
+            initialEarningNotif={profile.earning_notifications ?? true}
+            initialEcocash={profile.ecocash_number ?? ''}
+          />
         </SheetContent>
       </Sheet>
 

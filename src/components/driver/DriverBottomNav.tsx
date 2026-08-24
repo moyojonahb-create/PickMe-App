@@ -6,7 +6,11 @@ import { haptic } from '@/lib/haptics';
 import { RIDE_RED } from '@/components/ride/rideGlass';
 
 const tabs = [
-  { label: 'Home', icon: Home, path: '/driver/dashboard' },
+  // /driver/dashboard is no longer a screen of its own — it's the traffic
+  // controller that shows FullScreenNavigation during an active trip and
+  // otherwise hands off to /driver/requests, which is the real "home" now
+  // (online status, wallet, the request list).
+  { label: 'Home', icon: Home, path: '/driver/requests' },
   { label: 'Earnings', icon: TrendingUp, path: '/driver/dashboard', state: { openEarnings: true } },
   { label: 'Trips', icon: Clock, path: '/driver/trips' },
   { label: 'Profile', icon: User, path: '/driver/profile' },

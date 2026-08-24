@@ -68,6 +68,8 @@ export type DriverProfile = {
   total_trips: number | null;
   preferred_service_area?: string | null;
   created_at?: string;
+  earning_notifications?: boolean;
+  ecocash_number?: string | null;
 };
 
 // Round to nearest $0.50
@@ -214,7 +216,7 @@ export async function getDriverProfile(): Promise<DriverProfile | null> {
 
   const { data, error } = await supabase
     .from("drivers")
-    .select("id, user_id, status, vehicle_type, plate_number, vehicle_make, vehicle_model, vehicle_color, is_online, trial_ends_at, gender, avatar_url, rating_avg, total_trips, preferred_service_area, created_at")
+    .select("id, user_id, status, vehicle_type, plate_number, vehicle_make, vehicle_model, vehicle_color, is_online, trial_ends_at, gender, avatar_url, rating_avg, total_trips, preferred_service_area, created_at, earning_notifications, ecocash_number")
     .eq("user_id", user.id)
     .maybeSingle();
   
