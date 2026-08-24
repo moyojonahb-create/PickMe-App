@@ -61,18 +61,22 @@ export default defineConfig(({ mode }) => {
   // stomped Vite's own env replacement with "" and crashed the published app
   // with "supabaseUrl is required". The publishable key can also arrive as
   // VITE_SUPABASE_ANON_KEY in some build environments, so fall back to it.
+  // Last-resort fallbacks: if the managed Cloud vars are missing at build time
+  // the app used to ship blank credentials and die with "supabaseUrl is
+  // required". These owner-supplied public values keep the build bootable.
   define: Object.fromEntries(
     (
       [
-        ['VITE_SUPABASE_URL', ['VITE_SUPABASE_URL', 'SUPABASE_URL']],
-        ['VITE_SUPABASE_PUBLISHABLE_KEY', ['VITE_SUPABASE_PUBLISHABLE_KEY', 'VITE_SUPABASE_ANON_KEY', 'SUPABASE_ANON_KEY']],
-        ['VITE_MAPBOX_ACCESS_TOKEN', ['VITE_MAPBOX_ACCESS_TOKEN']],
+        ['VITE_SUPABASE_URL', ['VITE_SUPABASE_URL', 'SUPABASE_URL'], 'https://foksbnjtzubsjpeoorvo.supabase.co'],
+        ['VITE_SUPABASE_PUBLISHABLE_KEY', ['VITE_SUPABASE_PUBLISHABLE_KEY', 'VITE_SUPABASE_ANON_KEY', 'SUPABASE_ANON_KEY'], 'sb_publishable_vgKlnioVW-ZyBiPeHgmaNw_411hQVXA'],
+        ['VITE_MAPBOX_ACCESS_TOKEN', ['VITE_MAPBOX_ACCESS_TOKEN'], ''],
       ] as const
     )
-      .map(([key, sources]) => [key, sources.map((s) => publicEnv(env, s)).find(Boolean) || ''] as const)
+      .map(([key, sources, fallback]) => [key, sources.map((s) => publicEnv(env, s)).find(Boolean) || fallback] as const)
       .filter(([, value]) => Boolean(value))
       .map(([key, value]) => [`import.meta.env.${key}`, JSON.stringify(value)])
   ),
+
 
   resolve: {
     alias: {
