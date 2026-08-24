@@ -59,13 +59,21 @@ export default defineConfig(({ mode }) => {
   ].filter(Boolean),
   // Only inject values that actually exist. Defining them unconditionally
   // stomped Vite's own env replacement with "" and crashed the published app
-  // with "supabaseUrl is required".
+  // with "supabaseUrl is required". The publishable key can also arrive as
+  // VITE_SUPABASE_ANON_KEY in some build environments, so fall back to it.
   define: Object.fromEntries(
-    (['VITE_SUPABASE_URL', 'VITE_SUPABASE_PUBLISHABLE_KEY', 'VITE_MAPBOX_ACCESS_TOKEN'] as const)
-      .map((key) => [key, publicEnv(env, key)] as const)
+    (
+      [
+        ['VITE_SUPABASE_URL', ['VITE_SUPABASE_URL', 'SUPABASE_URL']],
+        ['VITE_SUPABASE_PUBLISHABLE_KEY', ['VITE_SUPABASE_PUBLISHABLE_KEY', 'VITE_SUPABASE_ANON_KEY', 'SUPABASE_ANON_KEY']],
+        ['VITE_MAPBOX_ACCESS_TOKEN', ['VITE_MAPBOX_ACCESS_TOKEN']],
+      ] as const
+    )
+      .map(([key, sources]) => [key, sources.map((s) => publicEnv(env, s)).find(Boolean) || ''] as const)
       .filter(([, value]) => Boolean(value))
       .map(([key, value]) => [`import.meta.env.${key}`, JSON.stringify(value)])
   ),
+
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

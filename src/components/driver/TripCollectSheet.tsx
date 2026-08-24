@@ -85,7 +85,7 @@ export default function TripCollectSheet({ ride, onDone }: TripCollectSheetProps
     haptic('medium');
     try {
       if (rating > 0) {
-        await supabase.from('ride_passenger_ratings').insert([{ ride_id: ride.id, driver_id: ride.user_id, rating }] as never).select().maybeSingle().catch(() => null);
+        await supabase.from('ride_passenger_ratings').insert([{ ride_id: ride.id, driver_id: ride.user_id, rating }] as never).select().maybeSingle();
       }
       await supabase.from('rides').update({ driver_collected_at: new Date().toISOString() } as never).eq('id', ride.id);
     } finally {

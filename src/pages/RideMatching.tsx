@@ -612,7 +612,7 @@ export default function RideMatching() {
      GPS tick. */
   const tripProgress = useMemo(() => {
     if (!inTrip || !ride?.route_polyline) return null;
-    const coords = decodePolyline(ride.route_polyline).map(([lng, lat]) => ({ lat, lng }));
+    const coords = decodePolyline(ride.route_polyline) as [number, number][];
     const { remainingMeters } = trimRouteAhead(coords, driverLocation);
     const remainingKm = remainingMeters / 1000;
     const minutes = ride.distance_km > 0

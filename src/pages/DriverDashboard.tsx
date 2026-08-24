@@ -280,7 +280,6 @@ export default function DriverDashboard() {
       } else {
         toast.info("You're now offline", { description: "You won't receive new ride requests" });
         stopLocationTracking();
-        setRides([]);
       }
     } catch (e: unknown) {
       toast.error("Failed to update status", { description: (e as Error).message });

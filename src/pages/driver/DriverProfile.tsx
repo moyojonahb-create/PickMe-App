@@ -108,8 +108,7 @@ export default function DriverProfilePage() {
     // they never return anything usable. wallets/user_id is the one table
     // that's actually real and readable under the driver's own RLS policy.
     supabase.from('wallets').select('balance').eq('user_id', user.id).maybeSingle()
-      .then(({ data }) => { if (data) setBalance(Number(data.balance)); })
-      .catch(() => {});
+      .then(({ data }) => { if (data) setBalance(Number(data.balance)); }, () => {});
 
     listWalletDeposits({ type: 'driver', limit: 1 })
       .then((deposits) => {
@@ -121,10 +120,9 @@ export default function DriverProfilePage() {
       .catch(() => setProofStatus(null));
 
     supabase.from('driver_documents').select('document_type, status, expiry_date').eq('driver_id', user.id)
-      .then(({ data }) => setDocuments((data as DriverDocRow[]) ?? []))
-      .catch(() => setDocuments([]));
+      .then(({ data }) => setDocuments((data as DriverDocRow[]) ?? []), () => setDocuments([]));
 
-    const { data: photoRow } = await supabase.from('drivers').select('vehicle_photo_url').eq('user_id', user.id).maybeSingle().catch(() => ({ data: null }) as never);
+    const { data: photoRow } = await supabase.from('drivers').select('vehicle_photo_url').eq('user_id', user.id).maybeSingle();
     if (photoRow) {
       setProfile((prev) => (prev ? { ...prev, vehicle_photo_url: photoRow.vehicle_photo_url } : prev));
     }
