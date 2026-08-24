@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Star } from 'lucide-react';
 import { haptic } from '@/lib/haptics';
-import { playAcceptedSound } from '@/lib/notificationSounds';
 
 const POPUP_SECONDS = 50;
 const RING_RADIUS = 42;
@@ -43,7 +42,6 @@ export default function DriverBidAcceptedModal({ open, driver, fare, etaMinutes,
     if (!open) return;
     setSecondsLeft(POPUP_SECONDS);
     void haptic('heavy');
-    playAcceptedSound();
     const id = setInterval(() => {
       setSecondsLeft((s) => {
         if (s <= 1) {

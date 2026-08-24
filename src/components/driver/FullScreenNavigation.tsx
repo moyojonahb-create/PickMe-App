@@ -21,6 +21,7 @@ import { toast } from "sonner";
 import { completeTrip } from "@/lib/completeTrip";
 import { eventString } from "@/lib/backendSocketClient";
 import { useRideRealtime } from "@/hooks/useRideRealtime";
+import { useUnreadRideMessages } from "@/hooks/useUnreadRideMessages";
 import { useVoiceNavigation } from "@/hooks/useVoiceNavigation";
 import { RideCommunication } from "@/components/ride/RideCommunication";
 import SafetySheet from "@/components/ride/SafetySheet";
@@ -201,6 +202,7 @@ export default function FullScreenNavigation({
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [lastSpokenStepIndex, setLastSpokenStepIndex] = useState(-1);
   const [chatOpen, setChatOpen] = useState(false);
+  const unreadMessages = useUnreadRideMessages(activeTrip?.id, userId, chatOpen);
   const [safetyOpen, setSafetyOpen] = useState(false);
   const [completing, setCompleting] = useState(false);
   const [confirmingEndTrip, setConfirmingEndTrip] = useState(false);
@@ -551,7 +553,14 @@ export default function FullScreenNavigation({
               </button>
             </div>
             <div className="max-h-[280px] overflow-y-auto">
-              <RideCommunication rideId={activeTrip.id} currentUserId={userId} otherUserPhone={riderPhone} riderId={activeTrip.user_id} />
+              <RideCommunication
+                rideId={activeTrip.id}
+                currentUserId={userId}
+                otherUserPhone={riderPhone}
+                riderId={activeTrip.user_id}
+                onStartCall={onStartCall}
+                callActive={callStatus !== 'idle'}
+              />
             </div>
           </motion.div>
         )}
@@ -691,10 +700,18 @@ export default function FullScreenNavigation({
                         type="button"
                         onClick={() => setChatOpen((v) => !v)}
                         aria-label="Message passenger"
-                        className="flex items-center justify-center rounded-full active:scale-90 transition-transform"
+                        className="relative flex items-center justify-center rounded-full active:scale-90 transition-transform"
                         style={{ width: 40, height: 40, ...glassSurface }}
                       >
                         <MessageCircle style={{ width: 18, height: 18, color: RIDE_TEXT }} />
+                        {unreadMessages > 0 && (
+                          <span
+                            className="absolute flex items-center justify-center rounded-full"
+                            style={{ top: -2, right: -2, minWidth: 16, height: 16, padding: '0 3px', background: RIDE_RED, color: '#fff', fontSize: 9.5, fontWeight: 800, boxShadow: '0 0 0 2px rgba(255,255,255,.95)' }}
+                          >
+                            {unreadMessages > 9 ? '9+' : unreadMessages}
+                          </span>
+                        )}
                       </button>
                       {dialNumber && (
                         <button

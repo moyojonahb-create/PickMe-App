@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { resolveAvatarUrl } from "@/lib/avatarUrl";
 import { useAuth } from "@/hooks/useAuth";
 import { useRideRealtime } from "@/hooks/useRideRealtime";
+import { useUnreadRideMessages } from "@/hooks/useUnreadRideMessages";
 import { useDriverTracking } from "@/hooks/useDriverTracking";
 import { useNearbyDrivers } from "@/hooks/useNearbyDrivers";
 import { useRideViewerCount } from "@/lib/rideViewerPresence";
@@ -34,7 +35,7 @@ import CancellationPolicy from "@/components/ride/CancellationPolicy";
 import SafetySheet from "@/components/ride/SafetySheet";
 import DriverRatingModal from "@/components/ride/DriverRatingModal";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { playAcceptedSound, playNewRequestSound, playArrivedSound, playCompletedSound } from "@/lib/notificationSounds";
+import { playNewRequestSound, playArrivedSound, playCompletedSound } from "@/lib/notificationSounds";
 import SearchingOverlay from "@/components/ride/SearchingOverlay";
 import RideCompleteSummary from "@/components/ride/RideCompleteSummary";
 import TripReceiptButton from "@/components/ride/TripReceiptButton";
@@ -102,6 +103,7 @@ export default function RiderRideDetail() {
   // navigates here with { state: { openMessage: true } } rather than
   // dead-ending on this page requiring a second tap to actually open chat.
   const [showCommunication, setShowCommunication] = useState(() => Boolean((location.state as { openMessage?: boolean } | null)?.openMessage));
+  const unreadMessages = useUnreadRideMessages(ride?.id, user?.id, showCommunication);
   const [lastOfferCount, setLastOfferCount] = useState(0);
   const [showRating, setShowRating] = useState(false);
   const [hasRated, setHasRated] = useState(false);
@@ -155,9 +157,10 @@ export default function RiderRideDetail() {
     setRide(data);
 
     if (wasAccepted) {
-      // Sound/haptic fire from DriverBidAcceptedModal itself when it opens —
-      // it owns the full "driver accepted" moment (50s confirm/decline),
-      // replacing the old auto-dismissing celebration overlay.
+      // Haptic fires from DriverBidAcceptedModal itself when it opens — it
+      // owns the full "driver accepted" moment (50s confirm/decline),
+      // replacing the old auto-dismissing celebration overlay. No sound on
+      // the rider side for this — connection sounds are driver-only.
       setShowAcceptedOverlay(true);
       setModalOpen(false);
       try {
@@ -304,7 +307,6 @@ export default function RiderRideDetail() {
       setError(null);
       await acceptOffer(rideId, offer);
       setModalOpen(false);
-      playAcceptedSound();
       toast.success("Driver accepted!", { description: "You can now contact your driver" });
       await refreshRide();
     } catch (e: unknown) { setError((e as Error).message); toast.error("Failed to accept offer", { description: (e as Error).message }); }
@@ -900,8 +902,18 @@ export default function RiderRideDetail() {
                     <Phone className="h-5 w-5 text-foreground" />
                     <span className="text-[11px] font-medium text-foreground">Call</span>
                   </a>
-                  <button onClick={() => { setShowCommunication(!showCommunication); setSheetState('half'); }} className="flex flex-col items-center gap-1.5 py-3 rounded-2xl border border-border active:scale-95 transition-transform">
-                    <MessageCircle className="h-5 w-5 text-foreground" />
+                  <button onClick={() => { setShowCommunication(!showCommunication); setSheetState('half'); }} className="relative flex flex-col items-center gap-1.5 py-3 rounded-2xl border border-border active:scale-95 transition-transform">
+                    <span className="relative">
+                      <MessageCircle className="h-5 w-5 text-foreground" />
+                      {unreadMessages > 0 && (
+                        <span
+                          className="absolute flex items-center justify-center rounded-full text-white"
+                          style={{ top: -4, right: -6, minWidth: 15, height: 15, padding: '0 3px', background: '#B81104', fontSize: 9, fontWeight: 800, boxShadow: '0 0 0 2px hsl(var(--background))' }}
+                        >
+                          {unreadMessages > 9 ? '9+' : unreadMessages}
+                        </span>
+                      )}
+                    </span>
                     <span className="text-[11px] font-medium text-foreground">Message</span>
                   </button>
                   <ShareTripButton rideId={ride.id} pickupAddress={ride.pickup_address} dropoffAddress={ride.dropoff_address} driverName={driverName ?? undefined} variant="square" />
@@ -998,7 +1010,14 @@ export default function RiderRideDetail() {
               {/* Communication panel */}
               {showCommunication && user && (
                 <div className="bg-muted/30 rounded-2xl p-3 border border-border/30">
-                  <RideCommunication rideId={ride.id} currentUserId={user.id} otherUserPhone={driverPhone} riderId={ride.user_id} />
+                  <RideCommunication
+                    rideId={ride.id}
+                    currentUserId={user.id}
+                    otherUserPhone={driverPhone}
+                    riderId={ride.user_id}
+                    onStartCall={startCall}
+                    callActive={callStatus !== 'idle'}
+                  />
                 </div>
               )}
             </>

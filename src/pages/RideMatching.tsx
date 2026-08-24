@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from '@/hooks/use-toast';
 import { haptic } from '@/lib/haptics';
-import { playAcceptedSound, playNewRequestSound } from '@/lib/notificationSounds';
+import { playNewRequestSound } from '@/lib/notificationSounds';
 import { fetchPendingOffers, acceptOffer, declineOffer, fetchDriversByIds, type Offer, type DriverProfile } from '@/lib/offerHelpers';
 import { useTownPricing, calculateRecommendedFare, getFareStep } from '@/hooks/useTownPricing';
 import {
@@ -378,7 +378,8 @@ export default function RideMatching() {
     if (!announced.current && !isComplete && notifyBookerPref) {
       announced.current = true;
       haptic('medium');
-      playAcceptedSound();
+      // Connection sound plays on the driver's side only, not the rider's —
+      // haptic + toast still confirm the match here.
       toast({ title: '🎉 Driver found!', description: 'Your driver is on the way.' });
     }
     fetchAssignedDriver(ride.driver_id).then(setDriver).catch(() => {});

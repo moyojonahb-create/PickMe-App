@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { getDriverProfile, submitOffer, defaultNightMultiplier } from '@/lib/offerHelpers';
 import { fetchEnrichedOpenRides, type EnrichedRideRequest } from '@/lib/driverRideRequests';
 import { expireOldRides } from '@/lib/rideExpiry';
+import { useTrackRideViewer } from '@/lib/rideViewerPresence';
 import { playNewRequestSound } from '@/lib/notificationSounds';
 import { vibrateAlert, showBrowserNotification } from '@/lib/alerts';
 import RideGlassPanel from '@/components/ride/RideGlassPanel';
@@ -265,6 +266,11 @@ function RequestCard({
   onView: () => void;
   onDismiss: () => void;
 }) {
+  // Marks this driver as "viewing" the ride for as long as this card is
+  // mounted, so the rider sees a live "N drivers are viewing your request"
+  // count (RideMatching.tsx's useRideViewerCount) while they wait.
+  useTrackRideViewer(ride.id);
+
   return (
     <div
       className="flex items-center"

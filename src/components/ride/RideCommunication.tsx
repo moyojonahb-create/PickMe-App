@@ -1,14 +1,12 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { CallButton } from "./CallButton";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { useRideRealtime } from "@/hooks/useRideRealtime";
-import { Send, Phone, MessageCircle, Image as ImageIcon, Smile } from "lucide-react";
+import { Send, Phone, MessageCircle, PhoneCall, Smile } from "lucide-react";
 import { playMessageSound } from "@/lib/notificationSounds";
 import { format } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
 import { createMessage } from "@/lib/businessApi";
+import { RIDE_RED, RIDE_RED_GRADIENT, RIDE_TEXT, RIDE_TEXT_2, RIDE_FONT, glassSurface } from "./rideGlass";
 
 type Message = {
   id: string;
@@ -32,13 +30,22 @@ type RideCommunicationProps = {
   currentUserId: string;
   otherUserPhone?: string | null;
   riderId: string;
+  /** In-app voice call (Agora) — when provided, the Call action uses this
+   * instead of a plain `tel:` link, and reuses the same ActiveCallOverlay/
+   * IncomingCallModal already mounted on the parent screen. */
+  onStartCall?: () => void;
+  /** True while a call (ringing/connecting/connected) is already underway,
+   * so this button doesn't start a second one. */
+  callActive?: boolean;
 };
 
-export function RideCommunication({ 
-  rideId, 
-  currentUserId, 
-  otherUserPhone, 
-  riderId 
+export function RideCommunication({
+  rideId,
+  currentUserId,
+  otherUserPhone,
+  riderId,
+  onStartCall,
+  callActive,
 }: RideCommunicationProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [text, setText] = useState("");
@@ -119,43 +126,64 @@ export function RideCommunication({
   }, []);
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <h3 className="font-bold text-lg text-foreground flex items-center gap-2">
-          <MessageCircle className="h-5 w-5" />
+    <div style={{ fontFamily: RIDE_FONT }} className="flex flex-col" >
+      <div className="flex items-center justify-between" style={{ marginBottom: 10 }}>
+        <span className="flex items-center" style={{ gap: 7, fontSize: 15, fontWeight: 700, color: RIDE_TEXT }}>
+          <MessageCircle style={{ width: 17, height: 17, color: RIDE_RED }} />
           Chat
-        </h3>
+        </span>
         {messages.length > 0 && (
-          <span className="text-[10px] text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+          <span style={{ fontSize: 10.5, fontWeight: 700, color: RIDE_TEXT_2, background: 'rgba(17,17,17,.05)', padding: '2px 8px', borderRadius: 999 }}>
             {messages.length} messages
           </span>
         )}
       </div>
 
-      {/* Call Button */}
-      {otherUserPhone && (
-        <div className="flex items-center gap-2 p-3 bg-muted rounded-xl">
-          <Phone className="h-4 w-4 text-muted-foreground" />
-          <span className="flex-1 text-sm font-medium">{otherUserPhone}</span>
-          <CallButton phone={otherUserPhone} label="Call" className="text-sm py-2 px-4" />
-        </div>
-      )}
+      {/* Call row — in-app voice call when wired, phone-network fallback otherwise */}
+      {onStartCall ? (
+        <button
+          type="button"
+          onClick={onStartCall}
+          disabled={callActive}
+          className="flex items-center active:scale-[0.98] transition-transform disabled:opacity-70"
+          style={{ ...glassSurface, borderRadius: 14, padding: '10px 12px', gap: 10, marginBottom: 10, width: '100%', textAlign: 'left' }}
+        >
+          <span className="flex items-center justify-center rounded-full shrink-0" style={{ width: 32, height: 32, background: RIDE_RED_GRADIENT }}>
+            <PhoneCall style={{ width: 15, height: 15, color: '#fff' }} />
+          </span>
+          <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: RIDE_TEXT }}>
+            {callActive ? 'Call in progress…' : 'Call in app'}
+          </span>
+        </button>
+      ) : otherUserPhone ? (
+        <a
+          href={`tel:${otherUserPhone.replace(/[^\d+]/g, "")}`}
+          className="flex items-center active:scale-[0.98] transition-transform"
+          style={{ ...glassSurface, borderRadius: 14, padding: '10px 12px', gap: 10, marginBottom: 10, textDecoration: 'none' }}
+        >
+          <span className="flex items-center justify-center rounded-full shrink-0" style={{ width: 32, height: 32, background: RIDE_RED_GRADIENT }}>
+            <Phone style={{ width: 15, height: 15, color: '#fff' }} />
+          </span>
+          <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: RIDE_TEXT }}>{otherUserPhone}</span>
+          <span style={{ fontSize: 11.5, fontWeight: 700, color: RIDE_RED }}>Call</span>
+        </a>
+      ) : null}
 
-      {/* Chat Section */}
-      <div className="border border-border rounded-xl overflow-hidden">
+      {/* Chat card */}
+      <div style={{ ...glassSurface, borderRadius: 18, overflow: 'hidden' }}>
         {/* Messages */}
-        <div ref={containerRef} className="h-56 overflow-y-auto p-3 space-y-1 bg-muted/20">
+        <div ref={containerRef} className="overflow-y-auto" style={{ height: 224, padding: '12px 12px 4px', display: 'flex', flexDirection: 'column', gap: 2, background: 'rgba(244,245,247,.5)' }}>
           {messages.length === 0 ? (
-            <div className="text-muted-foreground text-sm text-center py-8 space-y-2">
-              <MessageCircle className="w-8 h-8 mx-auto opacity-40" />
-              <p>No messages yet</p>
+            <div className="flex flex-col items-center justify-center" style={{ flex: 1, gap: 8, color: RIDE_TEXT_2 }}>
+              <MessageCircle style={{ width: 26, height: 26, opacity: 0.35 }} />
+              <p style={{ fontSize: 12.5, fontWeight: 600 }}>No messages yet</p>
             </div>
           ) : (
             <>
               {groupedMessages.map((group, gi) => (
                 <div key={gi}>
-                  <div className="flex justify-center my-2">
-                    <span className="text-[10px] text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                  <div className="flex justify-center" style={{ margin: '6px 0' }}>
+                    <span style={{ fontSize: 9.5, fontWeight: 700, color: RIDE_TEXT_2, background: 'rgba(17,17,17,.06)', padding: '2px 9px', borderRadius: 999 }}>
                       {group.date}
                     </span>
                   </div>
@@ -168,22 +196,26 @@ export function RideCommunication({
                         initial={{ opacity: 0, y: 8 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: mi * 0.03 }}
-                        className={`flex ${isMe ? "justify-end" : "justify-start"} mb-1`}
+                        className={`flex ${isMe ? "justify-end" : "justify-start"}`}
+                        style={{ marginBottom: 5 }}
                       >
                         <div
-                          className={`max-w-[80%] rounded-2xl px-3.5 py-2 ${
-                            isMe
-                              ? "bg-primary text-primary-foreground rounded-br-md"
-                              : "bg-card border border-border rounded-bl-md"
-                          }`}
+                          style={{
+                            maxWidth: '78%',
+                            borderRadius: 16,
+                            padding: '8px 12px',
+                            ...(isMe
+                              ? { background: RIDE_RED_GRADIENT, color: '#fff', borderBottomRightRadius: 5 }
+                              : { background: '#fff', color: RIDE_TEXT, boxShadow: 'inset 0 0 0 .5px rgba(17,17,17,.08)', borderBottomLeftRadius: 5 }),
+                          }}
                         >
                           {!isMe && (
-                            <p className="text-[10px] font-bold mb-0.5 opacity-60">
+                            <p style={{ fontSize: 9.5, fontWeight: 800, marginBottom: 1, color: RIDE_TEXT_2, textTransform: 'uppercase', letterSpacing: '.04em' }}>
                               {isRider ? "Rider" : "Driver"}
                             </p>
                           )}
-                          <p className="text-sm leading-relaxed">{m.text}</p>
-                          <p className={`text-[9px] mt-0.5 text-right ${isMe ? 'opacity-60' : 'text-muted-foreground'}`}>
+                          <p style={{ fontSize: 13.5, fontWeight: 500, lineHeight: 1.4 }}>{m.text}</p>
+                          <p style={{ fontSize: 9, marginTop: 2, textAlign: 'right', opacity: isMe ? 0.75 : 0.5 }}>
                             {format(new Date(m.created_at), 'h:mm a')}
                           </p>
                         </div>
@@ -204,14 +236,15 @@ export function RideCommunication({
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
-              className="border-t border-border bg-muted/30 overflow-hidden"
+              style={{ overflow: 'hidden', borderTop: '.5px solid rgba(17,17,17,.08)', background: 'rgba(255,255,255,.6)' }}
             >
-              <div className="p-2 flex flex-wrap gap-1.5">
+              <div className="flex flex-wrap" style={{ padding: 8, gap: 6 }}>
                 {QUICK_REPLIES.map((reply) => (
                   <button
                     key={reply}
                     onClick={() => sendMessage(reply)}
-                    className="text-xs px-3 py-1.5 rounded-full bg-card border border-border hover:bg-primary hover:text-primary-foreground transition-colors font-medium"
+                    className="active:scale-95 transition-transform"
+                    style={{ fontSize: 11.5, fontWeight: 600, padding: '6px 12px', borderRadius: 999, background: '#fff', color: RIDE_TEXT, boxShadow: 'inset 0 0 0 .5px rgba(17,17,17,.1)' }}
                   >
                     {reply}
                   </button>
@@ -222,29 +255,31 @@ export function RideCommunication({
         </AnimatePresence>
 
         {/* Input */}
-        <div className="flex items-center gap-1.5 p-2 bg-background border-t border-border">
+        <div className="flex items-center" style={{ gap: 8, padding: 8, background: '#fff', borderTop: '.5px solid rgba(17,17,17,.08)' }}>
           <button
             onClick={() => setShowQuickReplies(!showQuickReplies)}
-            className={`p-2 rounded-full transition-colors ${showQuickReplies ? 'bg-primary text-primary-foreground' : 'hover:bg-muted text-muted-foreground'}`}
+            className="flex items-center justify-center shrink-0 active:scale-90 transition-transform"
+            style={{ width: 34, height: 34, borderRadius: 999, background: showQuickReplies ? RIDE_RED : 'rgba(17,17,17,.05)' }}
           >
-            <Smile className="h-4 w-4" />
+            <Smile style={{ width: 16, height: 16, color: showQuickReplies ? '#fff' : RIDE_TEXT_2 }} />
           </button>
-          <Input
+          <input
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Type a message…"
-            className="flex-1 border-0 bg-muted/50 focus-visible:ring-1"
             disabled={sending}
+            className="flex-1 min-w-0"
+            style={{ height: 34, borderRadius: 999, background: 'rgba(17,17,17,.05)', padding: '0 14px', fontSize: 13, fontWeight: 500, color: RIDE_TEXT, border: 'none', outline: 'none' }}
           />
-          <Button 
-            onClick={() => sendMessage()} 
+          <button
+            onClick={() => sendMessage()}
             disabled={!text.trim() || sending}
-            size="icon"
-            className="rounded-full shrink-0"
+            className="flex items-center justify-center shrink-0 active:scale-90 transition-transform disabled:opacity-50"
+            style={{ width: 34, height: 34, borderRadius: 999, background: RIDE_RED_GRADIENT }}
           >
-            <Send className="h-4 w-4" />
-          </Button>
+            <Send style={{ width: 15, height: 15, color: '#fff' }} />
+          </button>
         </div>
       </div>
     </div>
