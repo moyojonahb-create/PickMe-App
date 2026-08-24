@@ -192,14 +192,35 @@ function routeFeature(points: Coords[]) {
   };
 }
 
+// A white halo layer under the colored route line keeps it readable over
+// dense/gray road intersections — added first so it renders below the
+// colored line added right after it.
+function ensureRouteHalo(map: MapboxMapInstance, id: string, data: ReturnType<typeof routeFeature>) {
+  const haloId = `${id}-halo`;
+  const haloSource = map.getSource(haloId);
+  if (haloSource?.setData) {
+    haloSource.setData(data);
+    return;
+  }
+  map.addSource(haloId, { type: "geojson", data });
+  map.addLayer({
+    id: haloId,
+    type: "line",
+    source: haloId,
+    layout: { "line-cap": "round", "line-join": "round" },
+    paint: { "line-color": "#FFFFFF", "line-width": 6, "line-opacity": 0.9 },
+  });
+}
+
 function updateRoute(map: MapboxMapInstance, id: string, points: Coords[], color: string, dashed = false) {
   if (points.length < 2) {
-    if (map.getLayer(id)) map.removeLayer(id);
-    if (map.getSource(id)) map.removeSource(id);
+    clearRoute(map, id);
     return;
   }
 
   const data = routeFeature(points);
+  ensureRouteHalo(map, id, data);
+
   const source = map.getSource(id);
   if (source?.setData) {
     source.setData(data);
@@ -214,30 +235,73 @@ function updateRoute(map: MapboxMapInstance, id: string, points: Coords[], color
     layout: { "line-cap": "round", "line-join": "round" },
     paint: {
       "line-color": color,
-      "line-width": 5,
+      "line-width": 4,
       "line-opacity": 0.95,
       ...(dashed ? { "line-dasharray": [1.4, 1.2] } : {}),
     },
   });
 }
 
-// The streets-v12 basemap renders motorways/trunk roads in yellow-orange by
-// default, which reads as the same signal as our own route-progress yellow —
-// force them black so only our route lines carry that meaning.
-const YELLOW_ROAD_LAYER_IDS = [
-  "road-motorway", "road-motorway-case", "road-motorway-link", "road-motorway-link-case",
-  "road-trunk", "road-trunk-case", "road-trunk-link", "road-trunk-link-case",
-];
+// The streets-v12 basemap renders motorways/trunk/primary/secondary roads in
+// yellow-orange-cream by default, which competes with the ride route's own
+// yellow. Every normal road (and its case/outline layer) is recolored to a
+// neutral gray so the ride route is the only yellow-to-red line on the map.
+const ROAD_MAJOR_COLOR = "#C7CCD3";
+const ROAD_SECONDARY_COLOR = "#D9DDE2";
+const ROAD_MINOR_COLOR = "#E5E7EB";
+const ROAD_CASE_COLOR = "#B8BEC7";
 
-function blackenHighwayRoads(map: MapboxMapInstance) {
-  YELLOW_ROAD_LAYER_IDS.forEach((id) => {
-    if (map.getLayer(id)) {
-      try {
-        map.setPaintProperty(id, "line-color", "#1a1a1a");
-      } catch {
-        // layer exists but doesn't support line-color (unlikely) — skip it
-      }
-    }
+// Route/halo layers this file manages itself — never touched by the road
+// recolor pass below, even though their ids also start with "road" (none
+// currently do, but this guards against a future id collision).
+const OWN_ROUTE_LAYER_MARKERS = ["-gradient", "-traveled", "-upcoming", "-halo"];
+
+function classifyRoadLayerColor(id: string): string {
+  if (id.includes("case")) return ROAD_CASE_COLOR;
+  if (/motorway|trunk|primary/.test(id)) return ROAD_MAJOR_COLOR;
+  if (/secondary|tertiary/.test(id)) return ROAD_SECONDARY_COLOR;
+  return ROAD_MINOR_COLOR;
+}
+
+// Soft neutral basemap so the road network and land recede behind the route.
+const MAP_LAND_COLOR = "#F4F5F2";
+const MAP_PARK_COLOR = "#DDE8DD";
+const MAP_WATER_COLOR = "#DCEAF0";
+const BACKGROUND_LAYER_COLORS: Record<string, string> = {
+  background: MAP_LAND_COLOR,
+  land: MAP_LAND_COLOR,
+  landuse: MAP_PARK_COLOR,
+  "landuse-overlay": MAP_PARK_COLOR,
+  park: MAP_PARK_COLOR,
+  "national-park": MAP_PARK_COLOR,
+  water: MAP_WATER_COLOR,
+};
+
+function setLayerColor(map: MapboxMapInstance, id: string, property: "line-color" | "fill-color" | "background-color", color: string) {
+  if (!map.getLayer(id)) return;
+  try {
+    map.setPaintProperty(id, property, color);
+  } catch {
+    // layer exists but doesn't support this paint property — skip it
+  }
+}
+
+function applyMapTheme(map: MapboxMapInstance) {
+  // Iterate every "road-*" line layer actually present in the loaded style,
+  // rather than a fixed id list — Mapbox's road classes (and which ones
+  // carry numbered-route roads like Zimbabwe's "R" trunk roads) vary by
+  // style version, so a static list reliably misses some.
+  const layers = map.getStyle()?.layers ?? [];
+  layers.forEach((layer) => {
+    if (!layer.id.startsWith("road-")) return;
+    if (layer.type !== "line") return;
+    if (OWN_ROUTE_LAYER_MARKERS.some((marker) => layer.id.includes(marker))) return;
+    setLayerColor(map, layer.id, "line-color", classifyRoadLayerColor(layer.id));
+  });
+  Object.entries(BACKGROUND_LAYER_COLORS).forEach(([id, color]) => {
+    const layer = map.getLayer(id);
+    if (!layer) return;
+    setLayerColor(map, id, layer.type === "background" ? "background-color" : "fill-color", color);
   });
 }
 
@@ -279,6 +343,8 @@ function updateGradientRoute(map: MapboxMapInstance, id: string, points: Coords[
 
   const gradientId = `${id}-gradient`;
   const data = routeFeature(points);
+  ensureRouteHalo(map, gradientId, data);
+
   const source = map.getSource(gradientId);
   if (source?.setData) {
     source.setData(data);
@@ -292,7 +358,7 @@ function updateGradientRoute(map: MapboxMapInstance, id: string, points: Coords[
     source: gradientId,
     layout: { "line-cap": "round", "line-join": "round" },
     paint: {
-      "line-width": 5,
+      "line-width": 4,
       "line-opacity": 0.95,
       "line-gradient": [
         "interpolate", ["linear"], ["line-progress"],
@@ -307,6 +373,9 @@ function updateGradientRoute(map: MapboxMapInstance, id: string, points: Coords[
 function clearRoute(map: MapboxMapInstance, id: string) {
   if (map.getLayer(id)) map.removeLayer(id);
   if (map.getSource(id)) map.removeSource(id);
+  const haloId = `${id}-halo`;
+  if (map.getLayer(haloId)) map.removeLayer(haloId);
+  if (map.getSource(haloId)) map.removeSource(haloId);
 }
 
 function MapboxFailure({ message, className, height, onRetry }: { message: string; className?: string; height?: string; onRetry?: () => void }) {
@@ -398,7 +467,7 @@ function InnerMapboxMap({
 
     mapRef.current = map;
     map.on("load", () => {
-      blackenHighwayRoads(map);
+      applyMapTheme(map);
       setLoaded(true);
     });
     return () => {

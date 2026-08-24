@@ -1333,10 +1333,9 @@ func (h *Handler) acceptOffer(c *fiber.Ctx, rideID, offerID string) error {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Authentication required"})
 	}
 
-	var req AcceptRideRequest
-	if err := c.BodyParser(&req); err != nil {
-		return c.Status(400).JSON(fiber.Map{"error": "Invalid request body"})
-	}
+	// The accepting driver comes from the offer row (looked up below), not
+	// the request body — the frontend calls this endpoint with no body at
+	// all, so BodyParser here would fail on every request.
 
 	tx, err := h.db.Begin(ctx)
 	if err != nil {

@@ -94,6 +94,13 @@ export default function DriverRideRequests() {
     try {
       await expireOldRides();
       const profile = await getDriverProfile();
+      const online = profile?.is_online ?? false;
+      setIsOnline(online);
+      if (!online) {
+        setRides([]);
+        lastRideIds.current = new Set();
+        return;
+      }
       const list = await fetchEnrichedOpenRides(profile?.gender);
       setRides(list);
 
@@ -102,7 +109,7 @@ export default function DriverRideRequests() {
       for (const id of currentIds) {
         if (!lastRideIds.current.has(id)) { hasNewRide = true; break; }
       }
-      if (hasNewRide && isOnline) {
+      if (hasNewRide) {
         playNewRequestSound();
         vibrateAlert();
         showBrowserNotification('🚗 New Ride Request', 'A rider is looking for a driver near you', '/driver/requests');
@@ -125,7 +132,7 @@ export default function DriverRideRequests() {
     } finally {
       setLoading(false);
     }
-  }, [autoAccept, isOnline]);
+  }, [autoAccept]);
 
   useEffect(() => {
     refresh();

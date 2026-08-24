@@ -317,39 +317,49 @@ export default function DriverProfilePage() {
       </div>
 
       <div className="max-w-lg mx-auto px-4" style={{ paddingTop: 14, display: 'flex', flexDirection: 'column', gap: 16 }}>
-        {/* Online / request-room block */}
-        <button
-          type="button"
-          onClick={() => navigate('/driver/requests')}
-          className="flex items-center text-left active:scale-[0.98] transition-transform"
+        {/* Online / request-room block — two separate controls, not nested
+            buttons: a <button> inside a <button> is invalid HTML and makes
+            taps on the inner one unreliably bubble into the outer navigate. */}
+        <div
+          className="flex items-center"
           style={{
             padding: '12px 14px', borderRadius: 16, gap: 12,
             background: RIDE_RED_GRADIENT,
             boxShadow: '0 12px 26px rgba(184,17,4,.3), inset 0 1px 0 rgba(255,255,255,.28)',
           }}
         >
-          <span
-            role="button"
+          <button
+            type="button"
             aria-label={isOnline ? 'Go offline' : 'Go online'}
-            onClick={(e) => { e.stopPropagation(); handleToggleOnline(); }}
-            className="shrink-0 flex items-center justify-center rounded-full active:scale-90 transition-transform"
-            style={{ width: 36, height: 36, background: 'rgba(255,255,255,.2)' }}
+            onClick={handleToggleOnline}
+            disabled={togglingOnline}
+            className="shrink-0 flex items-center justify-center rounded-full active:scale-90 transition-transform disabled:opacity-70"
+            style={{ width: 44, height: 44, background: 'rgba(255,255,255,.2)' }}
           >
-            {togglingOnline ? <Loader2 className="animate-spin" style={{ width: 18, height: 18, color: '#fff' }} /> : <Power style={{ width: 18, height: 18, color: '#fff' }} />}
-          </span>
-          <div className="flex-1 min-w-0">
+            {togglingOnline ? <Loader2 className="animate-spin" style={{ width: 20, height: 20, color: '#fff' }} /> : <Power style={{ width: 20, height: 20, color: '#fff' }} />}
+          </button>
+          <button
+            type="button"
+            onClick={handleToggleOnline}
+            disabled={togglingOnline}
+            className="flex-1 min-w-0 text-left disabled:opacity-70"
+          >
             <p style={{ fontSize: 16, fontWeight: 700, color: '#fff' }}>{isOnline ? "You're online" : "You're offline"}</p>
             <p style={{ fontSize: 11.5, fontWeight: 500, color: 'rgba(255,255,255,.8)', marginTop: 1 }}>
-              {waitingCount > 0 ? `${waitingCount} request${waitingCount === 1 ? '' : 's'} waiting` : 'No requests waiting'}
+              {isOnline
+                ? (waitingCount > 0 ? `${waitingCount} request${waitingCount === 1 ? '' : 's'} waiting` : 'No requests waiting')
+                : 'Tap to go online'}
             </p>
-          </div>
-          <span
-            className="shrink-0 flex items-center justify-center"
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate('/driver/requests')}
+            className="shrink-0 flex items-center justify-center active:scale-95 transition-transform"
             style={{ height: 36, padding: '0 14px', borderRadius: 999, background: RIDE_YELLOW }}
           >
             <span style={{ fontSize: 13, fontWeight: 700, color: '#1F1F1F' }}>Go to request room</span>
-          </span>
-        </button>
+          </button>
+        </div>
 
         {/* Vehicle */}
         <section>

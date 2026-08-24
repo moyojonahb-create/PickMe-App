@@ -21,6 +21,7 @@ export type MapboxMapInstance = {
   getSource: (id: string) => any;
   addSource: (id: string, source: Record<string, unknown>) => void;
   getLayer: (id: string) => any;
+  getStyle: () => { layers?: Array<{ id: string; type: string }> } | undefined;
   addLayer: (layer: Record<string, unknown>) => void;
   removeLayer: (id: string) => void;
   removeSource: (id: string) => void;

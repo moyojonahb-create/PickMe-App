@@ -265,21 +265,22 @@ export default function DriverRideDetails() {
 
       {/* Bottom action bar */}
       <div className="flex items-center" style={{ padding: '10px 16px 30px', gap: 12, background: 'rgba(255,255,255,.94)', backdropFilter: 'blur(20px) saturate(190%)', WebkitBackdropFilter: 'blur(20px) saturate(190%)' }}>
-        <button type="button" onClick={handleClose} className="shrink-0 flex items-center justify-center active:scale-[0.97] transition-transform" style={{ width: 104, height: 48, borderRadius: 15, ...glassSurface }}>
+        <button type="button" onClick={handleClose} className="shrink-0 flex items-center justify-center active:scale-[0.97] transition-transform" style={{ width: 104, height: 64, borderRadius: 17, ...glassSurface }}>
           <span style={{ fontSize: 14.5, fontWeight: 700, color: RIDE_TEXT_2 }}>Close</span>
         </button>
         <button
           type="button"
           onClick={handleAccept}
           disabled={submitting}
-          className="flex items-center justify-center active:scale-[0.97] transition-transform disabled:opacity-70"
-          style={{ flex: 1, height: 48, borderRadius: 15, gap: 8, ...redCta }}
+          className="flex flex-col items-center justify-center active:scale-[0.97] transition-transform disabled:opacity-70"
+          style={{ flex: 1, height: 64, borderRadius: 17, gap: 1, ...redCta }}
         >
           {submitting ? (
-            <span style={{ fontSize: 15.5, fontWeight: 700 }}>Sending…</span>
+            <span style={{ fontSize: 17, fontWeight: 700 }}>Sending…</span>
           ) : (
             <>
-              <span style={{ fontSize: 15.5, fontWeight: 700 }}>Accept ride</span>
+              <span className="tabular-nums" style={{ fontSize: 22, fontWeight: 800, lineHeight: 1 }}>{fmtUSD(ride.fare)}</span>
+              <span style={{ fontSize: 13, fontWeight: 700, opacity: 0.9 }}>Accept ride</span>
             </>
           )}
         </button>
