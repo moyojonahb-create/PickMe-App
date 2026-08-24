@@ -210,62 +210,32 @@ func (h *Handler) UpdateLocation(c *fiber.Ctx) error {
 		}
 	}
 
-	_, err := h.db.Exec(context.Background(), `
-		INSERT INTO public.driver_locations (
-			driver_id,
-			latitude,
-			longitude,
-			speed,
-			heading,
-			updated_at
-		)
-		VALUES ($1,$2,$3,$4,$5,NOW())
-		ON CONFLICT (driver_id)
-		DO UPDATE SET
-			latitude = EXCLUDED.latitude,
-			longitude = EXCLUDED.longitude,
-			speed = EXCLUDED.speed,
-			heading = EXCLUDED.heading,
-			updated_at = NOW()
-	`,
-		req.DriverID,
-		req.Latitude,
-		req.Longitude,
-		req.Speed,
-		req.Heading,
-	)
-
-	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
-	}
-
-	_, err = h.db.Exec(context.Background(), `
-		UPDATE public.driver_sessions
-		SET latitude = $1,
-		    longitude = $2,
-		    speed = $3,
-		    heading = $4,
-		    last_seen = NOW(),
-		    is_online = true
-		WHERE driver_id = $5
-	`,
-		req.Latitude,
-		req.Longitude,
-		req.Speed,
-		req.Heading,
-		req.DriverID,
-	)
-
-	if err != nil {
-		log.Println("Driver session location update error:", err)
-	}
+	// Two dead write paths removed here, both silently broken on every call:
+	//
+	//  - public.driver_locations is a read-only VIEW over live_locations
+	//    (SELECT user_id AS driver_user_id, latitude, longitude, is_online,
+	//    updated_at FROM live_locations WHERE user_type = 'driver'), with no
+	//    INSTEAD OF trigger — never writable — and the INSERT here also
+	//    referenced driver_id/speed/heading, none of which exist on it.
+	//  - public.driver_sessions only has (id, driver_id, went_online_at,
+	//    went_offline_at, forced_break_until, created_at) — no latitude,
+	//    longitude, speed, heading, last_seen, or is_online. This UPDATE
+	//    referenced all six and had been failing every time (logged, never
+	//    surfaced to the caller, which is why it went unnoticed).
+	//
+	// The live_locations upsert right below already writes everything both
+	// of these were attempting, and is what the view reads from and what
+	// useNearbyDrivers/useDriverTracking on the frontend actually consume —
+	// nothing else reads driver_locations or looks at driver_sessions for
+	// location data. driver_sessions' real job (going online/offline) is
+	// handled by Online()/Offline() elsewhere, not here.
 
 	// live_locations is the table rider-side "nearby drivers"/tracking reads
 	// (see useNearbyDrivers/useDriverTracking on the frontend) — it was
 	// previously only written by Online()/Offline()/Heartbeat(), so a
 	// driver's position froze at whatever Online() wrote (often 0,0) for
-	// their entire online session even while this periodic location update
-	// kept driver_locations/driver_sessions fresh. Keep it in lockstep here.
+	// their entire online session. Keep it fresh here on every periodic
+	// location update instead.
 	if _, err := h.db.Exec(context.Background(), `
 		INSERT INTO public.live_locations (
 			user_id,
