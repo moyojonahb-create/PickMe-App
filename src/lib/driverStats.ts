@@ -22,24 +22,14 @@ export interface DriverWeekStats {
 }
 
 export async function fetchDriverWeekStats(driverRowId: string, driverCreatedAt?: string | null): Promise<DriverWeekStats> {
-  const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-
-  const [weekRes, historyRes] = await Promise.all([
-    supabase
-      .from('rides')
-      .select('fare')
-      .eq('driver_id', driverRowId)
-      .eq('status', 'completed')
-      .gte('updated_at', weekAgo),
+  const [{ weekEarnings }, historyRes] = await Promise.all([
+    fetchDriverEarningsBreakdown(driverRowId),
     supabase
       .from('rides')
       .select('status')
       .eq('driver_id', driverRowId)
       .in('status', ['completed', 'cancelled']),
   ]);
-
-  const weekFares = (weekRes.data ?? []).reduce((sum, r) => sum + Number(r.fare ?? 0), 0);
-  const weekEarnings = Math.round(weekFares * (1 - COMMISSION_RATE) * 100) / 100;
 
   const history = historyRes.data ?? [];
   const completed = history.filter((r) => r.status === 'completed').length;
@@ -53,6 +43,63 @@ export async function fetchDriverWeekStats(driverRowId: string, driverCreatedAt?
   }
 
   return { weekEarnings, completionRate, monthsOnPickMe };
+}
+
+export interface DriverEarningsBreakdown {
+  /** Net take (fare minus the standard commission) for rides completed
+   * since local midnight today. */
+  todayEarnings: number;
+  /** Same, for the 24h window before today. */
+  yesterdayEarnings: number;
+  /** Today's fare total before commission — with todayCommission, this is
+   * what "$X in fares · $Y commission" reconciles against exactly. */
+  todayFares: number;
+  todayCommission: number;
+  /** Net take for rides completed in the last 7 days. */
+  weekEarnings: number;
+}
+
+/** Real per-ride numbers from `rides` (status='completed', driver_id), not
+ * the wallet-summary endpoints — those read public.wallet_accounts /
+ * settlement_records, which don't exist in this database (see the
+ * pre-launch audit fixes), so they always fail and every earnings figure
+ * sourced from them silently renders as "—" or $0. Bucketed on created_at
+ * to match loadTodayTrips' existing "today's trips" query in
+ * DriverDashboard.tsx, so the two never disagree about what "today" means. */
+export async function fetchDriverEarningsBreakdown(driverRowId: string): Promise<DriverEarningsBreakdown> {
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const startOfYesterday = new Date(startOfToday.getTime() - 24 * 60 * 60 * 1000);
+  const startOfWeek = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+  const { data } = await supabase
+    .from('rides')
+    .select('fare, created_at')
+    .eq('driver_id', driverRowId)
+    .eq('status', 'completed')
+    .gte('created_at', startOfWeek < startOfYesterday ? startOfWeek.toISOString() : startOfYesterday.toISOString());
+
+  let todayFares = 0;
+  let yesterdayFares = 0;
+  let weekFares = 0;
+  for (const r of data ?? []) {
+    const fare = Number(r.fare ?? 0);
+    const t = new Date(r.created_at).getTime();
+    if (t >= startOfToday.getTime()) todayFares += fare;
+    else if (t >= startOfYesterday.getTime()) yesterdayFares += fare;
+    if (t >= startOfWeek.getTime()) weekFares += fare;
+  }
+
+  const net = (fares: number) => Math.round(fares * (1 - COMMISSION_RATE) * 100) / 100;
+  const todayCommission = Math.round(todayFares * COMMISSION_RATE * 100) / 100;
+
+  return {
+    todayEarnings: net(todayFares),
+    yesterdayEarnings: net(yesterdayFares),
+    todayFares: Math.round(todayFares * 100) / 100,
+    todayCommission,
+    weekEarnings: net(weekFares),
+  };
 }
 
 export interface RiderTrustSignals {

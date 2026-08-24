@@ -60,7 +60,7 @@ import { subscribeRiderComing } from "@/lib/rideSignals";
 import { setDriverOnline } from "@/lib/driverPresence";
 import { useDriverRideAlerts, type DriverServiceArea } from "@/hooks/useDriverRideAlerts";
 import { useAppBootstrap } from "@/hooks/useAppBootstrap";
-import { getDriverWalletSummary } from "@/lib/walletApi";
+import { fetchDriverEarningsBreakdown } from "@/lib/driverStats";
 import { Footprints } from "lucide-react";
 
 // Smart USD format: $4 for whole, $4.50 for halves
@@ -155,42 +155,24 @@ export default function DriverDashboard() {
   const locationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const { speak, isSupported: voiceSupported } = useVoiceNavigation({ enabled: voiceEnabled });
   const fetchDriverBalance = useCallback(async () => {
-    if (!user) return;
-    const data = await getDriverWalletSummary();
-    setDriverBalance(data.balance ?? 0);
-
-    // Today's/yesterday's net earnings — same driver_earnings figures shown
-    // on the Wallet screen, just bucketed by day for the dashboard summary.
-    // Today's fares/commission are the SAME per-ride records split into
-    // their two components (fare_amount, platform_fee) rather than a
-    // separately-derived number, so "$X in fares · $Y commission" always
-    // reconciles exactly to the net take above it.
-    const startOfToday = new Date();
-    startOfToday.setHours(0, 0, 0, 0);
-    const startOfYesterday = new Date(startOfToday.getTime() - 24 * 60 * 60 * 1000);
-    const startOfWeek = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    let todaySum = 0;
-    let yestSum = 0;
-    let weekSum = 0;
-    let todayFareSum = 0;
-    let todayCommissionSum = 0;
-    for (const e of data.earnings) {
-      const t = new Date(e.created_at).getTime();
-      if (t >= startOfToday.getTime()) {
-        todaySum += Number(e.driver_earnings);
-        todayFareSum += Number(e.fare_amount);
-        todayCommissionSum += Number(e.platform_fee);
-      } else if (t >= startOfYesterday.getTime()) {
-        yestSum += Number(e.driver_earnings);
-      }
-      if (t >= startOfWeek.getTime()) weekSum += Number(e.driver_earnings);
-    }
-    setTodayEarnings(todaySum);
-    setYesterdayEarnings(yestSum);
-    setTodayFares(todayFareSum);
-    setTodayCommission(todayCommissionSum);
-    setWeekEarnings(weekSum);
-  }, [user]);
+    if (!user || !profile) return;
+    // Balance and earnings both used to read the Go backend's wallet-summary
+    // endpoints, which query public.wallet_accounts / settlement_records —
+    // neither table exists in this database (see the pre-launch audit
+    // fixes), so every call silently failed and this whole card rendered
+    // "—" / $0 permanently. wallets is the one balance table that's real and
+    // RLS-scoped to the driver; earnings come straight from completed rides.
+    const [walletRes, breakdown] = await Promise.all([
+      supabase.from('wallets').select('balance').eq('user_id', user.id).maybeSingle(),
+      fetchDriverEarningsBreakdown(profile.id),
+    ]);
+    setDriverBalance(Number(walletRes.data?.balance ?? 0));
+    setTodayEarnings(breakdown.todayEarnings);
+    setYesterdayEarnings(breakdown.yesterdayEarnings);
+    setTodayFares(breakdown.todayFares);
+    setTodayCommission(breakdown.todayCommission);
+    setWeekEarnings(breakdown.weekEarnings);
+  }, [user, profile]);
   // Wallet summary is non-critical (only feeds the earnings cards) — deferred
   // until the shell has actually rendered (`loading` false) instead of firing
   // in the same burst as the profile/active-trip queries the first paint
