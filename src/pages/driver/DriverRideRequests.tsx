@@ -1,35 +1,40 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Bell, X, SlidersHorizontal, ShieldCheck } from 'lucide-react';
+import { Wallet, User, MapPin, X } from 'lucide-react';
 import { toast } from 'sonner';
-import { Switch } from '@/components/ui/switch';
+import LazyMapboxMap from '@/components/map/LazyMapboxMap';
 import { supabase } from '@/lib/supabaseClient';
-import { useEscapeKey } from '@/hooks/useEscapeKey';
 import { getDriverProfile, submitOffer, defaultNightMultiplier } from '@/lib/offerHelpers';
 import { fetchEnrichedOpenRides, type EnrichedRideRequest } from '@/lib/driverRideRequests';
-import RideRequestListCard from '@/components/driver/RideRequestListCard';
+import RideGlassPanel from '@/components/ride/RideGlassPanel';
+import SwipeDismissCard from '@/components/driver/SwipeDismissCard';
 import DriverBottomNav from '@/components/driver/DriverBottomNav';
+import { RIDE_RED, RIDE_TEXT, RIDE_TEXT_2, glassSurface } from '@/components/ride/rideGlass';
 
 function fmtUSD(n: number): string {
   return n % 1 === 0 ? `$${n}` : `$${n.toFixed(2)}`;
 }
 
-const AUTO_ACCEPT_KEY = 'pickme-driver-auto-accept';
+const panelStyle = {
+  background: 'rgba(255,255,255,.9)',
+  backdropFilter: 'blur(28px) saturate(190%)',
+  WebkitBackdropFilter: 'blur(28px) saturate(190%)',
+};
 
-type SortMode = 'nearest' | 'fare';
+const AUTO_ACCEPT_KEY = 'pickme-driver-auto-accept';
 
 export default function DriverRideRequests() {
   const navigate = useNavigate();
   const [rides, setRides] = useState<EnrichedRideRequest[]>([]);
+  const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
-  const [bannerDismissed, setBannerDismissed] = useState(false);
   const [driverCoords, setDriverCoords] = useState<{ lat: number; lng: number } | null>(null);
-  const [filterOpen, setFilterOpen] = useState(false);
-  const [vehicleFilter, setVehicleFilter] = useState<string | null>(null);
-  const [sortMode, setSortMode] = useState<SortMode>('nearest');
-  const [autoAccept, setAutoAccept] = useState(() => localStorage.getItem(AUTO_ACCEPT_KEY) === '1');
+  const [isOnline, setIsOnline] = useState(false);
+  const [balance, setBalance] = useState(0);
+  const [autoAccept] = useState(() => localStorage.getItem(AUTO_ACCEPT_KEY) === '1');
   const autoAcceptedIds = useRef<Set<string>>(new Set());
-  useEscapeKey(filterOpen, () => setFilterOpen(false));
+  const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [undoRide, setUndoRide] = useState<EnrichedRideRequest | null>(null);
 
   useEffect(() => {
     navigator.geolocation?.getCurrentPosition(
@@ -37,6 +42,21 @@ export default function DriverRideRequests() {
       () => {},
       { enableHighAccuracy: false, timeout: 5000 }
     );
+  }, []);
+
+  useEffect(() => {
+    getDriverProfile().then((p) => setIsOnline(p?.is_online ?? false)).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    supabase.auth.getUser().then(({ data }) => {
+      const uid = data.user?.id;
+      if (!uid) return;
+      supabase.from('wallets').select('balance').eq('user_id', uid).maybeSingle()
+        .then(({ data: w }) => { if (!cancelled && w) setBalance(Number(w.balance)); });
+    });
+    return () => { cancelled = true; };
   }, []);
 
   const refresh = useCallback(async () => {
@@ -53,7 +73,7 @@ export default function DriverRideRequests() {
           const price = Math.max(0.5, Math.round(ride.fare * mult * 2) / 2);
           submitOffer({ ride_id: ride.id, price, eta_minutes: 10 })
             .then(() => toast.success('Auto-accepted a ride', { description: `${fmtUSD(price)} offer sent` }))
-            .catch(() => { /* silently skip — driver can still accept manually */ });
+            .catch(() => {});
         }
       }
     } catch (e) {
@@ -61,15 +81,10 @@ export default function DriverRideRequests() {
     } finally {
       setLoading(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoAccept]);
 
   useEffect(() => {
     refresh();
-    // Realtime-driven, not polling: any insert/update/delete on rides
-    // (a new request, one getting claimed, one expiring) refreshes the
-    // list immediately. A long safety-net poll stays as a fallback only in
-    // case the realtime channel silently drops.
     const channel = supabase
       .channel('driver-open-rides-list')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'rides' }, () => { refresh(); })
@@ -77,12 +92,6 @@ export default function DriverRideRequests() {
     const id = setInterval(refresh, 45000);
     return () => { supabase.removeChannel(channel); clearInterval(id); };
   }, [refresh]);
-
-  const toggleAutoAccept = (checked: boolean) => {
-    setAutoAccept(checked);
-    localStorage.setItem(AUTO_ACCEPT_KEY, checked ? '1' : '0');
-    toast.success(checked ? 'Auto-accept turned on' : 'Auto-accept turned off');
-  };
 
   const minutesAwayFor = (ride: EnrichedRideRequest): number | null => {
     if (!driverCoords || ride.pickup_lat == null || ride.pickup_lon == null) return null;
@@ -92,134 +101,148 @@ export default function DriverRideRequests() {
     return Math.max(1, Math.round((km / 25) * 60));
   };
 
+  const distanceKmFor = (ride: EnrichedRideRequest): number | null => {
+    if (!driverCoords || ride.pickup_lat == null || ride.pickup_lon == null) return null;
+    const dLat = (ride.pickup_lat - driverCoords.lat) * 111;
+    const dLng = (ride.pickup_lon - driverCoords.lng) * 111 * Math.cos((driverCoords.lat * Math.PI) / 180);
+    return Math.sqrt(dLat * dLat + dLng * dLng);
+  };
+
   const visibleRides = useMemo(() => {
-    let list = rides;
-    if (vehicleFilter) list = list.filter((r) => (r.vehicle_type || 'economy') === vehicleFilter);
-    const withMinutes = list.map((r) => ({ ride: r, minutes: minutesAwayFor(r) }));
-    withMinutes.sort((a, b) => {
-      if (sortMode === 'fare') return b.ride.fare - a.ride.fare;
-      return (a.minutes ?? 999) - (b.minutes ?? 999);
-    });
-    return withMinutes;
+    return rides
+      .filter((r) => !dismissedIds.has(r.id))
+      .map((r) => ({ ride: r, minutes: minutesAwayFor(r), km: distanceKmFor(r) }))
+      .sort((a, b) => (a.minutes ?? 999) - (b.minutes ?? 999));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rides, vehicleFilter, sortMode, driverCoords]);
+  }, [rides, dismissedIds, driverCoords]);
+
+  const handleDismiss = (ride: EnrichedRideRequest) => {
+    setDismissedIds((prev) => new Set(prev).add(ride.id));
+    setUndoRide(ride);
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    undoTimerRef.current = setTimeout(() => setUndoRide((cur) => (cur?.id === ride.id ? null : cur)), 4000);
+  };
+
+  const handleUndo = () => {
+    if (!undoRide) return;
+    setDismissedIds((prev) => { const next = new Set(prev); next.delete(undoRide.id); return next; });
+    setUndoRide(null);
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+  };
 
   return (
-    <div className="min-h-[100dvh] bg-background pb-24">
-      <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-lg border-b border-border/50 px-4 py-3.5" style={{ paddingTop: 'calc(env(safe-area-inset-top) + 14px)' }}>
-        <div className="max-w-lg mx-auto flex items-center justify-between">
-          <button onClick={() => navigate(-1)} aria-label="Back" className="w-9 h-9 flex items-center justify-center rounded-full active:scale-90 transition-transform">
-            <ArrowLeft className="w-5 h-5 text-foreground" />
-          </button>
-          <h1 className="text-[16px] font-bold text-foreground">Ride Requests</h1>
-          <button onClick={() => setFilterOpen(true)} aria-label="Filter requests" className="w-9 h-9 flex items-center justify-center rounded-full active:scale-90 transition-transform">
-            <SlidersHorizontal className="w-5 h-5 text-foreground" />
-          </button>
-        </div>
+    <div className="relative w-full h-[100dvh] overflow-hidden" style={{ background: '#F2F4F7' }}>
+      <div className="absolute inset-0">
+        <LazyMapboxMap defaultCenter={driverCoords ?? undefined} driverLocation={driverCoords} className="w-full h-full" height="100%" />
+      </div>
+      <div className="absolute inset-0 pointer-events-none" style={{ background: 'rgba(17,17,17,.12)' }} />
+
+      {/* Floating top chrome */}
+      <div className="absolute inset-x-0 z-20 flex items-center" style={{ top: 59, left: 16, right: 16, gap: 10 }}>
+        <span className="inline-flex items-center shrink-0" style={{ height: 44, padding: '0 14px', borderRadius: 999, gap: 7, ...glassSurface }}>
+          <span className="rounded-full" style={{ width: 7, height: 7, background: isOnline ? '#22A447' : '#9AA1AD' }} />
+          <span style={{ fontSize: 13, fontWeight: 700, color: RIDE_TEXT }}>{isOnline ? 'Online' : 'Offline'}</span>
+        </span>
+        <button
+          type="button"
+          onClick={() => navigate('/driver/wallet')}
+          className="ml-auto inline-flex items-center shrink-0 active:scale-95 transition-transform"
+          style={{ height: 44, padding: '0 14px', borderRadius: 999, gap: 7, ...glassSurface }}
+        >
+          <Wallet style={{ width: 15, height: 15, color: RIDE_RED }} />
+          <span className="tabular-nums" style={{ fontSize: 13, fontWeight: 700, color: RIDE_TEXT }}>{fmtUSD(balance)}</span>
+        </button>
       </div>
 
-      <div className="max-w-lg mx-auto px-4 py-4 space-y-3">
-        {!bannerDismissed && rides.length > 0 && (
-          <div className="flex items-center gap-3 rounded-2xl px-3.5 py-3" style={{ background: '#FFF8DB' }}>
-            <span className="w-9 h-9 rounded-full flex items-center justify-center shrink-0" style={{ background: '#FFDD00' }}>
-              <Bell className="w-4.5 h-4.5" style={{ color: '#111111' }} />
-            </span>
-            <div className="flex-1 min-w-0">
-              <p className="text-[13px] font-bold text-foreground">You have {rides.length} new request{rides.length !== 1 ? 's' : ''}</p>
-              <p className="text-[11px] text-muted-foreground">Choose a request to accept</p>
+      {/* Sheet */}
+      <div className="absolute left-0 right-0 bottom-0 z-10" style={{ top: 170, maxWidth: 480, margin: '0 auto', width: '100%' }}>
+        <RideGlassPanel panelStyle={panelStyle} style={{ height: '100%', paddingBottom: 'env(safe-area-inset-bottom)' }}>
+          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain" style={{ paddingBottom: 100 }}>
+            <div className="p-4" style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
+              <div className="flex items-center justify-between">
+                <span style={{ fontSize: 11, fontWeight: 700, color: RIDE_TEXT_2, textTransform: 'uppercase', letterSpacing: '.1em' }}>Requests</span>
+                {visibleRides.length > 0 && (
+                  <span className="inline-flex items-center" style={{ height: 22, padding: '0 9px', borderRadius: 999, gap: 5, background: 'rgba(184,17,4,.1)' }}>
+                    <span className="rounded-full" style={{ width: 6, height: 6, background: RIDE_RED }} />
+                    <span style={{ fontSize: 11, fontWeight: 700, color: RIDE_RED }}>{visibleRides.length} new</span>
+                  </span>
+                )}
+              </div>
+              {visibleRides.length > 0 && (
+                <span style={{ fontSize: 11, fontWeight: 500, color: '#9AA1AD', marginTop: -6 }}>Swipe a card left to dismiss</span>
+              )}
+
+              {loading ? (
+                <div className="space-y-3">
+                  {Array.from({ length: 2 }).map((_, i) => <div key={i} className="h-24 rounded-2xl bg-muted animate-pulse" />)}
+                </div>
+              ) : visibleRides.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-border py-14 text-center">
+                  <p className="text-sm text-muted-foreground">No open ride requests right now.</p>
+                </div>
+              ) : (
+                visibleRides.map(({ ride, km }) => (
+                  <SwipeDismissCard key={ride.id} onDismiss={() => handleDismiss(ride)}>
+                    <RequestCard ride={ride} km={km} onView={() => navigate(`/driver/ride/${ride.id}`)} onDismiss={() => handleDismiss(ride)} />
+                  </SwipeDismissCard>
+                ))
+              )}
             </div>
-            <button onClick={() => setBannerDismissed(true)} aria-label="Dismiss" className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-black/5 shrink-0">
-              <X className="w-4 h-4 text-muted-foreground" />
-            </button>
           </div>
-        )}
-
-        {loading ? (
-          <div className="space-y-3">
-            {Array.from({ length: 2 }).map((_, i) => <div key={i} className="h-64 rounded-2xl bg-muted animate-pulse" />)}
-          </div>
-        ) : visibleRides.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-border py-14 text-center">
-            <p className="text-sm text-muted-foreground">No open ride requests right now.</p>
-          </div>
-        ) : (
-          visibleRides.map(({ ride, minutes }) => (
-            <RideRequestListCard
-              key={ride.id}
-              ride={ride}
-              minutesAway={minutes}
-              fmtUSD={fmtUSD}
-              onClick={() => navigate(`/driver/ride/${ride.id}`)}
-              onAccept={() => navigate(`/driver/ride/${ride.id}`)}
-              onEditFare={() => navigate(`/driver/ride/${ride.id}`)}
-            />
-          ))
-        )}
-
-        {/* Auto-accept */}
-        <div className="flex items-center gap-3 rounded-2xl border border-border p-3.5 mt-2">
-          <span className="w-9 h-9 rounded-full bg-muted flex items-center justify-center shrink-0">
-            <ShieldCheck className="w-4.5 h-4.5 text-muted-foreground" />
-          </span>
-          <div className="flex-1 min-w-0">
-            <p className="text-[13px] font-bold text-foreground">Auto-accept is {autoAccept ? 'ON' : 'OFF'}</p>
-            <p className="text-[11px] text-muted-foreground">
-              {autoAccept ? 'New requests are offered automatically at the listed fare.' : 'You need to accept requests manually.'}
-            </p>
-          </div>
-          <Switch checked={autoAccept} onCheckedChange={toggleAutoAccept} />
-        </div>
+        </RideGlassPanel>
       </div>
 
-      {filterOpen && (
-        <div className="fixed inset-0 z-[80] flex items-end justify-center" role="dialog" aria-modal="true">
-          <div className="absolute inset-0 bg-foreground/30 backdrop-blur-sm" onClick={() => setFilterOpen(false)} />
-          <div className="relative w-full max-w-lg bg-background rounded-t-3xl p-5 space-y-4" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 20px)' }}>
-            <div className="flex items-center justify-between">
-              <p className="font-bold text-foreground">Filter requests</p>
-              <button onClick={() => setFilterOpen(false)} aria-label="Close" className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-muted">
-                <X className="w-4 h-4 text-muted-foreground" />
-              </button>
-            </div>
-
-            <div>
-              <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Vehicle type</p>
-              <div className="flex gap-2 flex-wrap">
-                {[{ key: null, label: 'All' }, { key: 'economy', label: 'Economy' }, { key: 'share', label: 'Comfort' }, { key: 'parcel', label: 'Parcel' }].map((opt) => (
-                  <button
-                    key={opt.label}
-                    onClick={() => setVehicleFilter(opt.key)}
-                    className={`px-3.5 py-2 rounded-full text-[12px] font-bold border ${vehicleFilter === opt.key ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-foreground'}`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Sort by</p>
-              <div className="flex gap-2">
-                {[{ key: 'nearest' as SortMode, label: 'Nearest' }, { key: 'fare' as SortMode, label: 'Highest fare' }].map((opt) => (
-                  <button
-                    key={opt.key}
-                    onClick={() => setSortMode(opt.key)}
-                    className={`px-3.5 py-2 rounded-full text-[12px] font-bold border ${sortMode === opt.key ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-foreground'}`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <button onClick={() => setFilterOpen(false)} className="w-full py-3 rounded-2xl bg-primary text-primary-foreground font-bold text-sm">
-              Apply
-            </button>
+      {undoRide && (
+        <div className="absolute left-0 right-0 z-30 flex justify-center" style={{ bottom: 100 }}>
+          <div className="flex items-center" style={{ gap: 12, padding: '10px 16px', borderRadius: 999, background: '#1F1F1F', boxShadow: '0 10px 24px rgba(0,0,0,.3)' }}>
+            <span style={{ fontSize: 12.5, fontWeight: 600, color: '#fff' }}>Request dismissed</span>
+            <button type="button" onClick={handleUndo} style={{ fontSize: 12.5, fontWeight: 700, color: '#FFDD00' }}>Undo</button>
           </div>
         </div>
       )}
 
       <DriverBottomNav />
+    </div>
+  );
+}
+
+function RequestCard({
+  ride, km, onView, onDismiss,
+}: {
+  ride: EnrichedRideRequest;
+  km: number | null;
+  onView: () => void;
+  onDismiss: () => void;
+}) {
+  return (
+    <div
+      className="flex items-center"
+      style={{ borderRadius: 18, background: '#fff', boxShadow: '0 10px 24px rgba(17,17,17,.1), inset 0 0 0 .5px rgba(17,17,17,.06)', padding: '13px 14px', gap: 12 }}
+    >
+      <span className="shrink-0 flex items-center justify-center rounded-full overflow-hidden" style={{ width: 52, height: 52, background: 'linear-gradient(135deg,#C6CBD4,#868E9B)', boxShadow: '0 0 0 2px rgba(255,255,255,.95)' }}>
+        {ride.passenger_avatar_url ? (
+          <img src={ride.passenger_avatar_url} alt="" className="w-full h-full object-cover" />
+        ) : (
+          <User style={{ width: 24, height: 24, color: '#fff' }} strokeWidth={2} />
+        )}
+      </span>
+      <div className="min-w-0" style={{ flex: 1 }}>
+        <p className="truncate" style={{ fontSize: 15, fontWeight: 700, color: RIDE_TEXT }}>{ride.passenger_display_name ?? 'Rider'}</p>
+        <p className="flex items-center truncate" style={{ gap: 3, fontSize: 12, fontWeight: 600, color: RIDE_TEXT_2, marginTop: 2 }}>
+          <MapPin style={{ width: 12, height: 12, color: '#1A73E8', flexShrink: 0 }} />
+          {km != null ? `${km.toFixed(1)} km to pickup` : 'Nearby'}
+        </p>
+        <p className="truncate" style={{ fontSize: 11, fontWeight: 500, color: '#9AA1AD', marginTop: 1 }}>{ride.pickup_address}</p>
+      </div>
+      <div className="flex flex-col items-end shrink-0" style={{ gap: 6 }}>
+        <span className="tabular-nums" style={{ fontSize: 18, fontWeight: 700, color: RIDE_RED }}>{fmtUSD(ride.fare)}</span>
+        <button type="button" onClick={onView} className="flex items-center justify-center active:scale-95 transition-transform" style={{ height: 30, padding: '0 14px', borderRadius: 999, background: 'linear-gradient(135deg, #E01B00, #B81104)' }}>
+          <span style={{ fontSize: 12.5, fontWeight: 700, color: '#fff' }}>View</span>
+        </button>
+      </div>
+      <button type="button" onClick={onDismiss} aria-label="Dismiss" className="shrink-0 flex items-center justify-center rounded-full active:scale-90 transition-transform" style={{ width: 22, height: 22, background: 'rgba(17,17,17,.06)', alignSelf: 'flex-start' }}>
+        <X style={{ width: 12, height: 12, color: RIDE_TEXT_2 }} strokeWidth={2.4} />
+      </button>
     </div>
   );
 }

@@ -22,6 +22,11 @@ export interface EnrichedRideRequest {
   /** Sent with the request, before the driver accepts — see NoteToDriverSheet. */
   rider_note?: string | null;
   passenger_gender: string | null;
+  /** "First L." — first name plus last initial, not the full name; a
+   * middle ground between full identity and the gender-only chip this
+   * card used to show. */
+  passenger_display_name: string | null;
+  passenger_avatar_url: string | null;
   preferences: {
     quiet_ride: boolean;
     cool_temperature: boolean;
@@ -56,7 +61,9 @@ export async function fetchEnrichedOpenRides(driverGender?: string | null): Prom
   const [prefsRes, luggageRes, profilesRes, parcelRes, noteRes] = await Promise.all([
     supabase.from('ride_preferences').select('ride_id, quiet_ride, cool_temperature, wav_required, hearing_impaired').in('ride_id', rideIds),
     supabase.from('luggage_requests').select('ride_id').in('ride_id', rideIds),
-    userIds.length > 0 ? supabase.from('profiles').select('user_id, gender').in('user_id', userIds) : Promise.resolve({ data: [] as { user_id: string; gender: string | null }[] }),
+    userIds.length > 0
+      ? supabase.from('profiles').select('user_id, gender, full_name, avatar_url').in('user_id', userIds)
+      : Promise.resolve({ data: [] as { user_id: string; gender: string | null; full_name: string | null; avatar_url: string | null }[] }),
     supabase.from('ride_parcel_details').select('ride_id, package_size, recipient_name, delivery_note, who_pays, photo_path').in('ride_id', rideIds),
     // Same trip_events / event_type: 'rider_note' log RideMatching.tsx and
     // FullScreenNavigation.tsx read — a driver deciding whether to accept
@@ -67,6 +74,7 @@ export async function fetchEnrichedOpenRides(driverGender?: string | null): Prom
   const prefsMap = new Map((prefsRes.data ?? []).map((p) => [p.ride_id, p]));
   const luggageSet = new Set((luggageRes.data ?? []).map((l) => l.ride_id));
   const genderMap = new Map((profilesRes.data ?? []).map((p) => [p.user_id, p.gender]));
+  const profileMap = new Map((profilesRes.data ?? []).map((p) => [p.user_id, p]));
   const parcelMap = new Map((parcelRes.data ?? []).map((p) => [p.ride_id, p]));
   const noteMap = new Map<string, string>();
   for (const row of noteRes.data ?? []) {
@@ -99,6 +107,8 @@ export async function fetchEnrichedOpenRides(driverGender?: string | null): Prom
       passenger_phone: (row.passenger_phone as string | null | undefined) ?? null,
       rider_note: noteMap.get(String(row.id)) ?? null,
       passenger_gender: genderMap.get(userId) ?? null,
+      passenger_display_name: formatDisplayName(profileMap.get(userId)?.full_name ?? null),
+      passenger_avatar_url: profileMap.get(userId)?.avatar_url ?? null,
       preferences: prefs
         ? {
             quiet_ride: Boolean(prefs.quiet_ride),
@@ -121,4 +131,13 @@ export async function fetchEnrichedOpenRides(driverGender?: string | null): Prom
       })(),
     };
   });
+}
+
+/** "Tendai Moyo" -> "Tendai M." — real name, not the booker's/rider's full
+ * identity, shown before a driver has accepted. */
+function formatDisplayName(fullName: string | null): string | null {
+  if (!fullName) return null;
+  const parts = fullName.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0];
+  return `${parts[0]} ${parts[parts.length - 1][0]}.`;
 }

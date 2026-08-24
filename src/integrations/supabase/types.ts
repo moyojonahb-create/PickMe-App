@@ -259,6 +259,7 @@ export type Database = {
           created_at: string
           document_type: string
           driver_id: string
+          expiry_date: string | null
           file_url: string
           id: string
           rejection_reason: string | null
@@ -271,6 +272,7 @@ export type Database = {
           created_at?: string
           document_type: string
           driver_id: string
+          expiry_date?: string | null
           file_url: string
           id?: string
           rejection_reason?: string | null
@@ -283,6 +285,7 @@ export type Database = {
           created_at?: string
           document_type?: string
           driver_id?: string
+          expiry_date?: string | null
           file_url?: string
           id?: string
           rejection_reason?: string | null
