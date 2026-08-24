@@ -1120,9 +1120,9 @@ export default function RiderRideDetail() {
           open={safetyOpen}
           onClose={() => setSafetyOpen(false)}
           rideId={ride.id}
-          driverName={driverName || 'Your driver'}
-          driverAvatarUrl={driverProfile?.avatar_url}
-          vehicleLabel={[driverProfile?.vehicle_color, driverProfile?.vehicle_make, driverProfile?.vehicle_model].filter(Boolean).join(' ') || 'Vehicle details pending'}
+          counterpartName={driverName || 'Your driver'}
+          counterpartAvatarUrl={driverProfile?.avatar_url}
+          counterpartMeta={[driverProfile?.vehicle_color, driverProfile?.vehicle_make, driverProfile?.vehicle_model].filter(Boolean).join(' ') || 'Vehicle details pending'}
           plateNumber={driverProfile?.plate_number ?? null}
           startedAt={null}
           pickupAddress={ride.pickup_address}
