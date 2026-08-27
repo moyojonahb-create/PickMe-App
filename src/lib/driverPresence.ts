@@ -1,4 +1,5 @@
 import { goBackend, type GoDriverPresenceRequest } from '@/lib/goBackendClient';
+import { invalidateDriverProfileCache } from '@/lib/offerHelpers';
 
 function getCurrentPositionSafe(timeoutMs = 4000): Promise<GeolocationPosition | null> {
   return new Promise((resolve) => {
@@ -55,6 +56,12 @@ export async function setDriverOnline(
   if (typeof result?.is_online === 'boolean' && result.is_online !== online) {
     throw new Error('Server did not confirm the requested status change');
   }
+
+  // The write succeeded server-side — any cached copy of this driver's
+  // profile is now stale. Without this, a refresh a few seconds later
+  // (toggleOnline's own follow-up refresh() included) can read that stale
+  // cache entry and silently revert the UI to the pre-toggle state.
+  await invalidateDriverProfileCache();
 
   return { is_online: online };
 }

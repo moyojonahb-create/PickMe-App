@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/hooks/useAuth';
+import { getCached, setCache } from '@/lib/queryCache';
 
 interface DriverStatus {
   isDriver: boolean;
@@ -9,6 +10,8 @@ interface DriverStatus {
   driverId: string | null;
   loading: boolean;
 }
+
+type CachedStatus = Omit<DriverStatus, 'loading'>;
 
 export function useDriverStatus(): DriverStatus {
   const { user, loading: authLoading } = useAuth();
@@ -34,6 +37,17 @@ export function useDriverStatus(): DriverStatus {
       return;
     }
 
+    // UserMenu (rendered on most pages) mounts this hook on every
+    // navigation — cache the result for 30s so hopping between pages
+    // doesn't re-query `drivers` every time, same TTL/pattern as
+    // getDriverProfile() in offerHelpers.ts.
+    const cacheKey = `driver-status-${user.id}`;
+    const cached = getCached<CachedStatus>(cacheKey);
+    if (cached) {
+      setState({ ...cached, loading: false });
+      return;
+    }
+
     const checkDriverStatus = async () => {
       try {
         const { data, error } = await supabase
@@ -48,23 +62,11 @@ export function useDriverStatus(): DriverStatus {
           return;
         }
 
-        if (data) {
-          setState({
-            isDriver: true,
-            isApproved: data.status === 'approved',
-            isPending: data.status === 'pending',
-            driverId: data.id,
-            loading: false,
-          });
-        } else {
-          setState({
-            isDriver: false,
-            isApproved: false,
-            isPending: false,
-            driverId: null,
-            loading: false,
-          });
-        }
+        const next: CachedStatus = data
+          ? { isDriver: true, isApproved: data.status === 'approved', isPending: data.status === 'pending', driverId: data.id }
+          : { isDriver: false, isApproved: false, isPending: false, driverId: null };
+        setCache(cacheKey, next, 30_000);
+        setState({ ...next, loading: false });
       } catch (err) {
         console.error('Error checking driver status:', err);
         setState(prev => ({ ...prev, loading: false }));

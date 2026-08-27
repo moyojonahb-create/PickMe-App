@@ -11,6 +11,7 @@ interface TripMapboxMapProps {
   className?: string;
   routeGradient?: boolean;
   mapCards?: MapEtaCard[];
+  bottomInset?: number;
 }
 
 function getPhase(status: string): TripPhase {
@@ -28,6 +29,7 @@ export default function TripMapboxMap({
   className,
   routeGradient,
   mapCards,
+  bottomInset,
 }: TripMapboxMapProps) {
   const phase = getPhase(tripStatus);
   const routeCoordinates =
@@ -47,6 +49,7 @@ export default function TripMapboxMap({
       className={className}
       routeGradient={routeGradient}
       mapCards={mapCards}
+      bottomInset={bottomInset}
     />
   );
 }

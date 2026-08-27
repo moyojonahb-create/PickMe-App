@@ -1,7 +1,7 @@
 // Offer/bidding system helpers - RLS safe implementation
 import { supabase } from '@/lib/supabaseClient';
 import { resolveAvatarUrl } from '@/lib/avatarUrl';
-import { getCached, setCache } from '@/lib/queryCache';
+import { getCached, setCache, invalidateCache } from '@/lib/queryCache';
 import { goBackend, type GoOfferCreateRequest } from '@/lib/goBackendClient';
 import { decimalToMinor } from '@/lib/money';
 import { normalizeRideRow } from '@/lib/rideContract';
@@ -223,6 +223,22 @@ export async function getDriverProfile(): Promise<DriverProfile | null> {
   if (error) throw new Error(error.message);
   if (data) setCache(cacheKey, data, 30_000); // 30s TTL
   return data as DriverProfile | null;
+}
+
+// Drop the cached profile so the next getDriverProfile() call re-fetches
+// instead of serving a stale copy. Call this right after writing something
+// that changes the row (e.g. presence) — without it, a refresh triggered in
+// the few seconds after that write can read the pre-write cache entry and
+// silently stomp the state a caller just set (this is what made "go online"
+// immediately flip back to offline: toggleOnline's own refresh() call was
+// reading a still-cached is_online: false from before the toggle).
+export async function invalidateDriverProfileCache(): Promise<void> {
+  try {
+    const user = await getUserOrThrow();
+    invalidateCache(`driver-profile-${user.id}`);
+  } catch {
+    // Not signed in — nothing cached to invalidate.
+  }
 }
 
 // Submit a new offer

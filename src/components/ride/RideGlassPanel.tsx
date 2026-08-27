@@ -1,4 +1,4 @@
-import { ReactNode, CSSProperties } from 'react';
+import { ReactNode, CSSProperties, forwardRef } from 'react';
 import { cn } from '@/lib/utils';
 import { glassPanel, RIDE_RED_GRADIENT, RIDE_FONT } from './rideGlass';
 
@@ -27,16 +27,17 @@ interface RideGlassPanelProps {
  * than a flat bar stacked in front of it. The panel keeps its own white/
  * frosted fill on top, so red never bleeds through the glass.
  */
-export default function RideGlassPanel({
+const RideGlassPanel = forwardRef<HTMLDivElement, RideGlassPanelProps>(function RideGlassPanel({
   children,
   onRibbonClick,
   className,
   style,
   handleWidth = 44,
   panelStyle,
-}: RideGlassPanelProps) {
+}, ref) {
   return (
     <div
+      ref={ref}
       className={cn('relative flex flex-col overflow-hidden', className)}
       style={{
         borderTopLeftRadius: 26,
@@ -90,4 +91,6 @@ export default function RideGlassPanel({
       </div>
     </div>
   );
-}
+});
+
+export default RideGlassPanel;

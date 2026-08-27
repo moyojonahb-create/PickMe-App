@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { MapPin, Navigation, Clock, Car, Shield, Phone, AlertCircle, Radio, ChevronRight } from "lucide-react";
@@ -52,6 +52,24 @@ export default function LiveTrackingPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'live' | 'offline'>('connecting');
+
+  // Measured height of the bottom status panel — fed to the map as
+  // fitBounds padding so pickup/dropoff/route always frame above it.
+  const bottomPanelRef = useRef<HTMLDivElement | null>(null);
+  const [bottomPanelHeight, setBottomPanelHeight] = useState(220);
+  useEffect(() => {
+    const el = bottomPanelRef.current;
+    if (!el) return;
+    let debounce: ReturnType<typeof setTimeout>;
+    const observer = new ResizeObserver((entries) => {
+      const height = entries[0]?.contentRect.height;
+      if (height === undefined) return;
+      clearTimeout(debounce);
+      debounce = setTimeout(() => setBottomPanelHeight(Math.round(height)), 180);
+    });
+    observer.observe(el);
+    return () => { clearTimeout(debounce); observer.disconnect(); };
+  }, []);
 
   useEffect(() => {
     if (!tripId) return;
@@ -195,6 +213,7 @@ export default function LiveTrackingPage() {
           driverLocation={driverLoc ? { lat: driverLoc.latitude, lng: driverLoc.longitude } : null}
           tripStatus={ride.status}
           height="100%"
+          bottomInset={bottomPanelHeight + 24}
         />
       </div>
 
@@ -223,7 +242,7 @@ export default function LiveTrackingPage() {
       </div>
 
       {/* Bottom panel */}
-      <div className="absolute bottom-0 left-0 right-0 z-50 bg-card rounded-t-3xl shadow-[0_-8px_40px_rgba(0,0,0,0.12)]"
+      <div ref={bottomPanelRef} className="absolute bottom-0 left-0 right-0 z-50 bg-card rounded-t-3xl shadow-[0_-8px_40px_rgba(0,0,0,0.12)]"
         style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 12px)' }}>
         <div className="flex justify-center pt-3 pb-2"><div className="w-10 h-1 rounded-full bg-border" /></div>
 

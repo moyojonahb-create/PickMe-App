@@ -27,7 +27,7 @@ export default function SwipeDismissCard({ children, onDismiss }: SwipeDismissCa
   };
 
   return (
-    <div className="relative overflow-hidden" style={{ borderRadius: 18 }}>
+    <div className="relative overflow-hidden" style={{ borderRadius: 20 }}>
       <motion.div
         className="absolute inset-0 flex items-center justify-end"
         style={{ background: RIDE_RED, opacity: dismissOpacity, paddingRight: 24, gap: 8 }}

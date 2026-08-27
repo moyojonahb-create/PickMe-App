@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- API 31+ (Android 12) owns its own SplashScreen system and ignores a
+         plain android:background on a Theme.SplashScreen-derived theme,
+         falling back to a white windowSplashScreenBackground default. These
+         attributes are the ones it actually reads, so the launch frame is
+         red instead of a white flash before the WebView/HTML splash paints. -->
+    <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/colorPrimary</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_foreground</item>
+        <item name="android:background">@drawable/splash</item>
+    </style>
+
+</resources>

@@ -110,6 +110,10 @@ export default function RiderRideDetail() {
   const [secondsLeft, setSecondsLeft] = useState(30);
   const [showEcoCashPay, setShowEcoCashPay] = useState(false);
   const [sheetState, setSheetState] = useState<SheetState>('half');
+  // Reserved bottom padding for the map's fitBounds — kept in sync with
+  // RideBottomSheet's own already-computed height so pickup/dropoff/route
+  // always frame above the sheet instead of partly under it.
+  const [sheetHeightPx, setSheetHeightPx] = useState(260);
   const [showAcceptedOverlay, setShowAcceptedOverlay] = useState(false);
   const showAcceptedOverlayRef = useRef(showAcceptedOverlay);
   useEffect(() => { showAcceptedOverlayRef.current = showAcceptedOverlay; }, [showAcceptedOverlay]);
@@ -362,7 +366,10 @@ export default function RiderRideDetail() {
     }
   };
 
-  const modalViewing = offers.map((o) => {
+  // Memoized so this screen's own 1s countdown re-render (secondsLeft,
+  // below) doesn't rebuild these arrays every tick when offers/driversById
+  // haven't actually changed.
+  const modalViewing = useMemo(() => offers.map((o) => {
     const d = driversById[o.driver_id];
     return {
       driverId: o.driver_id,
@@ -374,9 +381,9 @@ export default function RiderRideDetail() {
       distanceKm: 0,
       etaMinutes: o.eta_minutes || 10
     };
-  });
+  }), [offers, driversById]);
 
-  const modalOffers = offers.map((o) => {
+  const modalOffers = useMemo(() => offers.map((o) => {
     const d = driversById[o.driver_id];
     const driverFullName = (d as Record<string, unknown>)?.full_name as string | undefined;
     return {
@@ -399,7 +406,7 @@ export default function RiderRideDetail() {
       ratingAvg: ((d as Record<string, unknown>)?.rating_avg as number) || null,
       totalTrips: ((d as Record<string, unknown>)?.total_trips as number) || null
     };
-  });
+  }), [offers, driversById]);
 
   const isAccepted = ride ? ["accepted", "enroute", "in_progress", "arrived"].includes(ride.status) : false;
   const isPending = isRequestedRideStatus(ride?.status, ride?.ride_status);
@@ -508,6 +515,7 @@ export default function RiderRideDetail() {
             className="w-full h-full"
             routeGradient
             mapCards={arrivalMapCards}
+            bottomInset={sheetHeightPx + 24}
           />
         ) : pickupCoords ? (
           <MapboxMap
@@ -518,6 +526,7 @@ export default function RiderRideDetail() {
             routeGeometry={ride?.route_polyline}
             className="w-full h-full"
             height="100%"
+            bottomInset={sheetHeightPx + 24}
           />
         ) : (
           <MapboxMap
@@ -662,6 +671,7 @@ export default function RiderRideDetail() {
       <RideBottomSheet
         state={sheetState}
         onStateChange={setSheetState}
+        onHeightChange={setSheetHeightPx}
         collapsedContent={collapsedContent}
         className="z-40"
       >

@@ -59,6 +59,11 @@ interface MapboxMapProps {
   /** Bump to force an immediate re-center on driverLocation even when the
    * coordinates haven't changed (a manual "recenter" tap). */
   recenterSignal?: number;
+  /** Extra bottom padding (px) reserved for a bottom sheet/card overlaying
+   * the map, so fitBounds keeps pickup/dropoff/route above it instead of
+   * framing points that then render hidden underneath. Pass the sheet's
+   * actual measured height — it changes as the sheet's content changes. */
+  bottomInset?: number;
 }
 
 const ZW_CENTER: Coords = { lat: -19.015, lng: 29.155 };
@@ -307,10 +312,10 @@ function applyMapTheme(map: MapboxMapInstance) {
 
 const ROUTE_TRAVELED_COLOR = "#B81104";
 const ROUTE_UPCOMING_COLOR = "#FFDD00";
-// Secondary route is the driver's path to pickup, not the trip itself — green
-// keeps it visually distinct from the primary route's yellow-turning-red.
-const SECONDARY_ROUTE_TRAVELED_COLOR = "#15803d";
-const SECONDARY_ROUTE_UPCOMING_COLOR = "#22c55e";
+// Secondary route (driver's path to pickup) uses the same brand red/yellow
+// as the primary route — no green anywhere on the trip map.
+const SECONDARY_ROUTE_TRAVELED_COLOR = ROUTE_TRAVELED_COLOR;
+const SECONDARY_ROUTE_UPCOMING_COLOR = ROUTE_UPCOMING_COLOR;
 
 // Renders a route as two segments — traveled behind the vehicle's current
 // progress point, upcoming ahead of it — instead of a single solid color.
@@ -419,6 +424,7 @@ function InnerMapboxMap({
   navigationFollow,
   followZoom = 17,
   recenterSignal,
+  bottomInset = 260,
 }: MapboxMapProps & { mapboxgl: MapboxGL }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapboxMapInstance | null>(null);
@@ -548,7 +554,7 @@ function InnerMapboxMap({
     if (points.length >= 2) {
       const bounds = new mapboxgl.LngLatBounds();
       points.forEach((p) => bounds.extend([p.lng, p.lat]));
-      map.fitBounds(bounds, { padding: { top: 70, bottom: 260, left: 48, right: 48 }, maxZoom: 16 });
+      map.fitBounds(bounds, { padding: { top: 70, bottom: bottomInset, left: 48, right: 48 }, maxZoom: 16 });
     } else if (points.length === 1) {
       map.panTo([points[0].lng, points[0].lat]);
       map.setZoom(15);
@@ -570,6 +576,7 @@ function InnerMapboxMap({
     smoothDrivers,
     stops,
     riderGender,
+    bottomInset,
     preferredCenter?.lat,
     preferredCenter?.lng,
     defaultCenter?.lat,

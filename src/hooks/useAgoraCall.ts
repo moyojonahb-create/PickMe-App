@@ -156,6 +156,10 @@ export function useAgoraCall({
   }, [currentUserId]);
 
   const cleanup = useCallback(async () => {
+    // Stop any ringtone — without this, unmounting mid-ring (nav away, trip
+    // completes, app backgrounds) left startRingtone's module-level
+    // setInterval running forever with nothing left able to stop it.
+    stopRingtone();
     joiningRef.current = false;
     if (timerRef.current) {
       clearInterval(timerRef.current);

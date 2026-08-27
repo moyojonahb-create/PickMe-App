@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowUp,
@@ -143,6 +143,51 @@ function useSmoothPosition(target: Coordinates | null): Coordinates | null {
   return display;
 }
 
+interface NavigationMapProps {
+  pickup: Coordinates;
+  dropoff: Coordinates;
+  driverCoords: Coordinates | null;
+  routeGeometry: string | null;
+  destination: Coordinates;
+  mapCards: MapEtaCard[];
+  recenterSignal: number;
+}
+
+/** Owns the map and the 60fps driver-position smoothing that used to live on
+ * FullScreenNavigation itself — every eased animation frame re-rendered the
+ * entire ~900-line screen (banner, bottom sheet, chat, buttons) instead of
+ * just the marker. Isolating it here means that rAF loop only re-renders
+ * this small leaf component. */
+const NavigationMap = memo(function NavigationMap({
+  pickup, dropoff, driverCoords, routeGeometry, destination, mapCards, recenterSignal,
+}: NavigationMapProps) {
+  const smoothPos = useSmoothPosition(driverCoords);
+  const routeCoordinates = useMemo(
+    () => (!routeGeometry ? ([smoothPos, destination].filter(Boolean) as Coordinates[]) : undefined),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [routeGeometry, smoothPos?.lat, smoothPos?.lng, destination.lat, destination.lng]
+  );
+
+  return (
+    <div className="absolute inset-0">
+      <MapboxMap
+        pickup={pickup}
+        dropoff={dropoff}
+        driverLocation={smoothPos}
+        routeGeometry={routeGeometry}
+        routeCoordinates={routeCoordinates}
+        routeGradient
+        mapCards={mapCards}
+        navigationFollow
+        followZoom={17}
+        recenterSignal={recenterSignal}
+        className="h-full w-full"
+        height="100%"
+      />
+    </div>
+  );
+});
+
 /** Keeps the display awake for as long as this screen is mounted — a driver
  * following directions cannot have the phone sleep mid-navigation. No-op
  * (never throws) where the Wake Lock API isn't supported. Re-acquires on
@@ -221,7 +266,6 @@ export default function FullScreenNavigation({
   const holdRaf = useRef<number | null>(null);
   const holdStart = useRef<number | null>(null);
 
-  const smoothPos = useSmoothPosition(driverCoords);
   const { speak, isSupported: voiceSupported } = useVoiceNavigation({ enabled: voiceEnabled });
   useWakeLock();
 
@@ -279,9 +323,14 @@ export default function FullScreenNavigation({
   const isInTrip = activeTrip.status === "in_progress" || activeTrip.status === "ongoing";
   const canCancel = isPickupPhase || isArrivedWaiting;
   const origin = driverCoords;
-  const destination = isPickupPhase || isArrivedWaiting
-    ? { lat: activeTrip.pickup_lat, lng: activeTrip.pickup_lon }
-    : { lat: activeTrip.dropoff_lat, lng: activeTrip.dropoff_lon };
+  const destination = useMemo(
+    () => (isPickupPhase || isArrivedWaiting
+      ? { lat: activeTrip.pickup_lat, lng: activeTrip.pickup_lon }
+      : { lat: activeTrip.dropoff_lat, lng: activeTrip.dropoff_lon }),
+    [isPickupPhase, isArrivedWaiting, activeTrip.pickup_lat, activeTrip.pickup_lon, activeTrip.dropoff_lat, activeTrip.dropoff_lon]
+  );
+  const pickup = useMemo(() => ({ lat: activeTrip.pickup_lat, lng: activeTrip.pickup_lon }), [activeTrip.pickup_lat, activeTrip.pickup_lon]);
+  const dropoff = useMemo(() => ({ lat: activeTrip.dropoff_lat, lng: activeTrip.dropoff_lon }), [activeTrip.dropoff_lat, activeTrip.dropoff_lon]);
   const phaseKey = isPickupPhase || isArrivedWaiting ? "pickup" : "dropoff";
 
   const fetchRoute = useCallback(async () => {
@@ -312,13 +361,14 @@ export default function FullScreenNavigation({
 
   useEffect(() => { fetchRoute(); }, [fetchRoute]);
 
-  const { currentStep, currentStepIndex, distToManeuverM } = (() => {
+  const { currentStep, currentStepIndex, distToManeuverM } = useMemo(() => {
     if (!route?.steps.length || !driverCoords) return { currentStep: null as RouteStep | null, currentStepIndex: 0, distToManeuverM: 0 };
     const { stepIndex } = findCurrentStep(route.steps, driverCoords);
     const step = route.steps[stepIndex];
     const dist = haversineM(driverCoords, { lat: step.maneuver.location[1], lng: step.maneuver.location[0] });
     return { currentStep: step, currentStepIndex: stepIndex, distToManeuverM: dist };
-  })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [route?.steps, driverCoords?.lat, driverCoords?.lng]);
 
   useEffect(() => {
     if (!currentStep || !voiceEnabled || lastSpokenStepIndex === currentStepIndex) return;
@@ -338,9 +388,12 @@ export default function FullScreenNavigation({
   const arrivingClockTime = new Date(Date.now() + etaMinutes * 60000)
     .toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-  const mapCards: MapEtaCard[] = driverCoords
-    ? [{ id: phaseKey, at: destination, label: isPickupPhase || isArrivedWaiting ? "Pickup" : "Drop-off", value: `${etaMinutes} min`, subvalue: `${remainingDistanceKm.toFixed(1)} km` }]
-    : [];
+  const mapCards: MapEtaCard[] = useMemo(
+    () => (driverCoords
+      ? [{ id: phaseKey, at: destination, label: isPickupPhase || isArrivedWaiting ? "Pickup" : "Drop-off", value: `${etaMinutes} min`, subvalue: `${remainingDistanceKm.toFixed(1)} km` }]
+      : []),
+    [driverCoords, phaseKey, destination, isPickupPhase, isArrivedWaiting, etaMinutes, remainingDistanceKm]
+  );
 
   const handleStatusUpdate = async (newStatus: string, message: string, voiceMsg?: string) => {
     try {
@@ -470,22 +523,15 @@ export default function FullScreenNavigation({
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] bg-background">
-      <div className="absolute inset-0">
-        <MapboxMap
-          pickup={{ lat: activeTrip.pickup_lat, lng: activeTrip.pickup_lon }}
-          dropoff={{ lat: activeTrip.dropoff_lat, lng: activeTrip.dropoff_lon }}
-          driverLocation={smoothPos}
-          routeGeometry={route?.geometry ?? null}
-          routeCoordinates={!route ? ([smoothPos, destination].filter(Boolean) as Coordinates[]) : undefined}
-          routeGradient
-          mapCards={mapCards}
-          navigationFollow
-          followZoom={17}
-          recenterSignal={recenterSignal}
-          className="h-full w-full"
-          height="100%"
-        />
-      </div>
+      <NavigationMap
+        pickup={pickup}
+        dropoff={dropoff}
+        driverCoords={driverCoords}
+        routeGeometry={route?.geometry ?? null}
+        destination={destination}
+        mapCards={mapCards}
+        recenterSignal={recenterSignal}
+      />
 
       {/* Navigation banner — owns the top of the screen, not the sheet. */}
       <div className="absolute z-20" style={{ top: 'calc(env(safe-area-inset-top) + 7px)', left: 16, right: 16 }}>

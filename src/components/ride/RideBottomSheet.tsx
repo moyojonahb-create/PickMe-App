@@ -9,6 +9,10 @@ interface RideBottomSheetProps {
   children: ReactNode;
   collapsedContent?: ReactNode;
   className?: string;
+  /** Fires whenever the sheet's own (already-computed) height changes, so a
+   * sibling full-screen map can reserve that much bottom padding instead of
+   * fitting pickup/dropoff/route behind it. */
+  onHeightChange?: (height: number) => void;
 }
 
 const SNAP_POINTS = {
@@ -23,6 +27,7 @@ export default function RideBottomSheet({
   children,
   collapsedContent,
   className,
+  onHeightChange,
 }: RideBottomSheetProps) {
   const sheetRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -46,6 +51,10 @@ export default function RideBottomSheet({
   useEffect(() => {
     setSheetHeight(getHeightForState(state));
   }, [state, getHeightForState]);
+
+  useEffect(() => {
+    onHeightChange?.(sheetHeight);
+  }, [sheetHeight, onHeightChange]);
 
   useEffect(() => {
     const handleResize = () => setSheetHeight(getHeightForState(state));

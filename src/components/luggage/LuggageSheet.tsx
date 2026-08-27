@@ -1,12 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Camera, ImageIcon, Trash2, Briefcase, Loader2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { uploadLuggagePhoto, deleteLuggagePhoto, getLuggageSignedUrls } from '@/lib/luggageStorage';
+import { glassPanel, glassSurface, redCta, RIDE_RED, RIDE_RED_GRADIENT, RIDE_TEXT, RIDE_TEXT_2, RIDE_FONT } from '@/components/ride/rideGlass';
 
 export interface LuggageDraft {
   description: string;
@@ -35,7 +34,6 @@ export default function LuggageSheet({ open, onClose, initial, onSave }: Luggage
   const { user } = useAuth();
   const [description, setDescription] = useState(initial?.description || '');
   const [weight, setWeight] = useState<LuggageDraft['estimated_weight']>(initial?.estimated_weight || 'small');
-  const [itemCount, setItemCount] = useState(initial?.item_count || 1);
   const [paths, setPaths] = useState<string[]>(initial?.image_paths || []);
   const [previews, setPreviews] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -46,7 +44,6 @@ export default function LuggageSheet({ open, onClose, initial, onSave }: Luggage
     if (!open) return;
     setDescription(initial?.description || '');
     setWeight(initial?.estimated_weight || 'small');
-    setItemCount(initial?.item_count || 1);
     setPaths(initial?.image_paths || []);
   }, [open, initial]);
 
@@ -99,7 +96,10 @@ export default function LuggageSheet({ open, onClose, initial, onSave }: Luggage
     onSave({
       description: description.trim(),
       estimated_weight: weight,
-      item_count: itemCount,
+      // Item count is no longer a separate stepper — the rider notes it in
+      // the free-text description instead. Kept in the payload since the
+      // column/driver preview still read it (falling back to 1 if absent).
+      item_count: 1,
       image_paths: paths,
     });
     onClose();
@@ -119,98 +119,86 @@ export default function LuggageSheet({ open, onClose, initial, onSave }: Luggage
             transition={{ type: 'spring', damping: 30, stiffness: 300 }}
             drag="y" dragConstraints={{ top: 0, bottom: 0 }} dragElastic={0.2}
             onDragEnd={(_, info) => { if (info.offset.y > 120) onClose(); }}
-            className="fixed bottom-0 inset-x-0 z-[71] bg-background rounded-t-3xl max-h-[90vh] flex flex-col"
+            className="fixed bottom-0 inset-x-0 z-[71] rounded-t-3xl max-h-[90vh] flex flex-col"
+            style={{ ...glassPanel, fontFamily: RIDE_FONT }}
           >
             <div className="flex justify-center pt-3 pb-1 shrink-0">
               <div className="w-12 h-1.5 rounded-full bg-muted-foreground/30" />
             </div>
-            <div className="flex items-center justify-between px-5 pb-3 border-b border-border shrink-0">
-              <div className="flex items-center gap-2">
-                <div className="w-9 h-9 rounded-full bg-yellow-400 flex items-center justify-center">
-                  <Briefcase className="w-5 h-5 text-black" />
+            <div className="flex items-center justify-between px-5 pb-3 shrink-0" style={{ boxShadow: 'inset 0 -1px 0 rgba(17,17,17,.08)' }}>
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-full flex items-center justify-center" style={{ background: RIDE_RED_GRADIENT, boxShadow: '0 6px 14px rgba(184,17,4,.35)' }}>
+                  <Briefcase className="w-[18px] h-[18px] text-white" />
                 </div>
-                <h2 className="text-lg font-bold text-foreground">Add Luggage</h2>
+                <h2 className="text-lg font-bold" style={{ color: RIDE_TEXT }}>Add Luggage</h2>
               </div>
-              <button onClick={onClose} className="p-2 rounded-full hover:bg-muted">
-                <X className="w-5 h-5" />
+              <button
+                onClick={onClose}
+                aria-label="Close"
+                className="flex items-center justify-center rounded-full active:scale-90 transition-transform"
+                style={{ width: 32, height: 32, background: 'rgba(17,17,17,.06)' }}
+              >
+                <X className="w-4 h-4" style={{ color: RIDE_TEXT }} />
               </button>
             </div>
 
             <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
               {/* Description */}
               <div className="space-y-2">
-                <label className="text-sm font-semibold text-foreground">What are you transporting?</label>
+                <label className="text-[13px] font-bold" style={{ color: RIDE_TEXT }}>What are you transporting?</label>
                 <Textarea
                   value={description}
                   onChange={e => setDescription(e.target.value)}
                   placeholder="2 suitcases, groceries, small fridge, bags, TV stand…"
                   maxLength={500}
-                  className="min-h-[90px] resize-none"
+                  className="min-h-[90px] resize-none rounded-2xl border-0 shadow-none focus-visible:ring-0"
+                  style={{ ...glassSurface, color: RIDE_TEXT }}
                 />
-                <p className="text-xs text-muted-foreground text-right">{description.length}/500</p>
+                <p className="text-xs text-right" style={{ color: RIDE_TEXT_2 }}>{description.length}/500</p>
               </div>
 
               {/* Weight */}
               <div className="space-y-2">
-                <label className="text-sm font-semibold text-foreground">Size / Weight</label>
+                <label className="text-[13px] font-bold" style={{ color: RIDE_TEXT }}>Size / Weight</label>
                 <div className="grid grid-cols-2 gap-2">
                   {WEIGHTS.map(w => (
                     <button
                       key={w.value}
                       type="button"
                       onClick={() => setWeight(w.value)}
-                      className={cn(
-                        'p-3 rounded-xl border text-left transition-all',
-                        weight === w.value
-                          ? 'border-yellow-400 bg-yellow-400/10'
-                          : 'border-border bg-background hover:bg-muted'
-                      )}
+                      className="p-3.5 rounded-2xl text-left transition-transform active:scale-[0.98]"
+                      style={{
+                        ...glassSurface,
+                        ...(weight === w.value ? { boxShadow: `inset 0 0 0 2px ${RIDE_RED}, 0 8px 16px rgba(184,17,4,.14)` } : {}),
+                      }}
                     >
-                      <p className="text-sm font-bold text-foreground">{w.label}</p>
-                      <p className="text-xs text-muted-foreground">{w.hint}</p>
+                      <p className="text-sm font-bold" style={{ color: RIDE_TEXT }}>{w.label}</p>
+                      <p className="text-xs" style={{ color: RIDE_TEXT_2 }}>{w.hint}</p>
                     </button>
                   ))}
-                </div>
-              </div>
-
-              {/* Item count */}
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-foreground">Number of items</label>
-                <div className="flex items-center justify-between bg-muted rounded-xl p-3">
-                  <span className="text-sm text-foreground">{itemCount} {itemCount === 1 ? 'item' : 'items'}</span>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setItemCount(c => Math.max(1, c - 1))}
-                      className="w-9 h-9 rounded-full bg-background border border-border font-bold text-foreground"
-                    >−</button>
-                    <span className="w-8 text-center font-bold">{itemCount}</span>
-                    <button
-                      onClick={() => setItemCount(c => Math.min(99, c + 1))}
-                      className="w-9 h-9 rounded-full bg-background border border-border font-bold text-foreground"
-                    >+</button>
-                  </div>
                 </div>
               </div>
 
               {/* Photos */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <label className="text-sm font-semibold text-foreground">Photos ({paths.length}/{MAX_IMAGES})</label>
-                  {uploading && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
+                  <label className="text-[13px] font-bold" style={{ color: RIDE_TEXT }}>Photos ({paths.length}/{MAX_IMAGES})</label>
+                  {uploading && <Loader2 className="w-4 h-4 animate-spin" style={{ color: RIDE_TEXT_2 }} />}
                 </div>
                 <div className="grid grid-cols-3 gap-2">
                   {paths.map((_, i) => (
-                    <div key={i} className="relative aspect-square rounded-xl overflow-hidden bg-muted">
+                    <div key={i} className="relative aspect-square rounded-2xl overflow-hidden" style={glassSurface}>
                       {previews[i] ? (
                         <img src={previews[i]} alt="" className="w-full h-full object-cover" />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center">
-                          <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                          <Loader2 className="w-4 h-4 animate-spin" style={{ color: RIDE_TEXT_2 }} />
                         </div>
                       )}
                       <button
                         onClick={() => removePhoto(i)}
-                        className="absolute top-1 right-1 w-7 h-7 rounded-full bg-black/70 flex items-center justify-center"
+                        className="absolute top-1 right-1 w-7 h-7 rounded-full flex items-center justify-center"
+                        style={{ background: 'rgba(17,17,17,.65)', backdropFilter: 'blur(6px)' }}
                       >
                         <Trash2 className="w-3.5 h-3.5 text-white" />
                       </button>
@@ -221,18 +209,20 @@ export default function LuggageSheet({ open, onClose, initial, onSave }: Luggage
                       <button
                         onClick={() => cameraInputRef.current?.click()}
                         disabled={uploading}
-                        className="aspect-square rounded-xl border-2 border-dashed border-border flex flex-col items-center justify-center gap-1 hover:bg-muted disabled:opacity-50"
+                        className="aspect-square rounded-2xl border-2 border-dashed flex flex-col items-center justify-center gap-1 active:opacity-70 transition-opacity disabled:opacity-40"
+                        style={{ ...glassSurface, borderColor: 'rgba(184,17,4,.28)' }}
                       >
-                        <Camera className="w-5 h-5 text-muted-foreground" />
-                        <span className="text-[10px] text-muted-foreground font-medium">Camera</span>
+                        <Camera className="w-5 h-5" style={{ color: RIDE_RED }} />
+                        <span className="text-[10px] font-semibold" style={{ color: RIDE_TEXT_2 }}>Camera</span>
                       </button>
                       <button
                         onClick={() => fileInputRef.current?.click()}
                         disabled={uploading}
-                        className="aspect-square rounded-xl border-2 border-dashed border-border flex flex-col items-center justify-center gap-1 hover:bg-muted disabled:opacity-50"
+                        className="aspect-square rounded-2xl border-2 border-dashed flex flex-col items-center justify-center gap-1 active:opacity-70 transition-opacity disabled:opacity-40"
+                        style={{ ...glassSurface, borderColor: 'rgba(184,17,4,.28)' }}
                       >
-                        <ImageIcon className="w-5 h-5 text-muted-foreground" />
-                        <span className="text-[10px] text-muted-foreground font-medium">Gallery</span>
+                        <ImageIcon className="w-5 h-5" style={{ color: RIDE_RED }} />
+                        <span className="text-[10px] font-semibold" style={{ color: RIDE_TEXT_2 }}>Gallery</span>
                       </button>
                     </>
                   )}
@@ -245,16 +235,23 @@ export default function LuggageSheet({ open, onClose, initial, onSave }: Luggage
                   ref={fileInputRef} type="file" accept="image/*" multiple
                   className="hidden" onChange={e => { handleFiles(e.target.files); e.target.value = ''; }}
                 />
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-[11px]" style={{ color: RIDE_TEXT_2 }}>
                   🔒 Photos are private and only visible to drivers who view your ride.
                 </p>
               </div>
             </div>
 
-            <div className="p-4 border-t border-border shrink-0 pb-[calc(env(safe-area-inset-bottom)+1rem)]">
-              <Button onClick={handleSave} disabled={uploading} size="lg" className="w-full bg-yellow-400 hover:bg-yellow-300 text-black font-bold">
-                Save Luggage Details
-              </Button>
+            <div className="p-4 shrink-0 pb-[calc(env(safe-area-inset-bottom)+1rem)]" style={{ boxShadow: 'inset 0 1px 0 rgba(17,17,17,.08)' }}>
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={uploading}
+                className="relative w-full flex items-center justify-center overflow-hidden active:scale-[0.98] transition-transform disabled:opacity-60"
+                style={{ height: 50, borderRadius: 16, ...redCta }}
+              >
+                <span className="pointer-events-none absolute inset-x-0 top-0 h-1/2" style={{ background: 'linear-gradient(180deg, rgba(255,255,255,.2), rgba(255,255,255,0))' }} />
+                <span className="relative text-[15.5px] font-bold text-white">Save Luggage Details</span>
+              </button>
             </div>
           </motion.div>
         </>

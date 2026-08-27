@@ -35,9 +35,9 @@ import PaymentMethodSelector from './PaymentMethodSelector';
 import { Button } from '@/components/ui/button';
 import {
   Loader2, MapPin, Navigation, Crosshair, ArrowLeft, User, Search,
-  Star, Phone, MessageCircle, Clock, ChevronRight, Locate,
+  Star, Phone, Clock, ChevronRight, Locate,
   Banknote, Wallet, Zap, CarFront, Menu, History, ContactRound,
-  Calendar, CreditCard, ChevronDown, Sparkles, UserPlus, X } from
+  Calendar, ChevronDown, Sparkles, UserPlus, X } from
 'lucide-react';
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle } from
@@ -174,6 +174,28 @@ export default function RideView() {
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
   const [sheetExpanded, setSheetExpanded] = useState(false);
+  // Measured height of the bottom sheet — fed to the map as fitBounds
+  // padding so pickup/dropoff/route always frame above the card instead of
+  // partly rendering underneath it. 260 matches the sheet's old fixed guess
+  // until the first real measurement lands.
+  const sheetRef = useRef<HTMLDivElement | null>(null);
+  const [sheetHeight, setSheetHeight] = useState(260);
+  useEffect(() => {
+    const el = sheetRef.current;
+    if (!el) return;
+    let debounce: ReturnType<typeof setTimeout>;
+    const observer = new ResizeObserver((entries) => {
+      const height = entries[0]?.contentRect.height;
+      if (height === undefined) return;
+      clearTimeout(debounce);
+      // The sheet animates its own height (max-height transition) whenever
+      // it expands/collapses or its content changes — debounce past that
+      // instead of re-fitting the map on every intermediate animation frame.
+      debounce = setTimeout(() => setSheetHeight(Math.round(height)), 180);
+    });
+    observer.observe(el);
+    return () => { clearTimeout(debounce); observer.disconnect(); };
+  }, []);
   const [menuOpen, setMenuOpen] = useState(false);
   const [selectedTown, setSelectedTown] = useState<TownConfig>(DEFAULT_TOWN);
   // Set when the rider explicitly picks a town, so the map recenters there even
@@ -1056,6 +1078,15 @@ export default function RideView() {
     } catch (error: unknown) {toast({ title: 'Failed to send offer', description: (error as Error).message, variant: 'destructive' });setRideStatus('idle');} finally {setIsRequesting(false);}
   };
 
+  // Shared by the "Find drivers"/"Choose <tier>" CTA and the payment-method
+  // popup's confirm — payment selection now happens inline the first time
+  // the rider tries to book, instead of as its own card in the list above.
+  const proceedToBook = () => {
+    if (selectedTier === 'parcel') { setParcelSheetOpen(true); return; }
+    if (selectedTier === 'share') { setShareSheetOpen(true); return; }
+    handleSendOffer(selectedTierPrice);
+  };
+
   const handleSendParcelOffer = async (data: ParcelBookingData) => {
     if (!user) { setAuthMode('login'); setAuthModalOpen(true); return; }
     if (!pickupLocation || !dropoffLocation || !fareEstimate) { toast({ title: 'Select pickup and destination', variant: 'destructive' }); return; }
@@ -1260,7 +1291,7 @@ export default function RideView() {
     <div className="relative h-[100dvh] w-full overflow-hidden bg-background">
       {/* ── MAP ── */}
       <div className="absolute inset-0">
-        <MapboxMap pickup={pickupLocation} dropoff={dropoffLocation} routeGeometry={routeData?.geometry} onMapClick={handleMapClick} defaultCenter={mapCenter} preferredCenter={preferredCenter} defaultZoom={mapZoom} className="w-full h-full" height="100%" drivers={nearbyDrivers} stops={rideStops.filter(s => s.lat && s.lng)} riderGender={(riderPrefs?.gender as "male" | "female" | undefined) ?? null} />
+        <MapboxMap pickup={pickupLocation} dropoff={dropoffLocation} routeGeometry={routeData?.geometry} onMapClick={handleMapClick} defaultCenter={mapCenter} preferredCenter={preferredCenter} defaultZoom={mapZoom} className="w-full h-full" height="100%" drivers={nearbyDrivers} stops={rideStops.filter(s => s.lat && s.lng)} riderGender={(riderPrefs?.gender as "male" | "female" | undefined) ?? null} bottomInset={sheetHeight + 24} />
 
         {/* Map chrome — back button (top-left) + menu/notifications/locate/navigation
             stack (top-right). Nothing else floats over the map, per the reference. */}
@@ -1392,6 +1423,7 @@ export default function RideView() {
 
       {/* ── BOTTOM SHEET ── */}
       <RideGlassPanel
+        ref={sheetRef}
         className="absolute left-0 right-0 z-50"
         onRibbonClick={() => setSheetExpanded((e) => !e)}
         handleWidth={showHomeContent ? 140 : undefined}
@@ -1519,8 +1551,11 @@ export default function RideView() {
         </div>
 
         {/* ── PINNED BOTTOM ROW ── row 3 of the 4e layout when idle (schedule + Find
-            Drivers); the payment/schedule/CTA stack for every other booking state. */}
-        <div
+            Drivers); the payment/schedule/CTA stack for every other booking state.
+            Hidden while the "Choose a ride" tier list is open — Schedule/Let's
+            CruiXe underneath it is redundant with the tier list's own selection
+            step and just clutters the screen. */}
+        {!tierPickerOpen && <div
           className="shrink-0 px-4 pb-2 pt-1.5"
           style={showHomeContent ? { paddingTop: 4 } : undefined}
         >
@@ -1530,9 +1565,10 @@ export default function RideView() {
                 type="button"
                 onClick={() => setSchedulePickerOpen(true)}
                 aria-label={scheduledAt ? 'Scheduled ride' : 'Schedule a ride'}
-                className="shrink-0 flex items-center justify-center active:scale-95 transition-transform"
-                style={{ width: 44, height: 44, borderRadius: 16, ...glassSurface }}>
+                className="flex-1 flex items-center justify-center gap-1.5 active:scale-95 transition-transform"
+                style={{ height: 44, borderRadius: 16, ...glassSurface }}>
                 <Calendar className="w-[18px] h-[18px]" style={{ color: RIDE_RED }} />
+                <span className="text-[14px] font-semibold" style={{ color: RIDE_TEXT }}>Schedule</span>
               </button>
               {/* Same "start booking" action as tapping the Where-to card
                   above — this is the idle screen's primary CTA, not a
@@ -1540,10 +1576,10 @@ export default function RideView() {
               <button
                 type="button"
                 onClick={() => setTierPickerOpen(true)}
-                className="relative flex-1 min-w-0 flex items-center justify-center gap-2 overflow-hidden active:scale-[0.97] transition-transform"
+                className="relative flex-1 flex items-center justify-center gap-2 overflow-hidden active:scale-[0.97] transition-transform"
                 style={{ height: 44, borderRadius: 16, ...redCta }}>
                 <span className="pointer-events-none absolute inset-x-0 top-0 h-1/2" style={{ background: 'linear-gradient(180deg, rgba(255,255,255,.2), rgba(255,255,255,0))' }} />
-                <span className="relative text-[16px] font-bold text-white">CruiXe</span>
+                <span className="relative text-[16px] font-bold text-white whitespace-nowrap">Let's Crui<span className="italic">X</span>e</span>
                 <span className="relative flex items-center justify-center rounded-full" style={{ width: 23, height: 23, background: 'rgba(255,255,255,.24)', boxShadow: 'inset 0 .5px 0 rgba(255,255,255,.5)' }}>
                   <ChevronRight className="w-[15px] h-[15px] text-white" strokeWidth={2.6} />
                 </span>
@@ -1553,33 +1589,24 @@ export default function RideView() {
             <>
               {/* Luggage prompt — shown once, right after drop-off is picked */}
               {luggagePromptOpen && (
-                <div className="mb-1.5 flex items-center justify-between gap-2 px-3 py-1.5 rounded-xl bg-accent/10 border border-accent/30">
-                  <span className="text-[12px] font-semibold text-foreground">🧳 Travelling with luggage?</span>
-                  <div className="flex items-center gap-1.5">
+                <div className="relative mb-1.5 flex items-center justify-between gap-2 px-3.5 py-2 overflow-hidden" style={{ borderRadius: 15, ...redCta }}>
+                  <span className="pointer-events-none absolute inset-x-0 top-0 h-1/2" style={{ background: 'linear-gradient(180deg, rgba(255,255,255,.22), rgba(255,255,255,0))' }} />
+                  <span className="relative text-[12.5px] font-semibold text-white">🧳 Travelling with luggage?</span>
+                  <div className="relative flex items-center gap-1.5">
                     <button
                       onClick={() => { setLuggagePromptOpen(false); setLuggageOpen(true); }}
-                      className="px-3 py-1 rounded-full bg-primary text-accent text-[11px] font-bold active:scale-95 transition-transform">
+                      className="px-3 py-1 rounded-full bg-white text-[11px] font-bold active:scale-95 transition-transform" style={{ color: RIDE_RED }}>
                       Yes
                     </button>
                     <button
-                      onClick={() => { setLuggagePromptOpen(false); setPaymentPopupOpen(true); }}
-                      className="px-3 py-1 rounded-full bg-muted text-muted-foreground text-[11px] font-semibold active:scale-95 transition-transform">
+                      onClick={() => setLuggagePromptOpen(false)}
+                      className="px-3 py-1 rounded-full text-white text-[11px] font-semibold active:scale-95 transition-transform"
+                      style={{ background: 'rgba(255,255,255,.22)', boxShadow: 'inset 0 0 0 .5px rgba(255,255,255,.35)' }}>
                       No
                     </button>
                   </div>
                 </div>
               )}
-              <button
-                type="button"
-                onClick={() => setPaymentPopupOpen(true)}
-                className="w-full flex items-center gap-2.5 px-3.5 mb-2.5 active:opacity-80 transition-opacity"
-                style={{ height: 44, borderRadius: 15, ...glassSurface }}>
-                <CreditCard className="w-[18px] h-[18px]" style={{ color: RIDE_TEXT }} />
-                <span className="flex-1 text-left text-[14.5px] font-medium" style={{ color: RIDE_TEXT }}>
-                  {paymentMethodConfirmed ? (paymentMethod === 'wallet' ? 'Wallet' : 'Cash') : 'Select payment method'}
-                </span>
-                <ChevronRight className="w-[17px] h-[17px]" style={{ color: RIDE_TEXT_2 }} />
-              </button>
 
               {selectedTier !== 'parcel' && (
                 <button
@@ -1594,18 +1621,6 @@ export default function RideView() {
                   <ChevronRight className="w-[17px] h-[17px]" style={{ color: RIDE_TEXT_2 }} />
                 </button>
               )}
-
-              <button
-                type="button"
-                onClick={() => setNoteSheetOpen(true)}
-                className="w-full flex items-center gap-2.5 px-3.5 mb-2.5 active:opacity-80 transition-opacity"
-                style={{ height: 44, borderRadius: 15, ...glassSurface }}>
-                <MessageCircle className="w-[18px] h-[18px]" style={{ color: RIDE_TEXT }} />
-                <span className="flex-1 text-left text-[14.5px] font-medium truncate" style={{ color: RIDE_TEXT }}>
-                  {riderNote.trim() ? riderNote.trim() : 'Note for your driver · optional'}
-                </span>
-                <ChevronRight className="w-[17px] h-[17px]" style={{ color: RIDE_TEXT_2 }} />
-              </button>
 
               <div className="flex items-center gap-3">
                 {/* Scheduling a Parcel isn't supported yet — ScheduleRide's
@@ -1635,9 +1650,8 @@ export default function RideView() {
                 <button
                   type="button"
                   onClick={() => {
-                    if (selectedTier === 'parcel') { setParcelSheetOpen(true); return; }
-                    if (selectedTier === 'share') { setShareSheetOpen(true); return; }
-                    handleSendOffer(selectedTierPrice);
+                    if (!paymentMethodConfirmed) { setPaymentPopupOpen(true); return; }
+                    proceedToBook();
                   }}
                   disabled={isRequesting}
                   className="relative flex-1 flex items-center justify-center gap-2 overflow-hidden active:scale-[0.97] transition-transform disabled:opacity-70"
@@ -1675,7 +1689,7 @@ export default function RideView() {
               )}
             </button>
           )}
-        </div>
+        </div>}
       </RideGlassPanel>
 
       {/* ═══ DESTINATION SEARCH SCREEN ═══ */}
@@ -1724,7 +1738,7 @@ export default function RideView() {
       )}
       <LuggageSheet
         open={luggageOpen}
-        onClose={() => { setLuggageOpen(false); setPaymentPopupOpen(true); }}
+        onClose={() => setLuggageOpen(false)}
         initial={luggageDraft}
         onSave={setLuggageDraft}
       />
@@ -1733,7 +1747,7 @@ export default function RideView() {
         onClose={() => setPaymentPopupOpen(false)}
         selected={paymentMethod}
         onSelect={setPaymentMethod}
-        onConfirm={() => setPaymentMethodConfirmed(true)}
+        onConfirm={() => { setPaymentMethodConfirmed(true); proceedToBook(); }}
         walletBalance={walletBalance}
         estimatedFare={fareBreakdown?.totalFare ?? 0}
         tierLabel={fareBreakdown ? `${RIDE_TIER_LABELS[selectedTier]} · ${fareBreakdown.fmt(selectedTierPrice)}` : RIDE_TIER_LABELS[selectedTier]}

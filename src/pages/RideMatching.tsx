@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, CheckCheck, ChevronRight, Locate, MapPin, MessageCircle, Minus, Phone, Plus, Radar, ShieldAlert, ShieldCheck, Star, User, X } from 'lucide-react';
@@ -208,7 +208,11 @@ export default function RideMatching() {
     return () => clearInterval(id);
   }, [rideId, isMatched, isComplete, loadRide]);
 
-  /* ── 60s countdown; each cycle widens the search radius ────── */
+  /* ── 60s countdown (widens search radius each cycle) + elapsed M:SS
+     display + bid-card countdown rings — one shared 1s ticker instead of
+     three separate intervals each forcing their own re-render of this whole
+     screen, so a searching rider only re-renders once per second, not up
+     to three times. ──────────────────────────────────────────────────── */
   useEffect(() => {
     if (isMatched || isComplete) return;
     const id = setInterval(() => {
@@ -225,16 +229,8 @@ export default function RideMatching() {
           return prev + 1;
         });
       }
-    }, 1000);
-    return () => clearInterval(id);
-  }, [isMatched, isComplete]);
-
-  /* ── Elapsed M:SS display — counts up, caps at 5:00, independent of the
-     radius-widening cycle above (purely a reassurance timer). ─────────── */
-  useEffect(() => {
-    if (isMatched || isComplete) return;
-    const id = setInterval(() => {
       setElapsedSeconds(Math.min(ELAPSED_CAP_SECONDS, Math.floor((Date.now() - searchStartedAt.current) / 1000)));
+      setBidsNow(Date.now());
     }, 1000);
     return () => clearInterval(id);
   }, [isMatched, isComplete]);
@@ -283,13 +279,6 @@ export default function RideMatching() {
       .then(({ data }) => { if (data?.default_ride_note) setNoteReuseEveryTrip(true); });
   }, [user?.id]);
 
-  /* ── 1s tick driving each bid card's countdown ring ────────────────── */
-  useEffect(() => {
-    if (isMatched || isComplete) return;
-    const id = setInterval(() => setBidsNow(Date.now()), 1000);
-    return () => clearInterval(id);
-  }, [isMatched, isComplete]);
-
   /* ── Enrich raw offer rows with driver name/rating/vehicle for the bid
      cards — `offers` only carries driver_id, so batch-fetch any driver
      profiles we don't already have cached. ─────────────────────────── */
@@ -318,7 +307,10 @@ export default function RideMatching() {
   const countdownText = `${elapsedMinutes}:${elapsedSecs < 10 ? '0' : ''}${elapsedSecs}`;
   const showKeepSearchingPrompt = elapsedSeconds >= ELAPSED_CAP_SECONDS;
 
-  const { floor: fareFloor, ceiling: fareCeiling } = useMemo(
+  // The rider can raise the fare to reach more drivers but never drag it
+  // below what the app itself recommended for this trip — `recommended`,
+  // not the town's absolute `floor`, is the effective minimum here.
+  const { recommended: fareFloor, ceiling: fareCeiling } = useMemo(
     () => calculateRecommendedFare(townPricing, ride?.distance_km ?? 0, ride?.duration_minutes ?? 0),
     [townPricing, ride?.distance_km, ride?.duration_minutes]
   );
@@ -510,7 +502,7 @@ export default function RideMatching() {
     setElapsedSeconds(0);
   };
 
-  const handleAcceptOffer = async (offer: Offer) => {
+  const handleAcceptOffer = useCallback(async (offer: Offer) => {
     if (!rideId) return;
     setAccepting(offer.id);
     try {
@@ -534,9 +526,9 @@ export default function RideMatching() {
     } finally {
       setAccepting(null);
     }
-  };
+  }, [rideId, loadRide]);
 
-  const handleDeclineOffer = async (offer: Offer) => {
+  const handleDeclineOffer = useCallback(async (offer: Offer) => {
     if (!rideId) return;
     setDecliningId(offer.id);
     haptic('light');
@@ -553,7 +545,7 @@ export default function RideMatching() {
     } finally {
       setDecliningId(null);
     }
-  };
+  }, [rideId]);
 
   const handleFareChange = async (delta: number) => {
     if (!rideId || !ride || fareBumping) return;
@@ -660,8 +652,13 @@ export default function RideMatching() {
     navigate('/ride', { replace: true });
   };
 
-  const pickup = ride ? { lat: ride.pickup_lat, lng: ride.pickup_lon } : null;
-  const dropoff = ride ? { lat: ride.dropoff_lat, lng: ride.dropoff_lon } : null;
+  // Stable references so the memo()-wrapped MapboxMap doesn't re-render on
+  // every tick of the 1s ticker above just because a new object literal was
+  // passed down with the same coordinates.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const pickup = useMemo(() => (ride ? { lat: ride.pickup_lat, lng: ride.pickup_lon } : null), [ride?.pickup_lat, ride?.pickup_lon]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const dropoff = useMemo(() => (ride ? { lat: ride.dropoff_lat, lng: ride.dropoff_lon } : null), [ride?.dropoff_lat, ride?.dropoff_lon]);
   const tierKey = ride?.vehicle_type && TIER_LABELS[ride.vehicle_type] ? ride.vehicle_type : 'economy';
 
   return (
@@ -679,6 +676,7 @@ export default function RideMatching() {
           preferredCenter={preferredCenter}
           className="w-full h-full"
           height="100%"
+          bottomInset={sheetTop + 24}
         />
       </div>
 
@@ -814,8 +812,8 @@ export default function RideMatching() {
                 profile={profile}
                 secondsLeft={secondsLeft}
                 busy={accepting === offer.id || decliningId === offer.id}
-                onAccept={() => handleAcceptOffer(offer)}
-                onDecline={() => handleDeclineOffer(offer)}
+                onAccept={handleAcceptOffer}
+                onDecline={handleDeclineOffer}
               />
             ))}
           </AnimatePresence>
@@ -1275,9 +1273,14 @@ export default function RideMatching() {
                   >
                     <Minus className="w-[17px] h-[17px]" style={{ color: RIDE_TEXT }} />
                   </button>
-                  <span className="text-center text-[17px] font-bold tabular-nums" style={{ color: RIDE_RED }}>
-                    ${ride ? Number(ride.fare).toFixed(2) : '0.00'}
-                  </span>
+                  <div className="flex flex-col items-center justify-center" style={{ minWidth: 72 }}>
+                    <span className="text-[9.5px] font-bold uppercase tracking-wide leading-none" style={{ color: RIDE_TEXT_2 }}>
+                      Trip Fare
+                    </span>
+                    <span className="text-center text-[17px] font-bold tabular-nums leading-tight" style={{ color: RIDE_RED }}>
+                      ${ride ? Number(ride.fare).toFixed(2) : '0.00'}
+                    </span>
+                  </div>
                   <button
                     type="button"
                     onClick={() => handleFareChange(FARE_STEP)}
@@ -1391,9 +1394,14 @@ export default function RideMatching() {
                   >
                     <Minus className="w-[17px] h-[17px]" style={{ color: RIDE_TEXT }} />
                   </button>
-                  <span className="text-center text-[17px] font-bold tabular-nums" style={{ color: RIDE_RED }}>
-                    ${ride ? Number(ride.fare).toFixed(2) : '0.00'}
-                  </span>
+                  <div className="flex flex-col items-center justify-center" style={{ minWidth: 72 }}>
+                    <span className="text-[9.5px] font-bold uppercase tracking-wide leading-none" style={{ color: RIDE_TEXT_2 }}>
+                      Trip Fare
+                    </span>
+                    <span className="text-center text-[17px] font-bold tabular-nums leading-tight" style={{ color: RIDE_RED }}>
+                      ${ride ? Number(ride.fare).toFixed(2) : '0.00'}
+                    </span>
+                  </div>
                   <button
                     type="button"
                     onClick={() => handleFareChange(FARE_STEP)}
@@ -1479,7 +1487,11 @@ function Dot() {
   return <span className="shrink-0 rounded-full" style={{ width: 2.5, height: 2.5, background: '#C7C9CC' }} />;
 }
 
-function BidCard({
+/** memo()-wrapped so the 1s ticker driving the countdown ring only
+ * re-renders the one card whose secondsLeft actually changed meaningfully
+ * (rounding keeps most ticks a no-op prop-wise for the other cards), not
+ * every bid card in the stack. */
+const BidCard = memo(function BidCard({
   offer,
   profile,
   secondsLeft,
@@ -1491,8 +1503,8 @@ function BidCard({
   profile?: DriverProfile & { full_name?: string | null };
   secondsLeft: number;
   busy: boolean;
-  onAccept: () => void;
-  onDecline: () => void;
+  onAccept: (offer: Offer) => void;
+  onDecline: (offer: Offer) => void;
 }) {
   const name = profile?.full_name || 'Driver';
   const vehicle = profile?.vehicle_model || profile?.vehicle_make || 'Car';
@@ -1557,7 +1569,7 @@ function BidCard({
       <div className="flex items-center shrink-0" style={{ gap: 6 }}>
         <button
           type="button"
-          onClick={onDecline}
+          onClick={() => onDecline(offer)}
           disabled={busy}
           aria-label={`Decline ${name}'s offer`}
           className="flex items-center justify-center rounded-full active:scale-90 transition-transform disabled:opacity-50"
@@ -1567,7 +1579,7 @@ function BidCard({
         </button>
         <button
           type="button"
-          onClick={onAccept}
+          onClick={() => onAccept(offer)}
           disabled={busy}
           aria-label={`Accept ${name}'s offer`}
           className="flex items-center justify-center active:scale-95 transition-transform disabled:opacity-60"
@@ -1584,7 +1596,7 @@ function BidCard({
       </div>
     </motion.div>
   );
-}
+});
 
 function TripSummary({ ride }: { ride: MatchingRide | null }) {
   if (!ride) return null;

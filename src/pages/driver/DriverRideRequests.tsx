@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Wallet, User, MapPin, X } from 'lucide-react';
+import { Wallet, User } from 'lucide-react';
 import { toast } from 'sonner';
 import LazyMapboxMap from '@/components/map/LazyMapboxMap';
 import { supabase } from '@/lib/supabaseClient';
@@ -10,10 +10,12 @@ import { expireOldRides } from '@/lib/rideExpiry';
 import { useTrackRideViewer } from '@/lib/rideViewerPresence';
 import { playNewRequestSound } from '@/lib/notificationSounds';
 import { vibrateAlert, showBrowserNotification } from '@/lib/alerts';
+import { getDismissedRideIds, dismissRide, undismissRide } from '@/lib/driverDismissedRides';
 import RideGlassPanel from '@/components/ride/RideGlassPanel';
 import SwipeDismissCard from '@/components/driver/SwipeDismissCard';
+import GenderChip from '@/components/driver/GenderChip';
 import DriverBottomNav from '@/components/driver/DriverBottomNav';
-import { RIDE_RED, RIDE_TEXT, RIDE_TEXT_2, glassSurface } from '@/components/ride/rideGlass';
+import { redCta, RIDE_RED, RIDE_TEXT, RIDE_TEXT_2, glassSurface } from '@/components/ride/rideGlass';
 
 function fmtUSD(n: number): string {
   return n % 1 === 0 ? `$${n}` : `$${n.toFixed(2)}`;
@@ -30,7 +32,7 @@ const AUTO_ACCEPT_KEY = 'pickme-driver-auto-accept';
 export default function DriverRideRequests() {
   const navigate = useNavigate();
   const [rides, setRides] = useState<EnrichedRideRequest[]>([]);
-  const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
+  const [dismissedIds, setDismissedIds] = useState<Set<string>>(() => getDismissedRideIds());
   const [loading, setLoading] = useState(true);
   const [driverCoords, setDriverCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [isOnline, setIsOnline] = useState(false);
@@ -40,6 +42,7 @@ export default function DriverRideRequests() {
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [undoRide, setUndoRide] = useState<EnrichedRideRequest | null>(null);
   const lastRideIds = useRef<Set<string>>(new Set());
+  const refreshDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     navigator.geolocation?.getCurrentPosition(
@@ -137,12 +140,28 @@ export default function DriverRideRequests() {
 
   useEffect(() => {
     refresh();
+    // Unfiltered on purpose — a ride leaving 'pending' (another driver took
+    // it, the rider cancelled) needs to disappear from this list too, and
+    // Supabase realtime filters can only match the row's new/old value, not
+    // "status changed away from pending". Debounced instead: a burst of
+    // unrelated rides changing status system-wide (which every online
+    // driver's list is subscribed to) collapses into one refetch instead of
+    // one per event — with 100 concurrent drivers, an un-debounced refetch
+    // per system-wide ride write was a real O(rides × drivers) query storm.
+    const scheduleRefresh = () => {
+      if (refreshDebounceRef.current) clearTimeout(refreshDebounceRef.current);
+      refreshDebounceRef.current = setTimeout(refresh, 1500);
+    };
     const channel = supabase
       .channel('driver-open-rides-list')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'rides' }, () => { refresh(); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'rides' }, scheduleRefresh)
       .subscribe();
     const id = setInterval(refresh, 45000);
-    return () => { supabase.removeChannel(channel); clearInterval(id); };
+    return () => {
+      supabase.removeChannel(channel);
+      clearInterval(id);
+      if (refreshDebounceRef.current) clearTimeout(refreshDebounceRef.current);
+    };
   }, [refresh]);
 
   const minutesAwayFor = (ride: EnrichedRideRequest): number | null => {
@@ -169,6 +188,7 @@ export default function DriverRideRequests() {
   }, [rides, dismissedIds, driverCoords]);
 
   const handleDismiss = (ride: EnrichedRideRequest) => {
+    dismissRide(ride.id);
     setDismissedIds((prev) => new Set(prev).add(ride.id));
     setUndoRide(ride);
     if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
@@ -177,6 +197,7 @@ export default function DriverRideRequests() {
 
   const handleUndo = () => {
     if (!undoRide) return;
+    undismissRide(undoRide.id);
     setDismissedIds((prev) => { const next = new Set(prev); next.delete(undoRide.id); return next; });
     setUndoRide(null);
     if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
@@ -212,13 +233,17 @@ export default function DriverRideRequests() {
           <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain" style={{ paddingBottom: 100 }}>
             <div className="p-4" style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
               <div className="flex items-center justify-between">
-                <span style={{ fontSize: 11, fontWeight: 700, color: RIDE_TEXT_2, textTransform: 'uppercase', letterSpacing: '.1em' }}>Requests</span>
-                {visibleRides.length > 0 && (
-                  <span className="inline-flex items-center" style={{ height: 22, padding: '0 9px', borderRadius: 999, gap: 5, background: 'rgba(184,17,4,.1)' }}>
-                    <span className="rounded-full" style={{ width: 6, height: 6, background: RIDE_RED }} />
-                    <span style={{ fontSize: 11, fontWeight: 700, color: RIDE_RED }}>{visibleRides.length} new</span>
-                  </span>
-                )}
+                <span className="inline-flex items-center" style={{ gap: 7 }}>
+                  <span style={{ fontSize: 15, fontWeight: 800, color: RIDE_TEXT }}>Available requests</span>
+                  {visibleRides.length > 0 && (
+                    <span
+                      className="inline-flex items-center justify-center rounded-full"
+                      style={{ minWidth: 19, height: 19, padding: '0 5px', background: RIDE_RED }}
+                    >
+                      <span style={{ fontSize: 11, fontWeight: 700, color: '#fff' }}>{visibleRides.length}</span>
+                    </span>
+                  )}
+                </span>
               </div>
               {visibleRides.length > 0 && (
                 <span style={{ fontSize: 11, fontWeight: 500, color: '#9AA1AD', marginTop: -6 }}>Swipe a card left to dismiss</span>
@@ -233,9 +258,9 @@ export default function DriverRideRequests() {
                   <p className="text-sm text-muted-foreground">No open ride requests right now.</p>
                 </div>
               ) : (
-                visibleRides.map(({ ride, km }) => (
+                visibleRides.map(({ ride, km, minutes }) => (
                   <SwipeDismissCard key={ride.id} onDismiss={() => handleDismiss(ride)}>
-                    <RequestCard ride={ride} km={km} onView={() => navigate(`/driver/ride/${ride.id}`)} onDismiss={() => handleDismiss(ride)} />
+                    <RequestCard ride={ride} km={km} minutes={minutes} onView={() => navigate(`/driver/ride/${ride.id}`)} onDismiss={() => handleDismiss(ride)} />
                   </SwipeDismissCard>
                 ))
               )}
@@ -259,10 +284,11 @@ export default function DriverRideRequests() {
 }
 
 function RequestCard({
-  ride, km, onView, onDismiss,
+  ride, km, minutes, onView, onDismiss,
 }: {
   ride: EnrichedRideRequest;
   km: number | null;
+  minutes: number | null;
   onView: () => void;
   onDismiss: () => void;
 }) {
@@ -273,33 +299,56 @@ function RequestCard({
 
   return (
     <div
-      className="flex items-center"
-      style={{ borderRadius: 18, background: '#fff', boxShadow: '0 10px 24px rgba(17,17,17,.1), inset 0 0 0 .5px rgba(17,17,17,.06)', padding: '13px 14px', gap: 12 }}
+      style={{ borderRadius: 20, background: '#fff', boxShadow: '0 8px 20px rgba(17,17,17,.08), inset 0 0 0 .5px rgba(17,17,17,.05)', padding: 14, display: 'flex', flexDirection: 'column', gap: 12 }}
     >
-      <span className="shrink-0 flex items-center justify-center rounded-full overflow-hidden" style={{ width: 52, height: 52, background: 'linear-gradient(135deg,#C6CBD4,#868E9B)', boxShadow: '0 0 0 2px rgba(255,255,255,.95)' }}>
-        {ride.passenger_avatar_url ? (
-          <img src={ride.passenger_avatar_url} alt="" className="w-full h-full object-cover" />
-        ) : (
-          <User style={{ width: 24, height: 24, color: '#fff' }} strokeWidth={2} />
-        )}
-      </span>
-      <div className="min-w-0" style={{ flex: 1 }}>
-        <p className="truncate" style={{ fontSize: 15, fontWeight: 700, color: RIDE_TEXT }}>{ride.passenger_display_name ?? 'Rider'}</p>
-        <p className="flex items-center truncate" style={{ gap: 3, fontSize: 12, fontWeight: 600, color: RIDE_TEXT_2, marginTop: 2 }}>
-          <MapPin style={{ width: 12, height: 12, color: '#1A73E8', flexShrink: 0 }} />
-          {km != null ? `${km.toFixed(1)} km to pickup` : 'Nearby'}
-        </p>
-        <p className="truncate" style={{ fontSize: 11, fontWeight: 500, color: '#9AA1AD', marginTop: 1 }}>{ride.pickup_address}</p>
+      <div className="flex items-start" style={{ gap: 12 }}>
+        <span className="shrink-0 flex items-center justify-center rounded-full overflow-hidden" style={{ width: 48, height: 48, background: 'linear-gradient(135deg,#C6CBD4,#868E9B)', boxShadow: '0 0 0 2px rgba(255,255,255,.95)' }}>
+          {ride.passenger_avatar_url ? (
+            <img src={ride.passenger_avatar_url} alt="" className="w-full h-full object-cover" />
+          ) : (
+            <User style={{ width: 22, height: 22, color: '#fff' }} strokeWidth={2} />
+          )}
+        </span>
+        <div className="min-w-0" style={{ flex: 1 }}>
+          <div className="flex items-center" style={{ gap: 6 }}>
+            <p className="truncate" style={{ fontSize: 15, fontWeight: 700, color: RIDE_TEXT }}>{ride.passenger_display_name ?? 'Rider'}</p>
+            <GenderChip gender={ride.passenger_gender} />
+          </div>
+          <p className="flex items-center truncate" style={{ gap: 5, fontSize: 12, fontWeight: 600, color: RIDE_TEXT_2, marginTop: 4 }}>
+            <span className="rounded-full shrink-0" style={{ width: 6, height: 6, background: '#1A73E8' }} />
+            {ride.pickup_address}
+          </p>
+          <p className="flex items-center truncate" style={{ gap: 5, fontSize: 12, fontWeight: 600, color: RIDE_TEXT_2, marginTop: 3 }}>
+            <span className="rounded-full shrink-0" style={{ width: 6, height: 6, background: RIDE_RED }} />
+            {ride.dropoff_address}
+          </p>
+        </div>
+        <div className="flex flex-col items-end shrink-0">
+          <span className="tabular-nums" style={{ fontSize: 19, fontWeight: 800, color: RIDE_RED, lineHeight: 1.1 }}>{fmtUSD(ride.fare)}</span>
+          <span className="tabular-nums" style={{ fontSize: 11.5, fontWeight: 600, color: RIDE_TEXT_2, marginTop: 3 }}>
+            {km != null ? `${km.toFixed(1)} km` : 'Nearby'}{minutes != null ? ` · ${minutes} min` : ''}
+          </span>
+        </div>
       </div>
-      <div className="flex flex-col items-end shrink-0" style={{ gap: 6 }}>
-        <span className="tabular-nums" style={{ fontSize: 18, fontWeight: 700, color: RIDE_RED }}>{fmtUSD(ride.fare)}</span>
-        <button type="button" onClick={onView} className="flex items-center justify-center active:scale-95 transition-transform" style={{ height: 30, padding: '0 14px', borderRadius: 999, background: 'linear-gradient(135deg, #E01B00, #B81104)' }}>
-          <span style={{ fontSize: 12.5, fontWeight: 700, color: '#fff' }}>View</span>
+
+      <div className="flex items-center" style={{ gap: 8 }}>
+        <button
+          type="button"
+          onClick={onView}
+          className="flex-1 flex items-center justify-center active:scale-[0.97] transition-transform"
+          style={{ height: 44, borderRadius: 14, ...redCta }}
+        >
+          <span style={{ fontSize: 14.5, fontWeight: 700, color: '#fff' }}>View request</span>
+        </button>
+        <button
+          type="button"
+          onClick={onDismiss}
+          className="shrink-0 flex items-center justify-center active:scale-[0.97] transition-transform"
+          style={{ height: 44, padding: '0 18px', borderRadius: 14, background: '#fff', boxShadow: `inset 0 0 0 1.5px ${RIDE_RED}` }}
+        >
+          <span style={{ fontSize: 14.5, fontWeight: 700, color: RIDE_RED }}>Decline</span>
         </button>
       </div>
-      <button type="button" onClick={onDismiss} aria-label="Dismiss" className="shrink-0 flex items-center justify-center rounded-full active:scale-90 transition-transform" style={{ width: 22, height: 22, background: 'rgba(17,17,17,.06)', alignSelf: 'flex-start' }}>
-        <X style={{ width: 12, height: 12, color: RIDE_TEXT_2 }} strokeWidth={2.4} />
-      </button>
     </div>
   );
 }
