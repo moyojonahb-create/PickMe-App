@@ -5,7 +5,7 @@ const STATIC_ASSETS = [
   '/ride',
   '/manifest.json',
   '/favicon.ico',
-  '/icons/pickme-app-icon.png',
+  '/icons/cruixe-icon-1024.png',
 ];
 
 // Map tile domains to cache for offline use
@@ -65,8 +65,8 @@ self.addEventListener('push', (event) => {
 
   const options = {
     body: data.body,
-    icon: '/icons/icon-192x192.png',
-    badge: '/icons/icon-96x96.png',
+    icon: '/icons/cruixe-icon-192.png',
+    badge: '/icons/cruixe-icon-64.png',
     image: data.image || undefined,
     vibrate: data.type === 'ride_request'
       ? [200, 100, 200, 100, 400]

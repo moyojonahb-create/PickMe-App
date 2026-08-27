@@ -1,6 +1,6 @@
 import { forwardRef } from 'react';
 import { Facebook, Twitter, Instagram, Linkedin, Globe, Mail, Phone, MapPin } from 'lucide-react';
-import PickMeLogo from '@/components/PickMeLogo';
+import CruiXeLogo from '@/components/CruiXeLogo';
 
 const footerLinks = {
   company: [
@@ -15,8 +15,8 @@ const footerLinks = {
     { label: 'Ride', href: '#ride' },
     { label: 'Drive', href: '#drive' },
     { label: 'Business', href: '#business' },
-    { label: 'PickMe Eats', href: '#' },
-    { label: 'PickMe Freight', href: '#' },
+    { label: 'CruiXe Eats', href: '#' },
+    { label: 'CruiXe Freight', href: '#' },
   ],
   citizenship: [
     { label: 'Safety', href: '#' },
@@ -39,11 +39,11 @@ const socialLinks = [
 const Footer = forwardRef<HTMLElement>((_props, ref) => {
   return (
     <footer ref={ref} className="bg-primary text-primary-foreground">
-      <div className="pickme-container py-14 lg:py-20">
+      <div className="cruixe-container py-14 lg:py-20">
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-10 mb-14">
           <div className="col-span-2 md:col-span-4 lg:col-span-1 mb-4 lg:mb-0">
             <a href="/" className="inline-block">
-              <PickMeLogo variant="inverted" showTagline />
+              <CruiXeLogo variant="inverted" showTagline />
             </a>
           </div>
 
@@ -120,7 +120,7 @@ const Footer = forwardRef<HTMLElement>((_props, ref) => {
               </span>
             </div>
             <div className="flex flex-wrap gap-4 text-sm text-primary-foreground/60">
-              <span>© 2026 PickMe. Powered by Tautona Tek</span>
+              <span>© 2026 CruiXe. Powered by Tautona Tek</span>
               <a href="/privacy" className="hover:text-primary-foreground transition-colors">Privacy</a>
               <a href="/terms" className="hover:text-primary-foreground transition-colors">Terms</a>
             </div>

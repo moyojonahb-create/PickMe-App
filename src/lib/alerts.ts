@@ -41,8 +41,8 @@ export function showBrowserNotification(title: string, body: string, url?: strin
     if (Notification.permission !== "granted") return;
     const notification = new Notification(title, {
       body,
-      icon: "/icons/pickme-app-icon.png",
-      badge: "/icons/pickme-app-icon.png",
+      icon: "/icons/cruixe-icon-1024.png",
+      badge: "/icons/cruixe-icon-64.png",
       tag: "pickme-alert",
       requireInteraction: true,
     });

@@ -206,7 +206,7 @@ export default function LiveTrackingPage() {
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-bold text-foreground">Live Trip Tracking</p>
-            <p className="text-[10px] text-muted-foreground">Shared via PickMe</p>
+            <p className="text-[10px] text-muted-foreground">Shared via CruiXe</p>
           </div>
           {etaMinutes && isActive && (
             <motion.div
@@ -334,7 +334,7 @@ export default function LiveTrackingPage() {
             href="/"
             className="block w-full py-3 rounded-2xl bg-primary text-primary-foreground font-semibold text-sm text-center active:scale-[0.98] transition-all"
           >
-            Get PickMe — Ride with Confidence
+            Get CruiXe — Ride with Confidence
           </a>
         </div>
       </div>

@@ -130,7 +130,7 @@ export default function EmergencyButton({ rideId, pickupAddress, dropoffAddress,
       ].filter(Boolean).join('\n');
 
       if (navigator.share) {
-        await navigator.share({ title: 'Emergency - PickMe', text });
+        await navigator.share({ title: 'Emergency - CruiXe', text });
       } else {
         await navigator.clipboard.writeText(text);
         toast.success('Emergency info copied to clipboard');

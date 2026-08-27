@@ -179,7 +179,7 @@ export default function RiderWalletPage() {
           </Button>
           <div className="flex-1">
             <h1 className="text-[17px] font-bold tracking-tight text-foreground">My Wallet</h1>
-            <p className="text-[11px] text-muted-foreground -mt-0.5">Manage your PickMe balance</p>
+            <p className="text-[11px] text-muted-foreground -mt-0.5">Manage your CruiXe balance</p>
           </div>
           <Button variant="ghost" size="icon" onClick={() => setShowSettings((v) => !v)} className="rounded-full">
             <Settings className="h-4 w-4 text-foreground" />
@@ -439,7 +439,7 @@ export default function RiderWalletPage() {
         </section>
 
         <p className="text-center text-[10px] text-muted-foreground pt-2">
-          PickMe Wallet · Secured by 256-bit encryption
+          CruiXe Wallet · Secured by 256-bit encryption
         </p>
       </div>
 

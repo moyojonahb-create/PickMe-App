@@ -37,7 +37,7 @@ const SafetySection = () => {
         backgroundSize: '32px 32px',
       }} />
 
-      <div className="pickme-container relative">
+      <div className="cruixe-container relative">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}

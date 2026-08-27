@@ -166,10 +166,10 @@ export default function DriverRideDetails() {
                     <>
                       <Star style={{ width: 11, height: 11, color: '#FFDD00' }} fill="#FFDD00" />
                       <span style={{ fontWeight: 700, color: RIDE_TEXT }}>{trust.averageRating.toFixed(1)}</span>
-                      <span>· {trust.tripsWithPickMe} trip{trust.tripsWithPickMe === 1 ? '' : 's'} with PickMe</span>
+                      <span>· {trust.tripsWithPickMe} trip{trust.tripsWithPickMe === 1 ? '' : 's'} with CruiXe</span>
                     </>
                   ) : (
-                    <span>{trust ? `${trust.tripsWithPickMe} trip${trust.tripsWithPickMe === 1 ? '' : 's'} with PickMe` : 'New rider'}</span>
+                    <span>{trust ? `${trust.tripsWithPickMe} trip${trust.tripsWithPickMe === 1 ? '' : 's'} with CruiXe` : 'New rider'}</span>
                   )}
                 </p>
                 {ride.passenger_name && (

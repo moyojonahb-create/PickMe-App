@@ -66,7 +66,7 @@ export default function RideStatusBanner({ status, driverName, eta, offersCount,
       exit={{ y: -10, opacity: 0, scale: 0.97 }}
       transition={{ type: 'spring', stiffness: 400, damping: 25 }}
       className={cn(
-        'flex items-center gap-2.5 px-4 py-3 rounded-2xl font-medium text-sm shadow-pickme-sm',
+        'flex items-center gap-2.5 px-4 py-3 rounded-2xl font-medium text-sm shadow-cruixe-sm',
         config.color,
         className
       )}

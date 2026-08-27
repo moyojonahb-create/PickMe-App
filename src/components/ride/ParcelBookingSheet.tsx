@@ -384,7 +384,7 @@ export default function ParcelBookingSheet({
                   <div className="flex items-start" style={{ ...tintRedWarning, borderRadius: 16, padding: '10px 12px', gap: 9 }}>
                     <ShieldAlert style={{ width: 16, height: 16, color: RIDE_RED, marginTop: 1 }} strokeWidth={2} className="shrink-0" />
                     <p style={{ fontSize: 12, fontWeight: 500, lineHeight: 1.4, color: RIDE_TEXT_3 }}>
-                      No cash, phones or fragile electronics. PickMe does not insure parcel contents.
+                      No cash, phones or fragile electronics. CruiXe does not insure parcel contents.
                     </p>
                   </div>
 

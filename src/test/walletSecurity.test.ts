@@ -143,11 +143,11 @@ describe("consistent white header across marketing/static routes", () => {
     "/offline", "/install", "/delete-account",
   ];
 
-  it("AppHeader component exists and uses the lg-sized PickMe logo", () => {
+  it("AppHeader component exists and uses the lg-sized CruiXe logo", () => {
     const headerPath = join(SRC, "components/AppHeader.tsx");
     expect(existsSync(headerPath)).toBe(true);
     const header = readFileSync(headerPath, "utf8");
-    expect(header).toMatch(/PickMeLogo/);
+    expect(header).toMatch(/CruiXeLogo/);
     expect(header).toMatch(/size=["']lg["']/);
     expect(header).toMatch(/bg-white/);
   });
@@ -159,8 +159,8 @@ describe("consistent white header across marketing/static routes", () => {
     }
   });
 
-  it("PickMeLogo lg size scales down on mobile", () => {
-    const logo = readFileSync(join(SRC, "components/PickMeLogo.tsx"), "utf8");
+  it("CruiXeLogo lg size scales down on mobile", () => {
+    const logo = readFileSync(join(SRC, "components/CruiXeLogo.tsx"), "utf8");
     // Should include responsive height utilities on the lg variant
     expect(logo).toMatch(/lg:\s*['"][^'"]*sm:h-/);
   });

@@ -96,7 +96,7 @@ export default function TownSelectorSheet({ currentTown, onSelect }: TownSelecto
                     onClick={() => handleSelect(town)}
                     className={cn(
                       'w-full flex items-center gap-3.5 px-4 py-3.5 rounded-2xl transition-all active:scale-[0.98] text-left mb-1',
-                      isActive ? 'bg-primary/8 glass-glow-blue' : 'hover:bg-foreground/[0.03]'
+                      isActive ? 'bg-primary/8 glass-glow-brand' : 'hover:bg-foreground/[0.03]'
                     )}
                   >
                     <div className={cn(

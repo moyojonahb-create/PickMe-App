@@ -56,7 +56,7 @@ export function useArrivalDetection({
         hasNotifiedPickupRef.current = true;
         
         // Notify rider
-        toast.success('🚗 Your PickMe ride has arrived!', {
+        toast.success('🚗 Your CruiXe ride has arrived!', {
           description: 'Your driver is at the pickup location',
           duration: 10000,
         });

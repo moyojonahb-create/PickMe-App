@@ -361,7 +361,7 @@ export default function RamzCodeScanPanel() {
       const { data, error } = await supabase.functions.invoke('analyze-code-scan', {
         body: {
           mode,
-          appStack: 'PickMe — React + TypeScript + Capacitor + Supabase + Google Maps',
+          appStack: 'CruiXe — React + TypeScript + Capacitor + Supabase + Google Maps',
           scanSummary: summary,
           findings: findings.map((f) => ({
             file: f.file, line: f.line, severity: f.severity, category: f.category,

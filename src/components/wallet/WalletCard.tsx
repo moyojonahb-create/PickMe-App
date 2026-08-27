@@ -52,7 +52,7 @@ export default function WalletCard({ fullName, balance, pickmeAccount, hidden }:
           </div>
           <div className="flex items-center gap-1 bg-accent text-accent-foreground px-2.5 py-1 rounded-full font-black text-[11px] shadow">
             <Wallet className="h-3.5 w-3.5" />
-            PickMe
+            CruiXe
           </div>
         </div>
 
@@ -62,7 +62,7 @@ export default function WalletCard({ fullName, balance, pickmeAccount, hidden }:
             <div className="w-7 h-5 rounded-sm border border-yellow-700/40" />
           </div>
           <p className="text-[11px] uppercase tracking-wider text-yellow-200/90 font-semibold">
-            PickMe Wallet Balance
+            CruiXe Wallet Balance
           </p>
         </div>
 

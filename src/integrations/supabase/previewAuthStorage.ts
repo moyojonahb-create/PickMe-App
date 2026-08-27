@@ -35,6 +35,8 @@ export function brokeredPreviewStorage() {
     new Promise((resolve) => {
       const requestId = newId();
       let done = false;
+      // `finish` below needs `timer` in scope for clearTimeout before it's assigned.
+      // eslint-disable-next-line prefer-const
       let timer: ReturnType<typeof setTimeout>;
       const finish = (r: { ok: boolean; value?: string | null } | null) => {
         if (done) return;

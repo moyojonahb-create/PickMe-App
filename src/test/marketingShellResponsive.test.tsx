@@ -6,7 +6,7 @@
  *     by stubbing `window.innerWidth` + `matchMedia` so Tailwind's
  *     responsive class names that we *care about* are still observable.
  *   - Assert that:
- *       a) the header renders the PickMe logo image,
+ *       a) the header renders the CruiXe logo image,
  *       b) the header is `position: sticky` and full-width — so it cannot
  *          push critical UI off-screen,
  *       c) the logo's height utility stays compact on mobile (h-10) and
@@ -37,9 +37,9 @@ afterEach(cleanup);
 describe.each(VIEWPORTS)("MarketingShell header @ $name ($w×$h)", ({ w, h }) => {
   beforeEach(() => setViewport(w, h));
 
-  it("renders the PickMe logo image", () => {
+  it("renders the CruiXe logo image", () => {
     render(<MemoryRouter><AppHeader /></MemoryRouter>);
-    const img = screen.getByAltText(/pickme/i);
+    const img = screen.getByAltText(/cruixe/i);
     expect(img).toBeInTheDocument();
   });
 
@@ -53,7 +53,7 @@ describe.each(VIEWPORTS)("MarketingShell header @ $name ($w×$h)", ({ w, h }) =>
 
   it("logo height utility includes a small-screen scale-down", () => {
     const { container } = render(<MemoryRouter><AppHeader /></MemoryRouter>);
-    const img = container.querySelector("img[alt='PickMe']") as HTMLImageElement;
+    const img = container.querySelector("img[alt='CruiXe']") as HTMLImageElement;
     // The lg variant must stay compact on mobile (h-10) and only grow at
     // larger breakpoints. If someone replaces this with a single fixed
     // height, this test fails before it can ship.

@@ -71,7 +71,7 @@ export default function RiderSettingsPanel() {
     {
       key: 'promo_notifications' as const,
       label: 'Promos & Offers',
-      desc: 'Discounts and special offers from PickMe',
+      desc: 'Discounts and special offers from CruiXe',
       icon: Megaphone,
     },
   ];

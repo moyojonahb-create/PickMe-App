@@ -19,7 +19,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
-import PickMeLogo from '@/components/PickMeLogo';
+import CruiXeLogo from '@/components/CruiXeLogo';
 
 interface AdminLayoutProps {
   children: ReactNode;
@@ -77,7 +77,7 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
         {/* Logo */}
         <div className="h-16 flex items-center justify-between px-4 border-b border-border">
           <Link to="/admin" className="flex items-center gap-2">
-            <PickMeLogo />
+            <CruiXeLogo />
             <span className="text-xs font-medium text-muted-foreground bg-accent/10 px-2 py-0.5 rounded">
               Admin
             </span>

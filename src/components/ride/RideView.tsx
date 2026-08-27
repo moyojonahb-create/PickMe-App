@@ -47,7 +47,7 @@ import MapboxMap from '@/components/map/LazyMapboxMap';
 import RideStatusBanner, { type RideStatus } from './RideStatusBanner';
 import OffersModal, { type DriverViewing, type DriverOffer } from '@/components/OffersModal';
 import AuthModalWrapper from '@/components/auth/AuthModalWrapper';
-import PickMeLogo from '@/components/PickMeLogo';
+import CruiXeLogo from '@/components/CruiXeLogo';
 import RideGlassPanel from './RideGlassPanel';
 import { glassSurface, redCta, RIDE_RED, RIDE_TEXT, RIDE_TEXT_2 } from './rideGlass';
 import QuickPickChips from './QuickPickChips';
@@ -1345,7 +1345,7 @@ export default function RideView() {
       <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
         <SheetContent side="left" className="w-[280px] p-0 border-r border-border/20" style={{ paddingTop: 'calc(env(safe-area-inset-top) + 16px)' }}>
           <SheetHeader className="px-5 pb-2 pt-4">
-            <SheetTitle><PickMeLogo size="sm" /></SheetTitle>
+            <SheetTitle><CruiXeLogo size="sm" /></SheetTitle>
           </SheetHeader>
           <nav className="flex flex-col gap-1 px-3 mt-2">
             <button
@@ -1543,7 +1543,7 @@ export default function RideView() {
                 className="relative flex-1 min-w-0 flex items-center justify-center gap-2 overflow-hidden active:scale-[0.97] transition-transform"
                 style={{ height: 44, borderRadius: 16, ...redCta }}>
                 <span className="pointer-events-none absolute inset-x-0 top-0 h-1/2" style={{ background: 'linear-gradient(180deg, rgba(255,255,255,.2), rgba(255,255,255,0))' }} />
-                <span className="relative text-[16px] font-bold text-white">PickMe</span>
+                <span className="relative text-[16px] font-bold text-white">CruiXe</span>
                 <span className="relative flex items-center justify-center rounded-full" style={{ width: 23, height: 23, background: 'rgba(255,255,255,.24)', boxShadow: 'inset 0 .5px 0 rgba(255,255,255,.5)' }}>
                   <ChevronRight className="w-[15px] h-[15px] text-white" strokeWidth={2.6} />
                 </span>

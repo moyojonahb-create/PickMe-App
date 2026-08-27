@@ -37,11 +37,11 @@ export default function ReferralShare() {
 
   const handleCopy = async () => {
     if (!referralCode) return;
-    const shareText = `Join PickMe and get $5 off your first ride! Use my code: ${referralCode}`;
+    const shareText = `Join CruiXe and get $5 off your first ride! Use my code: ${referralCode}`;
     
     if (navigator.share) {
       try {
-        await navigator.share({ title: "Join PickMe", text: shareText });
+        await navigator.share({ title: "Join CruiXe", text: shareText });
         return;
       } catch { /* fallback to clipboard */ }
     }

@@ -44,7 +44,7 @@ export function pickupPinSvg(gender: RiderGender, size = 54): string {
 
 export function createPickupPinElement(gender: RiderGender, size = 54): HTMLElement {
   const el = document.createElement('div');
-  el.className = 'pickme-pickup-pin';
+  el.className = 'cruixe-pickup-pin';
   el.style.width = `${size}px`;
   el.style.height = `${Math.round(size * 1.3)}px`;
   el.style.pointerEvents = 'none';

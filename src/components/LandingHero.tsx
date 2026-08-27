@@ -37,7 +37,7 @@ const LandingHero = ({ onGetStarted }: LandingHeroProps) => {
       <div className="absolute bottom-20 right-[10%] w-96 h-96 bg-primary-foreground/5 rounded-full blur-[120px]" />
 
       {/* Content */}
-      <div className="relative flex-1 flex flex-col lg:flex-row items-center justify-center gap-8 lg:gap-16 px-6 pt-16 pb-12 sm:pt-20 lg:pt-24 lg:pb-20 pickme-container">
+      <div className="relative flex-1 flex flex-col lg:flex-row items-center justify-center gap-8 lg:gap-16 px-6 pt-16 pb-12 sm:pt-20 lg:pt-24 lg:pb-20 cruixe-container">
         {/* Left: Text Content */}
         <div className="flex-1 text-center lg:text-left max-w-xl lg:max-w-lg">
           <motion.div

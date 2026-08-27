@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Download, Share, Plus, Check, Smartphone, Zap, MapPin, Shield } from 'lucide-react';
-import pickmeIcon from '@/assets/pickme-logo.png';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -50,8 +49,8 @@ export default function Install() {
     <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-primary/10 flex flex-col">
       {/* Hero */}
       <div className="flex-1 flex flex-col items-center justify-center px-6 py-12 text-center">
-        <img src={pickmeIcon} alt="PickMe" className="w-36 h-36 rounded-3xl shadow-2xl mb-6 object-contain" />
-        <h1 className="text-3xl font-extrabold text-foreground mb-2">Get PickMe App</h1>
+        <img src="/icons/cruixe-icon-512.png" alt="CruiXe" className="w-36 h-36 rounded-3xl shadow-2xl mb-6 object-contain" />
+        <h1 className="text-3xl font-extrabold text-foreground mb-2">Get CruiXe App</h1>
         <p className="text-muted-foreground text-lg mb-8 max-w-sm">
           Zimbabwe's #1 ride-hailing app. Install it now for the best experience.
         </p>
@@ -60,7 +59,7 @@ export default function Install() {
           <div className="bg-accent/30 border border-accent rounded-2xl p-6 max-w-sm w-full">
             <Check className="w-12 h-12 text-primary mx-auto mb-3" />
             <h2 className="text-lg font-bold text-foreground">Already Installed!</h2>
-            <p className="text-muted-foreground text-sm mt-1">PickMe is on your home screen. Open it from there for the best experience.</p>
+            <p className="text-muted-foreground text-sm mt-1">CruiXe is on your home screen. Open it from there for the best experience.</p>
             <Button className="mt-4 w-full" onClick={() => window.location.href = '/ride'}>
               Open App
             </Button>
@@ -107,7 +106,7 @@ export default function Install() {
               disabled={!deferredPrompt && !isAndroid}
             >
               <Download className="w-6 h-6" />
-              Install PickMe App
+              Install CruiXe App
             </Button>
             {!deferredPrompt && (
               <p className="text-muted-foreground text-xs text-center">
@@ -132,7 +131,7 @@ export default function Install() {
       {/* Footer */}
       <div className="text-center py-6 px-4">
         <p className="text-muted-foreground text-xs">
-          © {new Date().getFullYear()} PickMe Technologies • Your ride, your way.
+          © {new Date().getFullYear()} CruiXe Technologies • Your ride, your way.
         </p>
       </div>
     </div>

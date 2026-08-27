@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabaseClient';
 import { ArrowLeft, Trophy, Star, Car, Medal, Loader2 } from 'lucide-react';
 import { motion } from 'framer-motion';
-import PickMeLogo from '@/components/PickMeLogo';
+import CruiXeLogo from '@/components/CruiXeLogo';
 import BottomNavBar from '@/components/BottomNavBar';
 
 interface LeaderDriver {
@@ -55,7 +55,7 @@ export default function DriverLeaderboard() {
             <Trophy className="w-5 h-5 text-primary" />
             Top Drivers
           </h1>
-          <PickMeLogo size="sm" />
+          <CruiXeLogo size="sm" />
         </div>
       </div>
 

@@ -6,7 +6,7 @@ const suggestions = [
     id: 'ride',
     icon: Car,
     title: 'Ride',
-    description: 'Go anywhere with PickMe. Request a ride, hop in, and go.',
+    description: 'Go anywhere with CruiXe. Request a ride, hop in, and go.',
     href: '#ride',
     gradient: 'from-primary/10 to-primary/5',
     iconBg: 'bg-primary/10 text-primary',
@@ -23,7 +23,7 @@ const suggestions = [
   {
     id: 'business',
     icon: Briefcase,
-    title: 'PickMe Business',
+    title: 'CruiXe Business',
     description: 'Transform the way your company moves and feeds its people.',
     href: '#business',
     gradient: 'from-secondary to-muted/50',
@@ -34,7 +34,7 @@ const suggestions = [
 const SuggestionsSection = () => {
   return (
     <section className="bg-background py-16 lg:py-24 -mt-1">
-      <div className="pickme-container">
+      <div className="cruixe-container">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
           {suggestions.map((item, index) => (
             <motion.a

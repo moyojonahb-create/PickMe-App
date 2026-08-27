@@ -139,8 +139,8 @@ export function showLocalNotification(
   try {
     const notification = new Notification(title, {
       body,
-      icon: "/icons/icon-192x192.png",
-      badge: "/icons/icon-96x96.png",
+      icon: "/icons/cruixe-icon-192.png",
+      badge: "/icons/cruixe-icon-64.png",
       tag: `pickme-${Date.now()}`,
     } as NotificationOptions);
 

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import PickMeLogo from "@/components/PickMeLogo";
+import CruiXeLogo from "@/components/CruiXeLogo";
 import UserMenu from "@/components/UserMenu";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import { useAuth } from "@/hooks/useAuth";
@@ -41,7 +41,7 @@ const Header = ({ onLoginClick, onSignupClick, onFavoritesClick, onHistoryClick,
           : 'border-b border-border/10 shadow-none'
       }`}
     >
-      <div className="pickme-container">
+      <div className="cruixe-container">
         <nav
           className={`flex items-center justify-between transition-all duration-300 ${
             scrolled
@@ -50,7 +50,7 @@ const Header = ({ onLoginClick, onSignupClick, onFavoritesClick, onHistoryClick,
           }`}
         >
           <a href="/" className="shrink-0 -ml-2 flex items-center">
-            <PickMeLogo size="lg" variant="default" />
+            <CruiXeLogo size="lg" variant="default" />
           </a>
 
           <div className="hidden lg:flex items-center gap-0.5 ml-6">

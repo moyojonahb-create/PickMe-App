@@ -49,7 +49,7 @@ export default function DriverOfferCard({
   const dec = () => setCounterFare(prev => Math.max(prev - step, riderOffer));
 
   return (
-    <div className="glass-card rounded-2xl space-y-3 glass-glow-blue overflow-hidden">
+    <div className="glass-card rounded-2xl space-y-3 glass-glow-brand overflow-hidden">
       {/* Blue top bar */}
       <div className="px-4 py-1.5 text-center text-[10px] font-bold tracking-wider uppercase bg-primary/10 text-primary">
         Rider Offer

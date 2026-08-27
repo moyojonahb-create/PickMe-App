@@ -15,7 +15,7 @@ export default function PrivacyPolicy() {
         <p className="text-muted-foreground text-xs">Last updated: March 2026</p>
 
         <h2>1. Information We Collect</h2>
-        <p>We collect the following personal information when you use PickMe:</p>
+        <p>We collect the following personal information when you use CruiXe:</p>
         <ul>
           <li><strong>Account data</strong> – name, email, phone number, and profile photo.</li>
           <li><strong>Location data</strong> – real-time GPS coordinates during active rides for routing and safety.</li>

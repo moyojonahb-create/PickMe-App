@@ -142,7 +142,7 @@ function useSmoothDrivers(drivers?: Array<{ id: string; lat: number; lng: number
 
 function markerElement(label: string, color: string, textColor = "#fff", size = 30) {
   const el = document.createElement("div");
-  el.className = "pickme-mapbox-marker";
+  el.className = "cruixe-mapbox-marker";
   el.style.width = `${size}px`;
   el.style.height = `${size}px`;
   el.style.borderRadius = "999px";
@@ -163,7 +163,7 @@ function markerElement(label: string, color: string, textColor = "#fff", size = 
 // for the assigned driver on an in-progress ride.
 function carImageElement(src: string, width: number, opacity = 1) {
   const el = document.createElement("div");
-  el.className = "pickme-mapbox-marker";
+  el.className = "cruixe-mapbox-marker";
   el.style.width = `${width}px`;
   el.style.filter = "drop-shadow(0 6px 10px rgba(15,23,42,0.35))";
   el.style.opacity = String(opacity);

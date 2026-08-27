@@ -15,13 +15,13 @@ export default function TermsOfService() {
         <p className="text-muted-foreground text-xs">Last updated: March 2026</p>
 
         <h2>1. Acceptance of Terms</h2>
-        <p>By downloading, installing, or using the PickMe application ("App"), you agree to be bound by these Terms of Service ("Terms"). If you do not agree, do not use the App.</p>
+        <p>By downloading, installing, or using the CruiXe application ("App"), you agree to be bound by these Terms of Service ("Terms"). If you do not agree, do not use the App.</p>
 
         <h2>2. Eligibility</h2>
-        <p>You must be at least 18 years old and legally capable of entering into binding contracts under Zimbabwean law to use PickMe as a rider or driver.</p>
+        <p>You must be at least 18 years old and legally capable of entering into binding contracts under Zimbabwean law to use CruiXe as a rider or driver.</p>
 
         <h2>3. Service Description</h2>
-        <p>PickMe is a technology platform that connects riders with independent driver-partners. PickMe does not provide transportation services directly. Drivers are independent contractors, not employees of PickMe.</p>
+        <p>CruiXe is a technology platform that connects riders with independent driver-partners. CruiXe does not provide transportation services directly. Drivers are independent contractors, not employees of CruiXe.</p>
 
         <h2>4. User Accounts</h2>
         <ul>
@@ -50,7 +50,7 @@ export default function TermsOfService() {
         <p>You may delete your account at any time from your profile settings. Upon deletion, your personal data will be removed in accordance with our Privacy Policy. Some transaction records may be retained for regulatory compliance.</p>
 
         <h2>10. Limitation of Liability</h2>
-        <p>PickMe is provided "as is." To the maximum extent permitted by law, PickMe shall not be liable for indirect, incidental, or consequential damages arising from use of the platform.</p>
+        <p>CruiXe is provided "as is." To the maximum extent permitted by law, CruiXe shall not be liable for indirect, incidental, or consequential damages arising from use of the platform.</p>
 
         <h2>11. Governing Law</h2>
         <p>These Terms are governed by and construed in accordance with the laws of Zimbabwe. Any disputes shall be resolved in the courts of Zimbabwe.</p>

@@ -32,7 +32,7 @@ export function ArrivalIndicator({
         </div>
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-emerald-800">
-            🚗 Your PickMe ride has arrived!
+            🚗 Your CruiXe ride has arrived!
           </p>
           <p className="text-sm text-emerald-600 mt-0.5">
             Your driver is at the pickup location

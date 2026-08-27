@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'zw.co.pickme',
-  appName: 'PickMe',
+  appName: 'CruiXe',
   webDir: 'dist',
   server: {
     // NOTE: Uncomment only for local development with live reload
@@ -13,15 +13,15 @@ const config: CapacitorConfig = {
   plugins: {
     SplashScreen: {
       launchShowDuration: 2000,
-      backgroundColor: '#ffffff',
+      backgroundColor: '#B81104',
       showSpinner: false,
       androidScaleType: 'CENTER_INSIDE',
       splashFullScreen: true,
       splashImmersive: true
     },
     StatusBar: {
-      style: 'dark',
-      backgroundColor: '#1e3a5f'
+      style: 'light',
+      backgroundColor: '#B81104'
     }
   },
   android: {

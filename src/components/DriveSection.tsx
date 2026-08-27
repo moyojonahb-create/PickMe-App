@@ -35,7 +35,7 @@ const DriveSection = () => {
       <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-accent/5 rounded-full blur-[150px]" />
       <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-primary-foreground/3 rounded-full blur-[120px]" />
 
-      <div className="pickme-container relative">
+      <div className="cruixe-container relative">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20 items-center">
           <motion.div
             initial={{ opacity: 0, x: -30 }}
@@ -53,7 +53,7 @@ const DriveSection = () => {
               earn what you need
             </h2>
             <p className="text-primary-foreground/70 text-lg mb-10 leading-relaxed max-w-lg">
-              Join thousands of drivers earning on their own terms. Whether you need extra income or want to make driving your career, PickMe has you covered.
+              Join thousands of drivers earning on their own terms. Whether you need extra income or want to make driving your career, CruiXe has you covered.
             </p>
 
             <div className="space-y-4 mb-10">

@@ -27,7 +27,7 @@ export default function ShareTripButton({ rideId, pickupAddress, dropoffAddress,
 
   const shareUrl = `${window.location.origin}/track/${rideId}`;
   const text = [
-    `🚗 Track my PickMe ride live!`,
+    `🚗 Track my CruiXe ride live!`,
     driverName ? `Driver: ${driverName}` : '',
     `From: ${pickupAddress}`,
     `To: ${dropoffAddress}`,
@@ -49,7 +49,7 @@ export default function ShareTripButton({ rideId, pickupAddress, dropoffAddress,
   const handleShare = async () => {
     try {
       if (navigator.share) {
-        await navigator.share({ title: 'My PickMe Trip', text, url: shareUrl });
+        await navigator.share({ title: 'My CruiXe Trip', text, url: shareUrl });
         return;
       }
     } catch {

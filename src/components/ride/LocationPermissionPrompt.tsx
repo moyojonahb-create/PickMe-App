@@ -23,7 +23,7 @@ export default function LocationPermissionPrompt({ onAllow, onDismiss }: Locatio
         <div className="text-center space-y-1.5">
           <h2 className="text-lg font-bold text-foreground">Enable location</h2>
           <p className="text-sm text-muted-foreground leading-relaxed">
-            PickMe uses your location to set your pickup point and find nearby drivers.
+            CruiXe uses your location to set your pickup point and find nearby drivers.
           </p>
         </div>
 

@@ -22,7 +22,7 @@ export default function ProximityFilter({ selected, onSelect, className }: Proxi
           'px-3 py-1.5 rounded-full text-xs font-medium transition-all',
           selected === null
             ? 'bg-primary text-primary-foreground'
-            : 'bg-pickme-gray-100 text-muted-foreground hover:bg-pickme-gray-200'
+            : 'bg-cruixe-gray-100 text-muted-foreground hover:bg-cruixe-gray-200'
         )}
       >
         All
@@ -36,7 +36,7 @@ export default function ProximityFilter({ selected, onSelect, className }: Proxi
             'px-3 py-1.5 rounded-full text-xs font-medium transition-all',
             selected === option.value
               ? 'bg-primary text-primary-foreground'
-              : 'bg-pickme-gray-100 text-muted-foreground hover:bg-pickme-gray-200'
+              : 'bg-cruixe-gray-100 text-muted-foreground hover:bg-cruixe-gray-200'
           )}
         >
           {option.label}

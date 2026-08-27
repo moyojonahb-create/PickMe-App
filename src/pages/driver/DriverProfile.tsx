@@ -303,7 +303,7 @@ export default function DriverProfilePage() {
             {[
               { label: 'This week', value: weekStats ? fmtUSD(weekStats.weekEarnings) : '—' },
               { label: 'Completed', value: weekStats?.completionRate != null ? `${weekStats.completionRate}%` : '—' },
-              { label: 'On PickMe', value: weekStats ? `${weekStats.monthsOnPickMe} mo` : '—' },
+              { label: 'On CruiXe', value: weekStats ? `${weekStats.monthsOnPickMe} mo` : '—' },
             ].map((s) => (
               <div key={s.label} className="flex-1 flex flex-col items-center" style={{ background: 'rgba(255,255,255,.94)', borderRadius: 13, padding: '9px 4px' }}>
                 <span style={{ fontSize: 10, fontWeight: 700, color: RIDE_TEXT_2, textTransform: 'uppercase', letterSpacing: '.04em' }}>{s.label}</span>
@@ -594,7 +594,7 @@ function DriverWalletCard({
 }) {
   const [copied, setCopied] = useState(false);
   const accountNumber = '7710 2244 8890 1156';
-  const walletId = 'PICKME2024';
+  const walletId = 'CRUIXE2024';
   const driverSince = createdAt
     ? new Date(createdAt).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })
     : '—';
@@ -615,7 +615,7 @@ function DriverWalletCard({
       <div className="absolute pointer-events-none" style={{ top: -30, right: -30, width: 130, height: 130, borderRadius: '50%', border: '18px solid rgba(184,17,4,.06)' }} />
       <div className="relative" style={{ padding: '15px 15px 0' }}>
         <div className="flex items-center justify-between">
-          <span style={{ fontSize: 15, fontWeight: 700, color: RIDE_TEXT, letterSpacing: '-.01em' }}>PickMe</span>
+          <span style={{ fontSize: 15, fontWeight: 700, color: RIDE_TEXT, letterSpacing: '-.01em' }}>CruiXe</span>
           <button type="button" onClick={onTopUp} className="flex items-center active:scale-95 transition-transform" style={{ height: 28, padding: '0 12px', borderRadius: 999, gap: 4, background: RIDE_RED_GRADIENT }}>
             <span style={{ fontSize: 11.5, fontWeight: 700, color: '#fff' }}>+ Top up</span>
           </button>

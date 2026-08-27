@@ -21,7 +21,7 @@ import { updateMyProfileAvatar } from '@/lib/businessApi';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import BottomNavBar from '@/components/BottomNavBar';
-import PickMeLogo from '@/components/PickMeLogo';
+import CruiXeLogo from '@/components/CruiXeLogo';
 import { Switch } from '@/components/ui/switch';
 import { useTheme } from 'next-themes';
 import RiderPreferencesSettings from '@/components/settings/RiderPreferencesSettings';
@@ -93,9 +93,9 @@ export default function RiderProfile() {
 
   const handleCopyReferral = async () => {
     if (!stats.referralCode) return;
-    const text = `Join PickMe and ride! Use my code: ${stats.referralCode} — You earn $2!`;
+    const text = `Join CruiXe and ride! Use my code: ${stats.referralCode} — You earn $2!`;
     if (navigator.share) {
-      try { await navigator.share({ title: 'Join PickMe', text }); return; } catch { /* fallback */ }
+      try { await navigator.share({ title: 'Join CruiXe', text }); return; } catch { /* fallback */ }
     }
     await navigator.clipboard.writeText(stats.referralCode);
     setCopied(true);
@@ -121,7 +121,7 @@ export default function RiderProfile() {
               <ArrowLeft className="w-4 h-4 text-primary-foreground" />
             </button>
             <div className="bg-white rounded-full px-3 py-1.5 shadow-md flex items-center">
-              <PickMeLogo size="sm" />
+              <CruiXeLogo size="sm" />
             </div>
           </div>
 
@@ -368,10 +368,10 @@ function QuickAction({ icon, label, sublabel, sublabelLoading, onClick, accent }
       onClick={() => { haptic('light'); onClick(); }}
       className={`relative flex flex-col items-center justify-center gap-1 py-3 px-1.5 rounded-2xl active:scale-95 transition-all overflow-hidden group ${
         accent
-          ? 'text-primary-foreground shadow-[0_10px_28px_-8px_hsl(224_71%_37%/0.45)]'
+          ? 'text-primary-foreground shadow-[0_10px_28px_-8px_hsl(4_96%_37%/0.25)]'
           : 'glass-card text-foreground border border-primary/10'
       }`}
-      style={accent ? { background: 'linear-gradient(135deg, hsl(var(--pickme-blue)) 0%, hsl(var(--pickme-blue-dark)) 100%)' } : undefined}
+      style={accent ? { background: 'linear-gradient(135deg, hsl(var(--cruixe-red)) 0%, hsl(var(--cruixe-red-dark)) 100%)' } : undefined}
     >
       {accent && (
         <>

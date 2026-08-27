@@ -234,10 +234,10 @@ export default function DriverWalletPage() {
               onClick={() => setTab(t.key)}
               className={`flex-1 py-2.5 text-[11px] font-black rounded-xl transition-all active:scale-95 ${
                 tab === t.key
-                  ? 'text-primary-foreground shadow-[0_4px_14px_-4px_hsl(224_71%_37%/0.5)]'
+                  ? 'text-primary-foreground shadow-[0_4px_14px_-4px_hsl(4_96%_37%/0.25)]'
                   : 'text-muted-foreground hover:text-foreground'
               }`}
-              style={tab === t.key ? { background: 'linear-gradient(135deg, hsl(var(--pickme-blue)) 0%, hsl(var(--pickme-blue-dark)) 100%)' } : undefined}
+              style={tab === t.key ? { background: 'linear-gradient(135deg, hsl(var(--cruixe-red)) 0%, hsl(var(--cruixe-red-dark)) 100%)' } : undefined}
             >
               {t.label} <span className={`ml-0.5 tabular-nums ${tab === t.key ? 'text-primary-foreground/80' : ''}`}>({t.count})</span>
             </button>

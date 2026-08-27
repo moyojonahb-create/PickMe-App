@@ -149,7 +149,7 @@ export default function PaymentMethodSelector({
                   <Wallet style={{ width: 19, height: 19, color: RIDE_RED }} />
                 </span>
                 <div className="min-w-0" style={{ flex: 1 }}>
-                  <p style={{ fontSize: 15, fontWeight: selected === "wallet" ? 700 : 600, lineHeight: 1.2, color: RIDE_TEXT }}>PickMe wallet</p>
+                  <p style={{ fontSize: 15, fontWeight: selected === "wallet" ? 700 : 600, lineHeight: 1.2, color: RIDE_TEXT }}>CruiXe wallet</p>
                   <p style={{ marginTop: 2, fontSize: 11.5, fontWeight: 500, lineHeight: 1.2, color: RIDE_TEXT_2 }}>
                     {restrictToCash
                       ? "Cash only for this ride"

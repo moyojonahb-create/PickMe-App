@@ -168,7 +168,7 @@ const HeroSection = ({ onLoginClick }: HeroSectionProps) => {
 
   return (
     <section className="relative bg-background">
-      <div className="pickme-container py-8 lg:py-16">
+      <div className="cruixe-container py-8 lg:py-16">
         <div className="flex flex-col lg:flex-row lg:items-start lg:gap-12">
           {/* Left Side - Ride Request Card */}
           <div className="w-full lg:w-[420px] shrink-0 z-10">
@@ -189,12 +189,12 @@ const HeroSection = ({ onLoginClick }: HeroSectionProps) => {
               Get where you need to go with safe, reliable rides at your fingertips. Book in seconds, ride in minutes.
             </p>
 
-            <div className="bg-card rounded-xl shadow-pickme-card p-6 animate-slide-up">
+            <div className="bg-card rounded-xl shadow-cruixe-card p-6 animate-slide-up">
               {/* Pickup Type Selector */}
               <div className="relative mb-4">
                 <button
                   onClick={() => setShowPickupDropdown(!showPickupDropdown)}
-                  className="flex items-center gap-2 px-4 py-2 bg-secondary rounded-full hover:bg-pickme-gray-300 transition-colors"
+                  className="flex items-center gap-2 px-4 py-2 bg-secondary rounded-full hover:bg-cruixe-gray-300 transition-colors"
                 >
                   {pickupType === 'now' ? (
                     <>
@@ -211,7 +211,7 @@ const HeroSection = ({ onLoginClick }: HeroSectionProps) => {
                 </button>
 
                 {showPickupDropdown && (
-                  <div className="absolute top-full left-0 mt-2 bg-card rounded-lg shadow-pickme-lg border border-border overflow-hidden z-20 animate-fade-in">
+                  <div className="absolute top-full left-0 mt-2 bg-card rounded-lg shadow-cruixe-lg border border-border overflow-hidden z-20 animate-fade-in">
                     <button
                       onClick={() => {
                         setPickupType('now');
@@ -327,7 +327,7 @@ const HeroSection = ({ onLoginClick }: HeroSectionProps) => {
 
               {/* Request Ride Button */}
               <Button 
-                className="pickme-btn-primary w-full mt-4" 
+                className="cruixe-btn-primary w-full mt-4" 
                 disabled={!routeInfo || !currentFare || isRequesting}
                 onClick={handleRequestRide}
               >
@@ -337,7 +337,7 @@ const HeroSection = ({ onLoginClick }: HeroSectionProps) => {
                     Finding driver...
                   </>
                 ) : routeInfo && currentFare ? (
-                  `Request PickMe - $${currentFare}`
+                  `Request CruiXe - $${currentFare}`
                 ) : (
                   <>
                     Find a ride
@@ -370,7 +370,7 @@ const HeroSection = ({ onLoginClick }: HeroSectionProps) => {
                 onPickupSelect={handlePanelPickupSelect}
                 onDropoffSelect={handlePanelDropoffSelect}
                 routeGeometry={routeInfo?.geometry}
-                className="h-[500px] lg:h-[600px] shadow-pickme-xl"
+                className="h-[500px] lg:h-[600px] shadow-cruixe-xl"
               />
             </ErrorBoundary>
           </div>

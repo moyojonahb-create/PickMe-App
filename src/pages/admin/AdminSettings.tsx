@@ -144,7 +144,7 @@ const AdminSettings = () => {
           <div className="bg-card rounded-xl border border-border p-6 space-y-4">
             <div className="flex items-center gap-3">
               <DollarSign className="w-5 h-5 text-muted-foreground" />
-              <h2 className="font-semibold">PickMe Pricing (USD)</h2>
+              <h2 className="font-semibold">CruiXe Pricing (USD)</h2>
             </div>
             <Separator />
             

@@ -10,7 +10,7 @@ export const SecondaryButton = React.forwardRef<HTMLButtonElement, SecondaryButt
         ref={ref}
         className={cn(
           "h-11 rounded-2xl px-4 text-sm font-medium text-foreground bg-card border border-border/40 active:scale-[0.98] transition-all",
-          "shadow-pickme-sm disabled:opacity-50",
+          "shadow-cruixe-sm disabled:opacity-50",
           className,
         )}
         {...props}

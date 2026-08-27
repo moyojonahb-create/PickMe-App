@@ -17,7 +17,7 @@ describe("PaymentMethodSelector", () => {
     );
 
     expect(screen.getByRole("radio", { name: /cash/i })).toHaveAttribute("aria-checked", "true");
-    expect(screen.getByRole("radio", { name: /pickme wallet/i })).toHaveAttribute("aria-checked", "false");
+    expect(screen.getByRole("radio", { name: /cruixe wallet/i })).toHaveAttribute("aria-checked", "false");
     expect(screen.getByText("Balance $12.50 · covers this trip")).toBeInTheDocument();
     expect(screen.getByText("Pay with cash")).toBeInTheDocument();
   });
@@ -36,7 +36,7 @@ describe("PaymentMethodSelector", () => {
       />
     );
 
-    fireEvent.click(screen.getByRole("radio", { name: /pickme wallet/i }));
+    fireEvent.click(screen.getByRole("radio", { name: /cruixe wallet/i }));
     expect(onSelect).toHaveBeenCalledWith("wallet");
   });
 
@@ -54,7 +54,7 @@ describe("PaymentMethodSelector", () => {
       />
     );
 
-    const wallet = screen.getByRole("radio", { name: /pickme wallet/i });
+    const wallet = screen.getByRole("radio", { name: /cruixe wallet/i });
     expect(wallet).toBeDisabled();
     expect(screen.getByText("Balance $2.00 · not enough for this trip")).toBeInTheDocument();
 
@@ -114,10 +114,10 @@ describe("PaymentMethodSelector", () => {
       />
     );
 
-    expect(screen.getByRole("radio", { name: /pickme wallet/i })).toBeDisabled();
+    expect(screen.getByRole("radio", { name: /cruixe wallet/i })).toBeDisabled();
     expect(screen.getByText(/Ada pays cash on arrival/)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("radio", { name: /pickme wallet/i }));
+    fireEvent.click(screen.getByRole("radio", { name: /cruixe wallet/i }));
     expect(onSelect).not.toHaveBeenCalled();
   });
 

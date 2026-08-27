@@ -141,7 +141,7 @@ export function NotificationBell({ className, style }: NotificationBellProps = {
         onClick={() => setOpen(true)}
         className={cn(
           'relative flex items-center justify-center rounded-full transition-shadow',
-          className ?? 'w-11 h-11 glass-card-heavy hover:shadow-[0_8px_20px_-8px_hsl(224_71%_37%/0.35)]'
+          className ?? 'w-11 h-11 glass-card-heavy hover:shadow-[0_8px_20px_-8px_hsl(4_96%_37%/0.35)]'
         )}
         style={style}
         aria-label="Notifications"
@@ -166,7 +166,7 @@ export function NotificationBell({ className, style }: NotificationBellProps = {
           {/* Gradient header */}
           <div
             className="px-5 pt-6 pb-5 text-primary-foreground"
-            style={{ background: 'linear-gradient(135deg, hsl(224 71% 37%), hsl(225 65% 48%))' }}
+            style={{ background: 'var(--gradient-primary)' }}
           >
             <SheetHeader>
               <div className="flex items-center justify-between">
@@ -229,8 +229,8 @@ export function NotificationBell({ className, style }: NotificationBellProps = {
                 <div
                   className="w-20 h-20 rounded-3xl flex items-center justify-center mb-5"
                   style={{
-                    background: 'linear-gradient(135deg, hsl(224 71% 37% / 0.12), hsl(225 65% 48% / 0.06))',
-                    boxShadow: '0 8px 24px -8px hsl(224 71% 37% / 0.25)',
+                    background: 'linear-gradient(135deg, hsl(4 96% 37% / 0.12), hsl(4 97% 25% / 0.06))',
+                    boxShadow: '0 8px 24px -8px hsl(4 96% 37% / 0.25)',
                   }}
                 >
                   <Bell className="w-8 h-8 text-primary" strokeWidth={2} />

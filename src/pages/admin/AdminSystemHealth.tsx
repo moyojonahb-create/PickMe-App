@@ -588,7 +588,7 @@ export default function AdminSystemHealth() {
           category: 'driver',
           severity: fatigued > 3 ? 'critical' : 'high',
           title: `🥱 ${fatigued} driver${fatigued > 1 ? 's' : ''} online >12h (fatigue limit)`,
-          description: 'PickMe enforces a 12h active limit. These drivers must take a mandatory rest break.',
+          description: 'CruiXe enforces a 12h active limit. These drivers must take a mandatory rest break.',
           suggestion: 'Force-offline and impose a 6h cool-down. Notify the driver via push.',
           timestamp: now.toISOString(),
           affectedUsers: fatigued,
@@ -767,7 +767,7 @@ export default function AdminSystemHealth() {
           if (navigator.vibrate) navigator.vibrate([400, 100, 400, 100, 400]);
           try {
             if ('Notification' in window && Notification.permission === 'granted') {
-              new Notification('🆘 PickMe SOS', { body: 'New emergency alert — open Ramz One.', tag: 'pickme-sos' });
+              new Notification('🆘 CruiXe SOS', { body: 'New emergency alert — open Ramz One.', tag: 'pickme-sos' });
             }
             // Short alert tone
             const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
@@ -970,7 +970,7 @@ export default function AdminSystemHealth() {
           <div>
             <h2 className="font-bold text-lg flex items-center gap-2 mb-3">
               <Activity className="h-5 w-5 text-primary" />
-              PickMe Daily Stats
+              CruiXe Daily Stats
               <Badge variant="outline" className="text-[10px] font-mono bg-primary/10 text-primary border-primary/20">
                 OPERATIONAL
               </Badge>

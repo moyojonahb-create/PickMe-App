@@ -56,7 +56,7 @@ export default function AdminEmergencyAlerts() {
           if (Notification.permission === 'granted') {
             new Notification('🆘 EMERGENCY ALERT', {
               body: `User triggered SOS alert! Ride: ${(alert.ride_id as string)?.substring(0, 8) || 'N/A'}`,
-              icon: '/icons/pickme-app-icon.png',
+              icon: '/icons/cruixe-icon-1024.png',
               requireInteraction: true,
               tag: 'emergency-' + alert.id,
             });

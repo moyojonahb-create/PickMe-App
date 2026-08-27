@@ -41,7 +41,7 @@ export default function LanguageRow({ language = 'English' }: LanguageRowProps) 
               </button>
             </div>
             <p className="text-sm text-muted-foreground">
-              PickMe currently operates in <span className="font-semibold text-foreground">{language}</span> only.
+              CruiXe currently operates in <span className="font-semibold text-foreground">{language}</span> only.
               Multi-language support isn't available yet.
             </p>
           </div>

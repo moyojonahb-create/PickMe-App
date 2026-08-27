@@ -1,7 +1,6 @@
 import { forwardRef } from 'react';
-import pickmeLogo from '@/assets/pickme-logo.png';
 
-interface PickMeLogoProps {
+interface CruiXeLogoProps {
   className?: string;
   variant?: 'default' | 'inverted' | 'light';
   showTagline?: boolean;
@@ -17,22 +16,28 @@ const sizeClasses = {
   xl: 'h-16 sm:h-20 md:h-24 lg:h-28',
 };
 
-const PickMeLogo = forwardRef<HTMLDivElement, PickMeLogoProps>(({ 
-  className = '', 
-  variant = 'default', 
+const CruiXeLogo = forwardRef<HTMLDivElement, CruiXeLogoProps>(({
+  className = '',
+  variant = 'default',
   showTagline = false,
   size = 'md',
 }, ref) => {
   const isLight = variant === 'inverted' || variant === 'light';
+  // White wordmark for red/dark backgrounds (inverted, light), red wordmark
+  // for white/light backgrounds (default) — was previously a single static
+  // image regardless of variant, so "inverted" never actually inverted.
+  const logoSrc = isLight
+    ? '/brand/cruixe-logo-white-transparent.png'
+    : '/brand/cruixe-logo-red-transparent.png';
 
   return (
     <div ref={ref} className={`flex items-center gap-2 ${className}`}>
-      <img 
-        src={pickmeLogo} 
-        alt="PickMe" 
+      <img
+        src={logoSrc}
+        alt="CruiXe"
         className={`${sizeClasses[size]} w-auto object-contain`}
       />
-      
+
       {showTagline && (
         <span className={`text-xs ${isLight ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
           Your ride, your way.
@@ -42,6 +47,6 @@ const PickMeLogo = forwardRef<HTMLDivElement, PickMeLogoProps>(({
   );
 });
 
-PickMeLogo.displayName = 'PickMeLogo';
+CruiXeLogo.displayName = 'CruiXeLogo';
 
-export default PickMeLogo;
+export default CruiXeLogo;

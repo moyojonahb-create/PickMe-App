@@ -236,8 +236,8 @@ const AuthForm = ({ mode, onSwitchMode, onSuccess }: AuthFormProps) => {
         </h2>
         <p className="text-[15px] text-muted-foreground mb-8">
           {mode === 'login' 
-            ? 'Log in to continue to PickMe' 
-            : 'Sign up to get started with PickMe'}
+            ? 'Log in to continue to CruiXe' 
+            : 'Sign up to get started with CruiXe'}
         </p>
 
         <div className="space-y-3">
@@ -357,7 +357,7 @@ const AuthForm = ({ mode, onSwitchMode, onSuccess }: AuthFormProps) => {
                   <select 
                     value={countryCode}
                     onChange={(e) => setCountryCode(e.target.value)}
-                    className="pickme-input w-24"
+                    className="cruixe-input w-24"
                   >
                     <option value="+263">+263</option>
                     <option value="+27">+27</option>
@@ -454,7 +454,7 @@ const AuthForm = ({ mode, onSwitchMode, onSuccess }: AuthFormProps) => {
 
         <Button 
           type="submit" 
-          className="w-full mt-8 pickme-btn-primary"
+          className="w-full mt-8 cruixe-btn-primary"
           disabled={loading}
         >
           {loading && <Loader2 className="w-5 h-5 animate-spin mr-2" />}
@@ -486,7 +486,7 @@ const AuthForm = ({ mode, onSwitchMode, onSuccess }: AuthFormProps) => {
             <select 
               value={countryCode}
               onChange={(e) => setCountryCode(e.target.value)}
-              className="pickme-input w-24"
+              className="cruixe-input w-24"
             >
               <option value="+263">+263</option>
               <option value="+27">+27</option>
@@ -511,7 +511,7 @@ const AuthForm = ({ mode, onSwitchMode, onSuccess }: AuthFormProps) => {
 
         <Button 
           type="submit" 
-          className="w-full mt-6 pickme-btn-primary"
+          className="w-full mt-6 cruixe-btn-primary"
           disabled={loading}
         >
           {loading && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
@@ -557,7 +557,7 @@ const AuthForm = ({ mode, onSwitchMode, onSuccess }: AuthFormProps) => {
 
         <Button 
           type="submit" 
-          className="w-full mt-6 pickme-btn-primary"
+          className="w-full mt-6 cruixe-btn-primary"
           disabled={loading}
         >
           {loading && <Loader2 className="w-4 h-4 animate-spin mr-2" />}

@@ -165,7 +165,7 @@ export default function RiderRideDetail() {
       setModalOpen(false);
       try {
         if (typeof globalThis.Notification !== "undefined" && Notification.permission === "granted") {
-          new Notification("🎉 Driver Accepted!", { body: "Your ride has been confirmed. Driver is on the way!", icon: "/icons/icon-192x192.png" });
+          new Notification("🎉 Driver Accepted!", { body: "Your ride has been confirmed. Driver is on the way!", icon: "/icons/cruixe-icon-192.png" });
         }
       } catch (_) {}
     }
@@ -180,7 +180,7 @@ export default function RiderRideDetail() {
       haptic('heavy');
       try {
         if (typeof globalThis.Notification !== "undefined" && Notification.permission === "granted") {
-          new Notification("📍 Driver Has Arrived!", { body: "Your driver is waiting at the pickup point.", icon: "/icons/icon-192x192.png" });
+          new Notification("📍 Driver Has Arrived!", { body: "Your driver is waiting at the pickup point.", icon: "/icons/cruixe-icon-192.png" });
         }
       } catch (_) {}
     }
@@ -220,7 +220,7 @@ export default function RiderRideDetail() {
         });
         try {
           if (typeof globalThis.Notification !== "undefined" && Notification.permission === "granted") {
-            new Notification("🚗 New Driver Offer!", { body: "A driver has made an offer on your ride. Tap to review.", icon: "/icons/icon-192x192.png" });
+            new Notification("🚗 New Driver Offer!", { body: "A driver has made an offer on your ride. Tap to review.", icon: "/icons/cruixe-icon-192.png" });
           }
         } catch (_) {}
       }

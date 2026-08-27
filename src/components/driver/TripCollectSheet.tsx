@@ -127,7 +127,7 @@ export default function TripCollectSheet({ ride, onDone }: TripCollectSheetProps
               </div>
               <span style={{ height: 0.5, background: 'rgba(17,17,17,.07)' }} />
               <div className="flex items-center justify-between" style={{ padding: '9px 13px' }}>
-                <span style={{ fontSize: 13, fontWeight: 500, color: RIDE_TEXT }}>PickMe commission (15%)</span>
+                <span style={{ fontSize: 13, fontWeight: 500, color: RIDE_TEXT }}>CruiXe commission (15%)</span>
                 <span className="tabular-nums" style={{ fontSize: 13.5, fontWeight: 600, color: RIDE_RED }}>−{fmtUSD(commissionShown)}</span>
               </div>
               <span style={{ height: 0.5, background: 'rgba(17,17,17,.07)' }} />

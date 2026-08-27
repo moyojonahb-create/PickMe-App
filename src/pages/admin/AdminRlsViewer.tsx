@@ -75,7 +75,7 @@ const RULES: RowRule[] = [
   {
     resource: "transfer_funds",
     type: "rpc",
-    notes: "PickMe wallet → wallet transfer (riders).",
+    notes: "CruiXe wallet → wallet transfer (riders).",
     matrix: {
       anon: {},
       authenticated: { EXECUTE: true },

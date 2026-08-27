@@ -1,6 +1,6 @@
 import { MessageSquare, Users, Phone, Shield, Car, AlertTriangle, Lock, Send, Sparkles, PhoneCall, CircleAlert, ChevronRight } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import PickMeLogo from '@/components/PickMeLogo';
+import CruiXeLogo from '@/components/CruiXeLogo';
 import BottomNavBar from '@/components/BottomNavBar';
 
 const protectionCards = [
@@ -17,10 +17,10 @@ export default function SafetyPage() {
   const isMapp = location.pathname.startsWith('/mapp');
 
   const handleShareTrip = async () => {
-    const shareText = 'I’m sharing my current ride safety status from PickMe.';
+    const shareText = 'I’m sharing my current ride safety status from CruiXe.';
     if (typeof navigator !== 'undefined' && navigator.share) {
       try {
-        await navigator.share({ title: 'PickMe Safety', text: shareText, url: window.location.href });
+        await navigator.share({ title: 'CruiXe Safety', text: shareText, url: window.location.href });
         return;
       } catch {
         // fall back to clipboard if the share sheet is dismissed
@@ -36,7 +36,7 @@ export default function SafetyPage() {
       {/* Gradient header */}
       <div
         className="px-5 pt-5 pb-16 text-primary-foreground relative overflow-hidden"
-        style={{ background: 'linear-gradient(135deg, hsl(224 71% 37%), hsl(225 65% 48%))' }}
+        style={{ background: 'var(--gradient-primary)' }}
       >
         <div className="absolute -top-16 -right-12 w-56 h-56 rounded-full bg-white/10 blur-3xl pointer-events-none" />
         <div className="absolute -bottom-20 -left-10 w-64 h-64 rounded-full bg-accent/20 blur-3xl pointer-events-none" />
@@ -52,7 +52,7 @@ export default function SafetyPage() {
             </button>
           ) : <div className="w-10" />}
           <div className="flex items-center gap-2">
-            <PickMeLogo size="sm" iconOnly />
+            <CruiXeLogo size="sm" variant="light" iconOnly />
             <span className="font-black text-sm tracking-wide">SAFETY CENTER</span>
           </div>
           <div className="w-10" />
@@ -147,7 +147,7 @@ export default function SafetyPage() {
         </div>
 
         <div>
-          <h2 className="mb-3 text-lg font-bold text-foreground">Why PickMe feels safer</h2>
+          <h2 className="mb-3 text-lg font-bold text-foreground">Why CruiXe feels safer</h2>
           <div className="grid gap-3 sm:grid-cols-2">
             {protectionCards.map((card) => {
               const Icon = card.icon;

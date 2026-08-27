@@ -63,7 +63,7 @@ export default function AdminEarningsSheet({
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">
             <TrendingUp className="h-5 w-5 text-primary" />
-            PickMe Commission Revenue
+            CruiXe Commission Revenue
           </SheetTitle>
         </SheetHeader>
 
@@ -83,7 +83,7 @@ export default function AdminEarningsSheet({
             <div className="bg-primary/10 rounded-xl p-4 text-center">
               <div className="flex items-center justify-center gap-1 mb-1">
                 <DollarSign className="h-4 w-4 text-primary" />
-                <p className="text-xs text-muted-foreground font-semibold">PickMe Revenue (15%)</p>
+                <p className="text-xs text-muted-foreground font-semibold">CruiXe Revenue (15%)</p>
               </div>
               <p className="text-2xl font-black text-primary">${periodFees.toFixed(2)}</p>
               <p className="text-[10px] text-muted-foreground mt-1">{tripCount} trips</p>
@@ -100,7 +100,7 @@ export default function AdminEarningsSheet({
 
           {/* All-time summary bar */}
           <div className="flex items-center justify-between bg-muted rounded-xl px-4 py-3">
-            <span className="text-xs font-semibold text-muted-foreground">All-Time PickMe Revenue</span>
+            <span className="text-xs font-semibold text-muted-foreground">All-Time CruiXe Revenue</span>
             <span className="font-black text-primary">${totalPlatformFees.toFixed(2)}</span>
           </div>
 

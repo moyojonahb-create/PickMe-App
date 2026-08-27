@@ -1,6 +1,6 @@
 import { forwardRef } from 'react';
 import { X } from 'lucide-react';
-import PickMeLogo from '@/components/PickMeLogo';
+import CruiXeLogo from '@/components/CruiXeLogo';
 import AuthForm from './AuthForm';
 
 interface AuthModalWrapperProps {
@@ -23,11 +23,11 @@ const AuthModalWrapper = forwardRef<HTMLDivElement, AuthModalWrapperProps>(
         />
 
         {/* Modal */}
-        <div className="relative bg-card w-full max-w-md mx-4 rounded-2xl shadow-pickme-xl animate-slide-up overflow-hidden">
+        <div className="relative bg-card w-full max-w-md mx-4 rounded-2xl shadow-cruixe-xl animate-slide-up overflow-hidden">
           {/* Header */}
           <div className="flex items-center justify-between p-4 border-b border-border">
             <div className="w-9" />
-            <PickMeLogo />
+            <CruiXeLogo />
             <button 
               onClick={onClose}
               className="p-2 hover:bg-secondary rounded-lg transition-colors"
@@ -46,7 +46,7 @@ const AuthModalWrapper = forwardRef<HTMLDivElement, AuthModalWrapperProps>(
 
             {/* Terms */}
             <p className="text-xs text-muted-foreground mt-6 text-center">
-              By proceeding, you agree to PickMe's{' '}
+              By proceeding, you agree to CruiXe's{' '}
               <a href="#" className="underline hover:text-foreground">Terms of Service</a>
               {' '}and{' '}
               <a href="#" className="underline hover:text-foreground">Privacy Policy</a>

@@ -135,7 +135,7 @@ export default function RideCompleteSummary({
         <div className="flex gap-2">
           <SecondaryButton
             onClick={() => {
-              const msg = encodeURIComponent(`🚗 Just completed a PickMe ride!\nFrom: ${pickupAddress}\nTo: ${dropoffAddress}\nFare: $${fare.toFixed(2)}`);
+              const msg = encodeURIComponent(`🚗 Just completed a CruiXe ride!\nFrom: ${pickupAddress}\nTo: ${dropoffAddress}\nFare: $${fare.toFixed(2)}`);
               window.open(`https://wa.me/?text=${msg}`, '_blank');
             }}
             className="flex-1 rounded-2xl gap-1.5 text-xs font-medium"
@@ -144,7 +144,7 @@ export default function RideCompleteSummary({
           </SecondaryButton>
           <SecondaryButton
             onClick={() => {
-              const msg = encodeURIComponent(`PickMe ride: $${fare.toFixed(2)} from ${pickupAddress} to ${dropoffAddress}`);
+              const msg = encodeURIComponent(`CruiXe ride: $${fare.toFixed(2)} from ${pickupAddress} to ${dropoffAddress}`);
               window.open(`sms:?body=${msg}`, '_self');
             }}
             className="rounded-2xl gap-1.5 text-xs font-medium px-4"

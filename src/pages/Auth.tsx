@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { lovable } from '@/integrations/lovable/index';
-import PickMeLogo from '@/components/PickMeLogo';
+import CruiXeLogo from '@/components/CruiXeLogo';
 import { updateMyProfile } from '@/lib/businessApi';
 
 const Auth = () => {
@@ -159,7 +159,7 @@ const Auth = () => {
         await updateMyProfile({ phone: formattedPhone });
       }
 
-      toast({ title: 'Account created!', description: 'Welcome to PickMe.' });
+      toast({ title: 'Account created!', description: 'Welcome to CruiXe.' });
       navigate('/ride', { replace: true });
     } finally {
       setIsSubmitting(false);
@@ -170,7 +170,7 @@ const Auth = () => {
     return (
       <div className="min-h-[100dvh] flex flex-col items-center justify-center bg-background gap-3">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <span className="text-sm text-muted-foreground">Connecting to PickMe…</span>
+        <span className="text-sm text-muted-foreground">Connecting to CruiXe…</span>
       </div>
     );
   }
@@ -183,18 +183,18 @@ const Auth = () => {
       <Card className="w-full max-w-md rounded-3xl border border-border/40 bg-card/35 shadow-2xl backdrop-blur-2xl backdrop-saturate-150">
         <CardHeader className="text-center space-y-4">
           <Link to="/" className="mx-auto">
-            <PickMeLogo size="md" />
+            <CruiXeLogo size="md" />
           </Link>
           <div className="space-y-1">
-            <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">PickMe</p>
+            <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">CruiXe</p>
             <CardTitle className="text-2xl text-foreground">
             {mode === 'login' ? 'Welcome back' : 'Create an account'}
             </CardTitle>
           </div>
           <CardDescription className="text-muted-foreground">
             {mode === 'login' 
-              ? 'Sign in to your PickMe account' 
-              : 'Sign up to start using PickMe'
+              ? 'Sign in to your CruiXe account' 
+              : 'Sign up to start using CruiXe'
             }
           </CardDescription>
 
@@ -386,7 +386,7 @@ const Auth = () => {
                 </div>
               </div>
 
-              <p className="text-xs text-muted-foreground">By continuing, you agree to PickMe safety and account policies.</p>
+              <p className="text-xs text-muted-foreground">By continuing, you agree to CruiXe safety and account policies.</p>
 
               <Button type="submit" className="w-full h-12 rounded-xl" style={{ background: 'var(--gradient-primary)' }} disabled={isSubmitting}>
                 {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}

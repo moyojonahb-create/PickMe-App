@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">PickMe</string>
-    <string name="title_activity_main">PickMe</string>
+    <string name="app_name">CruiXe</string>
+    <string name="title_activity_main">CruiXe</string>
     <string name="package_name">zw.co.pickme</string>
     <string name="custom_url_scheme">zw.co.pickme</string>
 </resources>

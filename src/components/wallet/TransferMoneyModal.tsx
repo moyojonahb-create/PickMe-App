@@ -48,7 +48,7 @@ export default function TransferMoneyModal({ isOpen, onClose, balance, onSuccess
         toast.success(`Found: ${r.full_name || "User"}`);
       } else {
         setRecipient(null);
-        toast.error(mode === "account" ? "No PickMe account matches" : "No user with that phone");
+        toast.error(mode === "account" ? "No CruiXe account matches" : "No user with that phone");
       }
     } finally {
       setSearching(false);
@@ -91,7 +91,7 @@ export default function TransferMoneyModal({ isOpen, onClose, balance, onSuccess
       <Dialog open={isOpen} onOpenChange={(o) => !o && onClose()}>
         <DialogContent className="max-w-sm rounded-3xl">
           <DialogHeader>
-            <DialogTitle>Send to PickMe Wallet</DialogTitle>
+            <DialogTitle>Send to CruiXe Wallet</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-4">
@@ -109,7 +109,7 @@ export default function TransferMoneyModal({ isOpen, onClose, balance, onSuccess
                   mode === "account" ? "bg-background shadow-sm" : "text-muted-foreground"
                 )}
               >
-                <Hash className="h-3.5 w-3.5" /> PickMe Account
+                <Hash className="h-3.5 w-3.5" /> CruiXe Account
               </button>
               <button
                 onClick={() => { setMode("phone"); setRecipient(null); setQuery(""); }}
@@ -124,7 +124,7 @@ export default function TransferMoneyModal({ isOpen, onClose, balance, onSuccess
 
             <div>
               <label className="text-xs font-semibold text-muted-foreground">
-                {mode === "account" ? "PickMe Account number" : "Recipient phone"}
+                {mode === "account" ? "CruiXe Account number" : "Recipient phone"}
               </label>
               <div className="flex gap-2 mt-1">
                 <Input

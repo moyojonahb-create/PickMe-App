@@ -23,7 +23,7 @@ const features = [
 const BusinessSection = () => {
   return (
     <section id="business" className="bg-background py-20 lg:py-28">
-      <div className="pickme-container">
+      <div className="cruixe-container">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20 items-center">
           <motion.div
             initial={{ opacity: 0, x: -20 }}
@@ -33,7 +33,7 @@ const BusinessSection = () => {
           >
             <div className="inline-flex items-center gap-2 bg-accent/10 text-accent px-4 py-2 rounded-full text-sm font-semibold mb-6">
               <Building2 className="w-4 h-4" />
-              PickMe for Business
+              CruiXe for Business
             </div>
             <h2 className="text-4xl lg:text-5xl font-bold text-foreground mb-6 leading-tight tracking-tight">
               Transform how your company moves

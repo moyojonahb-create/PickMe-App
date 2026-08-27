@@ -188,7 +188,7 @@ const Signup = () => {
       if (authData?.user) {
         await updateMyProfile({ phone: data.phone });
       }
-      toast({ title: 'Account created!', description: 'Welcome to PickMe.' });
+      toast({ title: 'Account created!', description: 'Welcome to CruiXe.' });
       navigate(next);
     } catch {
       toast({ title: 'Sign up failed', description: 'Please try again.', variant: 'destructive' });
@@ -384,7 +384,7 @@ const Signup = () => {
         </Form>
 
         <p className="mt-4 text-xs text-muted-foreground leading-relaxed">
-          By continuing you agree to PickMe's basic terms of use.
+          By continuing you agree to CruiXe's basic terms of use.
         </p>
 
         <p className="mt-4 text-center text-sm text-muted-foreground">

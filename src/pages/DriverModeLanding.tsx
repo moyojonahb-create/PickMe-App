@@ -4,7 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useDriverStatus } from '@/hooks/useDriverStatus';
 import { Button } from '@/components/ui/button';
 import { Clock, DollarSign, Percent, ChevronRight } from 'lucide-react';
-import PickMeLogo from '@/components/PickMeLogo';
+import CruiXeLogo from '@/components/CruiXeLogo';
 import pickMeCarFront from '@/assets/pickme-car-front.png';
 import { useState } from 'react';
 import AuthModalWrapper from '@/components/auth/AuthModalWrapper';
@@ -55,14 +55,14 @@ export default function DriverModeLanding() {
             ← Back
           </button>
         )}
-        <PickMeLogo size="sm" />
+        <CruiXeLogo size="sm" />
         {!isMapp && <div className="w-12" />}
       </div>
 
       <div className="flex-1 px-5 py-6 flex flex-col gap-4">
         {/* Hero card */}
         <div className="rounded-3xl p-6 mb-2 text-primary-foreground" style={{ background: 'var(--gradient-primary)' }}>
-          <h2 className="text-2xl font-bold text-primary-foreground mb-4">Get income with PickMe</h2>
+          <h2 className="text-2xl font-bold text-primary-foreground mb-4">Get income with CruiXe</h2>
           <div className="space-y-2">
             {benefits.map((b) => (
               <div key={b.text} className="flex items-center gap-3 text-primary-foreground/90">

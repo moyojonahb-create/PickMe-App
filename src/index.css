@@ -3,7 +3,7 @@
 @tailwind components;
 @tailwind utilities;
 
-/* PickMe Design System — iOS 18 Frosted Glass */
+/* CruiXe Design System — iOS 18 Frosted Glass */
 
 @layer base {
   :root {
@@ -56,23 +56,23 @@
     --sidebar-border: 4 97% 25%;
     --sidebar-ring: 52 100% 50%;
 
-    /* PickMe design tokens */
-    --pickme-blue: 4 96% 37%;
-    --pickme-blue-dark: 4 97% 25%;
-    --pickme-blue-light: 4 96% 45%;
-    --pickme-yellow: 52 100% 50%;
-    --pickme-yellow-light: 52 100% 70%;
-    --pickme-white: 0 0% 100%;
-    --pickme-dark: 0 0% 12%;
-    --pickme-gray-100: 0 0% 98%;
-    --pickme-gray-200: 0 0% 96%;
-    --pickme-gray-300: 0 0% 90%;
-    --pickme-gray-400: 0 0% 75%;
-    --pickme-gray-500: 0 0% 55%;
-    --pickme-gray-600: 0 0% 45%;
-    --pickme-gray-700: 0 0% 30%;
-    --pickme-gray-800: 0 0% 20%;
-    --pickme-gray-900: 0 0% 12%;
+    /* CruiXe design tokens */
+    --cruixe-red: 4 96% 37%;
+    --cruixe-red-dark: 4 97% 25%;
+    --cruixe-red-light: 4 96% 45%;
+    --cruixe-yellow: 52 100% 50%;
+    --cruixe-yellow-light: 52 100% 70%;
+    --cruixe-white: 0 0% 100%;
+    --cruixe-dark: 0 0% 12%;
+    --cruixe-gray-100: 0 0% 98%;
+    --cruixe-gray-200: 0 0% 96%;
+    --cruixe-gray-300: 0 0% 90%;
+    --cruixe-gray-400: 0 0% 75%;
+    --cruixe-gray-500: 0 0% 55%;
+    --cruixe-gray-600: 0 0% 45%;
+    --cruixe-gray-700: 0 0% 30%;
+    --cruixe-gray-800: 0 0% 20%;
+    --cruixe-gray-900: 0 0% 12%;
 
     /* ─── Shadows — iOS-style layered ─── */
     --shadow-xs: 0 0.5px 1px 0 hsl(0 0% 0% / 0.02), 0 0 0 0.5px hsl(0 0% 0% / 0.02);
@@ -98,7 +98,7 @@
     --glass-shadow: 0 1px 4px hsl(0 0% 0% / 0.06), 0 0 0 0.5px hsl(0 0% 0% / 0.03);
     --glass-shadow-lg: 0 8px 28px hsl(0 0% 0% / 0.08), 0 0 0 0.5px hsl(0 0% 0% / 0.03);
     --glass-shadow-elevated: 0 12px 40px hsl(0 0% 0% / 0.10), 0 0 0 0.5px hsl(0 0% 0% / 0.04);
-    --glass-glow-blue: 0 0 0 1px hsl(4 96% 37% / 0.12), 0 0 12px hsl(4 96% 37% / 0.06);
+    --glass-glow-brand: 0 0 0 1px hsl(4 96% 37% / 0.12), 0 0 12px hsl(4 96% 37% / 0.06);
     --glass-glow-yellow: 0 0 0 1px hsl(52 100% 50% / 0.12), 0 0 12px hsl(52 100% 50% / 0.06);
 
     /* iOS-style inset separator */
@@ -122,9 +122,9 @@
     --sidebar-accent: 330 60% 55%;
     --sidebar-border: 330 60% 40%;
 
-    --pickme-blue: 330 75% 45%;
-    --pickme-blue-dark: 330 80% 35%;
-    --pickme-blue-light: 330 80% 60%;
+    --cruixe-red: 330 75% 45%;
+    --cruixe-red-dark: 330 80% 35%;
+    --cruixe-red-light: 330 80% 60%;
 
     /* Glassy pink overrides */
     --glass-bg: hsla(330, 75%, 97%, 0.72);
@@ -135,7 +135,7 @@
     --glass-shadow: 0 1px 3px hsl(330 75% 45% / 0.06), 0 0 0 0.5px hsl(330 75% 45% / 0.04);
     --glass-shadow-lg: 0 8px 32px hsl(330 75% 45% / 0.08), 0 0 0 0.5px hsl(330 75% 45% / 0.04);
     --glass-shadow-elevated: 0 12px 40px hsl(330 75% 45% / 0.12), 0 0 0 0.5px hsl(330 75% 45% / 0.04);
-    --glass-glow-blue: 0 0 0 0.5px hsl(330 75% 45% / 0.2), 0 0 16px hsl(330 75% 45% / 0.08);
+    --glass-glow-brand: 0 0 0 0.5px hsl(330 75% 45% / 0.2), 0 0 16px hsl(330 75% 45% / 0.08);
     --glass-glow-yellow: 0 0 0 0.5px hsl(330 80% 60% / 0.15), 0 0 16px hsl(330 80% 60% / 0.08);
 
     --gradient-primary: linear-gradient(135deg, hsl(330 75% 45%), hsl(330 80% 60%));
@@ -151,9 +151,9 @@
     --sidebar-accent: 330 60% 30%;
     --sidebar-border: 330 60% 25%;
 
-    --pickme-blue: 330 80% 60%;
-    --pickme-blue-dark: 330 70% 20%;
-    --pickme-blue-light: 330 80% 65%;
+    --cruixe-red: 330 80% 60%;
+    --cruixe-red-dark: 330 70% 20%;
+    --cruixe-red-light: 330 80% 65%;
 
     /* Glassy pink dark overrides */
     --glass-bg: hsla(330, 60%, 12%, 0.72);
@@ -164,7 +164,7 @@
     --glass-shadow: 0 1px 3px hsl(330 60% 10% / 0.2), 0 0 0 0.5px hsl(330 60% 30% / 0.1);
     --glass-shadow-lg: 0 8px 32px hsl(330 60% 10% / 0.3), 0 0 0 0.5px hsl(330 60% 30% / 0.1);
     --glass-shadow-elevated: 0 12px 40px hsl(330 60% 10% / 0.4), 0 0 0 0.5px hsl(330 60% 30% / 0.1);
-    --glass-glow-blue: 0 0 0 0.5px hsl(330 80% 60% / 0.2), 0 0 16px hsl(330 80% 60% / 0.06);
+    --glass-glow-brand: 0 0 0 0.5px hsl(330 80% 60% / 0.2), 0 0 16px hsl(330 80% 60% / 0.06);
 
     --gradient-primary: linear-gradient(135deg, hsl(330 70% 20%), hsl(330 80% 60%));
   }
@@ -208,7 +208,7 @@
     --glass-shadow: 0 1px 3px hsl(0 0% 0% / 0.2), 0 0 0 0.5px hsl(0 0% 100% / 0.04);
     --glass-shadow-lg: 0 8px 32px hsl(0 0% 0% / 0.3), 0 0 0 0.5px hsl(0 0% 100% / 0.04);
     --glass-shadow-elevated: 0 12px 40px hsl(0 0% 0% / 0.4), 0 0 0 0.5px hsl(0 0% 100% / 0.04);
-    --glass-glow-blue: 0 0 0 0.5px hsl(4 96% 37% / 0.2), 0 0 16px hsl(4 96% 37% / 0.06);
+    --glass-glow-brand: 0 0 0 0.5px hsl(4 96% 37% / 0.2), 0 0 16px hsl(4 96% 37% / 0.06);
     --glass-separator: 0.5px solid hsla(0, 0%, 100%, 0.06);
     --gradient-primary: linear-gradient(135deg, hsl(4 97% 25%), hsl(4 96% 45%));
     --gradient-glass-shine: linear-gradient(180deg, hsla(0, 0%, 100%, 0.06) 0%, hsla(0, 0%, 100%, 0) 100%);
@@ -328,8 +328,8 @@
     -webkit-backdrop-filter: blur(4px) saturate(1.2);
   }
 
-  .glass-glow-blue {
-    box-shadow: var(--glass-glow-blue);
+  .glass-glow-brand {
+    box-shadow: var(--glass-glow-brand);
   }
 
   .glass-glow-yellow {
@@ -345,11 +345,11 @@
     pointer-events: none;
   }
 
-  .pickme-container {
+  .cruixe-container {
     @apply max-w-7xl mx-auto px-5 sm:px-6 lg:px-8;
   }
 
-  .pickme-card {
+  .cruixe-card {
     @apply rounded-2xl p-5 transition-shadow duration-200;
     background: var(--glass-bg-ultra);
     backdrop-filter: var(--glass-blur);
@@ -357,11 +357,11 @@
     border: 0.5px solid var(--glass-border);
     box-shadow: var(--shadow-card);
   }
-  .pickme-card:hover {
+  .cruixe-card:hover {
     box-shadow: var(--shadow-lg);
   }
 
-  .pickme-card-glass {
+  .cruixe-card-glass {
     background: var(--glass-bg);
     backdrop-filter: var(--glass-blur);
     -webkit-backdrop-filter: var(--glass-blur);
@@ -370,55 +370,55 @@
     @apply rounded-2xl p-5;
   }
 
-  .pickme-input {
+  .cruixe-input {
     @apply w-full h-[52px] px-4 rounded-2xl text-foreground placeholder:text-muted-foreground transition-all duration-200;
     background: var(--glass-bg-ultra);
     border: 0.5px solid var(--glass-border-subtle);
     box-shadow: inset 0 0.5px 1px hsl(0 0% 0% / 0.04);
   }
-  .pickme-input:focus {
+  .cruixe-input:focus {
     @apply ring-2 ring-primary;
     background: hsl(var(--background));
   }
 
-  .pickme-btn-primary {
+  .cruixe-btn-primary {
     @apply h-[52px] px-8 bg-primary text-primary-foreground font-semibold rounded-full active:scale-[0.97] transition-all duration-150;
     box-shadow: var(--shadow-sm);
   }
-  .pickme-btn-primary:hover {
+  .cruixe-btn-primary:hover {
     filter: brightness(1.05);
     box-shadow: var(--shadow-md);
   }
 
-  .pickme-btn-secondary {
+  .cruixe-btn-secondary {
     @apply h-12 px-6 text-secondary-foreground font-medium rounded-full active:scale-[0.97] transition-all duration-150;
     background: var(--glass-bg-ultra);
     border: 0.5px solid var(--glass-border-subtle);
     box-shadow: var(--shadow-xs);
   }
 
-  .pickme-btn-accent {
+  .cruixe-btn-accent {
     @apply h-[52px] px-8 bg-accent text-accent-foreground font-bold rounded-full active:scale-[0.97] transition-all duration-150;
     box-shadow: var(--shadow-sm);
   }
-  .pickme-btn-accent:hover {
+  .cruixe-btn-accent:hover {
     filter: brightness(1.05);
     box-shadow: var(--shadow-glow);
   }
 
-  .pickme-link {
+  .cruixe-link {
     @apply text-foreground font-medium hover:text-muted-foreground transition-colors duration-150;
   }
 
-  .pickme-link-nav {
+  .cruixe-link-nav {
     @apply text-[15px] font-medium text-foreground hover:bg-muted/60 px-5 py-3 rounded-xl transition-all duration-150;
   }
 
-  .pickme-stat-card {
+  .cruixe-stat-card {
     @apply bg-primary-foreground/10 rounded-2xl p-5 text-center transition-all duration-200 hover:bg-primary-foreground/15 hover:-translate-y-0.5;
   }
 
-  .pickme-feature-card {
+  .cruixe-feature-card {
     @apply rounded-2xl p-5 transition-all duration-200 hover:-translate-y-0.5;
     background: var(--glass-bg-ultra);
     backdrop-filter: var(--glass-blur);
@@ -426,15 +426,15 @@
     border: 0.5px solid var(--glass-border);
     box-shadow: var(--shadow-sm);
   }
-  .pickme-feature-card:hover {
+  .cruixe-feature-card:hover {
     box-shadow: var(--shadow-md);
   }
 
-  .pickme-badge {
+  .cruixe-badge {
     @apply inline-flex items-center gap-2 px-4 py-2 bg-accent/10 text-accent rounded-full text-sm font-semibold;
   }
 
-  .pickme-icon-box {
+  .cruixe-icon-box {
     @apply w-12 h-12 rounded-2xl flex items-center justify-center transition-colors duration-150;
   }
 
@@ -596,7 +596,7 @@
   width: 100%;
   height: 100%;
   min-height: 260px;
-  background: hsl(var(--pickme-gray-200));
+  background: hsl(var(--cruixe-gray-200));
 }
 
 /* ─── Native Mobile Enhancements ─── */

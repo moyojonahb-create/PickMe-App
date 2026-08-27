@@ -29,7 +29,7 @@ export default function TripReceiptButton({ data }: { data: TripReceiptData }) {
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Trip Receipt - PickMe</title>
+  <title>Trip Receipt - CruiXe</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; padding: 20px; }
@@ -51,7 +51,7 @@ export default function TripReceiptButton({ data }: { data: TripReceiptData }) {
 </head>
 <body>
   <div class="receipt">
-    <div class="logo">PickMe</div>
+    <div class="logo">CruiXe</div>
     <div class="subtitle">Trip Receipt</div>
     
     <div class="section-title">Trip Details</div>
@@ -87,7 +87,7 @@ export default function TripReceiptButton({ data }: { data: TripReceiptData }) {
     </div>
     
     <div class="footer">
-      <p>Thank you for riding with PickMe!</p>
+      <p>Thank you for riding with CruiXe!</p>
       <p style="margin-top:4px;">support@pickmeapp.co.zw</p>
     </div>
   </div>
@@ -110,7 +110,7 @@ export default function TripReceiptButton({ data }: { data: TripReceiptData }) {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `PickMe-Receipt-${data.rideId.substring(0, 8)}.html`;
+        a.download = `CruiXe-Receipt-${data.rideId.substring(0, 8)}.html`;
         a.click();
         URL.revokeObjectURL(url);
         toast.success('Receipt downloaded');

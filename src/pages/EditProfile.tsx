@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import PickMeLogo from '@/components/PickMeLogo';
+import CruiXeLogo from '@/components/CruiXeLogo';
 import { updateMyProfile } from '@/lib/businessApi';
 
 
@@ -128,7 +128,7 @@ export default function EditProfile() {
             <ArrowLeft className="w-5 h-5 text-primary-foreground" />
           </button>
           <h1 className="text-lg font-bold text-primary-foreground">Edit Profile</h1>
-          <PickMeLogo variant="light" size="sm" />
+          <CruiXeLogo variant="light" size="sm" />
         </div>
       </div>
 
