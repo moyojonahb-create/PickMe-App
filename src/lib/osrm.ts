@@ -78,6 +78,24 @@ export function calculateHaversineDistance(a: Coordinates, b: Coordinates): numb
   return 2 * R * Math.asin(Math.sqrt(x));
 }
 
+/** A driver's `live_locations` row can genuinely hold (0,0) — a driver who
+ * has never sent a real GPS fix, not a rare edge case — and nothing about
+ * that value is invalid enough for a null check to catch. Haversine against
+ * it against a real pickup/dropoff produces a "valid" but geographically
+ * meaningless distance (thousands of km), which is what produced a
+ * "9255 min away" ETA with the map zoomed out to the whole continent. */
+export function isNullIslandCoord(c: Coordinates): boolean {
+  return Math.abs(c.lat) < 0.01 && Math.abs(c.lng) < 0.01;
+}
+
+/** No real ride in this product covers this distance — treat anything
+ * beyond it as bad data (stale/unset location), not a number to display. */
+export const MAX_PLAUSIBLE_RIDE_KM = 150;
+
+export function isPlausibleRideCoord(c: Coordinates): boolean {
+  return Number.isFinite(c.lat) && Number.isFinite(c.lng) && !isNullIslandCoord(c);
+}
+
 /**
  * Fallback route calculation when OSRM is unavailable
  * Estimates road distance as ~1.4x straight-line distance

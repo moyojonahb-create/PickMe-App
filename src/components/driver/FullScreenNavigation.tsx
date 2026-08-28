@@ -29,6 +29,7 @@ import { goBackend } from "@/lib/goBackendClient";
 import { createNotification } from "@/lib/businessApi";
 import { supabase } from "@/lib/supabaseClient";
 import { haptic } from "@/lib/haptics";
+import { useMinutesSince, formatWaitingLabel } from "@/hooks/useMinutesSince";
 import type { Coordinates } from "@/lib/osrm";
 import { getDetailedRoute, findCurrentStep, getManeuverInstruction, getVoiceInstruction, type RouteStep } from "@/lib/osrmSteps";
 import MapboxMap from "@/components/map/LazyMapboxMap";
@@ -59,6 +60,9 @@ interface ActiveTrip {
   passenger_count?: number | null;
   passenger_name?: string | null;
   passenger_phone?: string | null;
+  /** Server-set once, on the transition into 'arrived' — never written by
+   * this client (see trg_set_driver_arrived_at). */
+  driver_arrived_at?: string | null;
 }
 
 interface FullScreenNavigationProps {
@@ -187,6 +191,17 @@ const NavigationMap = memo(function NavigationMap({
     </div>
   );
 });
+
+/** Ticks on its own 60s interval so the rest of the screen doesn't
+ * re-render once a minute just for this label. */
+function ArrivedWaitingLine({ arrivedAt }: { arrivedAt: string }) {
+  const minutes = useMinutesSince(arrivedAt);
+  return (
+    <p style={{ fontSize: 12, fontWeight: 700, color: RIDE_RED, textAlign: 'center' }}>
+      Rider notified — {formatWaitingLabel(minutes)}
+    </p>
+  );
+}
 
 /** Keeps the display awake for as long as this screen is mounted — a driver
  * following directions cannot have the phone sleep mid-navigation. No-op
@@ -413,6 +428,19 @@ export default function FullScreenNavigation({
           body: "Your driver is at the pickup point. Please meet them now.",
           notification_type: "driver_arrived",
         }).catch(() => {});
+
+        // The status POST above doesn't return the row, and this client
+        // never sets driver_arrived_at itself (trg_set_driver_arrived_at
+        // does, server-side, in the same transaction as the status write)
+        // — read it back so the waiting timer can start immediately instead
+        // of waiting for the next full reload.
+        supabase.from('rides').select('driver_arrived_at').eq('id', activeTrip.id).maybeSingle()
+          .then(({ data }) => {
+            if (data?.driver_arrived_at) {
+              onTripUpdate({ ...activeTrip, status: newStatus, driver_arrived_at: data.driver_arrived_at });
+            }
+          })
+          .catch(() => {});
       }
     } catch (e: unknown) {
       toast.error("Failed to update trip", { description: (e as Error).message });
@@ -682,7 +710,7 @@ export default function FullScreenNavigation({
 
                   {confirmingEndTrip && (
                     <p style={{ fontSize: 12, fontWeight: 600, color: RIDE_RED, textAlign: 'center' }}>
-                      You're still far from the drop-off — tap End trip again to confirm.
+                      You're still far from the drop-off — tap Complete trip again to confirm.
                     </p>
                   )}
 
@@ -706,7 +734,7 @@ export default function FullScreenNavigation({
                     >
                       <Flag style={{ width: 17, height: 17 }} className="text-white" strokeWidth={2.4} />
                       <span style={{ fontSize: 15.5, fontWeight: 700 }} className="text-white">
-                        {completing ? 'Ending…' : confirmingEndTrip ? 'Confirm end trip' : 'End trip'}
+                        {completing ? 'Completing…' : confirmingEndTrip ? 'Confirm complete trip' : 'Complete trip'}
                       </span>
                     </button>
                   </div>
@@ -813,6 +841,10 @@ export default function FullScreenNavigation({
                     <p style={{ fontSize: 11, color: RIDE_TEXT_2 }}>
                       Live turn-by-turn is temporarily unavailable — showing a direct-line estimate instead.
                     </p>
+                  )}
+
+                  {isArrivedWaiting && activeTrip.driver_arrived_at && (
+                    <ArrivedWaitingLine arrivedAt={activeTrip.driver_arrived_at} />
                   )}
 
                   {/* Action row */}

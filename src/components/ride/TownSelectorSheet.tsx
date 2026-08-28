@@ -43,21 +43,22 @@ export default function TownSelectorSheet({ currentTown, onSelect }: TownSelecto
         <ChevronDown className="w-3.5 h-3.5" style={{ color: '#666666' }} />
       </button>
 
-      {/* Sheet overlay */}
+      {/* Sheet overlay — drops down from the top of the screen, over the
+          map, instead of sliding up from the bottom like the booking sheet
+          it sits above. */}
       {open && (
-        <div className="fixed inset-0 z-[70] flex flex-col justify-end animate-fade-in" onClick={() => setOpen(false)}>
+        <div className="fixed inset-0 z-[70] flex flex-col justify-start animate-fade-in" onClick={() => setOpen(false)}>
           {/* Backdrop - fully opaque to hide content behind */}
           <div className="absolute inset-0 bg-background/80 backdrop-blur-md" />
 
           {/* Sheet content */}
           <div
-            className="relative glass-card-heavy animate-slide-up overflow-hidden"
-            style={{ borderTopLeftRadius: 28, borderTopRightRadius: 28, borderBottomLeftRadius: 0, borderBottomRightRadius: 0, maxHeight: '70vh', paddingBottom: 'calc(env(safe-area-inset-bottom) + 16px)' }}
+            className="relative glass-card-heavy animate-slide-down overflow-hidden flex flex-col"
+            style={{ borderBottomLeftRadius: 28, borderBottomRightRadius: 28, borderTopLeftRadius: 0, borderTopRightRadius: 0, height: '50vh' }}
             onClick={e => e.stopPropagation()}
           >
-            {/* Handle + header */}
-            <div className="sticky top-0 z-10 pt-3.5 pb-3 px-5" style={{ borderTopLeftRadius: 28, borderTopRightRadius: 28, background: 'var(--gradient-primary)' }}>
-              <div className="w-10 h-1 rounded-full bg-primary-foreground/40 mx-auto mb-4" />
+            {/* Header */}
+            <div className="shrink-0 pb-3 px-5" style={{ paddingTop: 'calc(env(safe-area-inset-top) + 14px)', background: 'var(--gradient-primary)' }}>
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold font-display text-primary-foreground">Select Town</h2>
                 <button onClick={() => setOpen(false)} className="w-9 h-9 rounded-full flex items-center justify-center bg-primary-foreground/15 active:scale-90 transition-all">
@@ -67,7 +68,7 @@ export default function TownSelectorSheet({ currentTown, onSelect }: TownSelecto
             </div>
 
             {/* Search */}
-            <div className="px-5 pt-4 pb-2">
+            <div className="shrink-0 px-5 pt-4 pb-2">
               <div className="relative">
                 <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-muted-foreground pointer-events-none" />
                 <input
@@ -81,8 +82,10 @@ export default function TownSelectorSheet({ currentTown, onSelect }: TownSelecto
               </div>
             </div>
 
-            {/* Town list */}
-            <div className="overflow-y-auto px-3 pb-2" style={{ maxHeight: 'calc(70vh - 160px)' }}>
+            {/* Town list — flexes to fill whatever height is left under the
+                header/search instead of a fragile calc(), so it always has
+                room to scroll regardless of viewport size. */}
+            <div className="flex-1 min-h-0 overflow-y-auto px-3 pb-2" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 12px)' }}>
               {filtered.length === 0 && (
                 <div className="text-center py-10 text-muted-foreground">
                   <p className="text-sm">No towns found</p>

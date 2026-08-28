@@ -6,6 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { createPickupPinElement, type RiderGender } from "@/lib/pickupPin";
 import { getMapboxToken, loadMapbox, resetMapboxLoader, type MapboxGL, type MapboxMapInstance } from "@/lib/mapboxLoader";
 import { splitRouteAtProgress } from "@/lib/routeProgress";
+import { isNullIslandCoord } from "@/lib/osrm";
 import carTopWhite from "@/assets/cars/car-top-white.png";
 import carTopBlack from "@/assets/cars/car-top-black.png";
 
@@ -541,6 +542,11 @@ function InnerMapboxMap({
       return;
     }
 
+    // A driver's live_locations row (or a stale prop) can genuinely be
+    // (0,0) rather than null — a "valid" point that, if it ever made it
+    // into fitBounds, would drag the camera out to show the whole
+    // continent just to include one geographically meaningless coordinate.
+    // Dropped here rather than displayed.
     const points = [
       pickup,
       dropoff,
@@ -549,7 +555,7 @@ function InnerMapboxMap({
       ...primaryRoute,
       ...secondaryRoute,
       ...smoothDrivers,
-    ].filter(Boolean) as Coords[];
+    ].filter((p): p is Coords => Boolean(p) && !isNullIslandCoord(p as Coords));
 
     if (points.length >= 2) {
       const bounds = new mapboxgl.LngLatBounds();
@@ -605,10 +611,29 @@ function InnerMapboxMap({
       return;
     }
 
+    // Cards track a lat/lng's raw screen projection, which can land anywhere
+    // — including under the top-corner chrome buttons every screen using
+    // this map already reserves (back/menu top-left, Help/notifications
+    // top-right, ~44-52px tall + safe-area-inset-top). Clamping keeps the
+    // card's estimated footprint inside a margin those buttons never
+    // encroach on, instead of letting it render half-hidden behind them.
+    const CARD_WIDTH_ESTIMATE = 130;
+    const CARD_HEIGHT_ESTIMATE = 54;
+    const TOP_SAFE_MARGIN = 64;
+    const SIDE_SAFE_MARGIN = 60;
+
     const recompute = () => {
+      const container = containerRef.current;
+      const bounds = container?.getBoundingClientRect();
       const next: Record<string, { x: number; y: number }> = {};
       for (const card of mapCards) {
         const p = map.project([card.at.lng, card.at.lat]);
+        if (bounds) {
+          const offsetX = card.offset?.x ?? 14;
+          const offsetY = card.offset?.y ?? -14;
+          p.x = Math.min(Math.max(p.x, SIDE_SAFE_MARGIN - offsetX), bounds.width - SIDE_SAFE_MARGIN - CARD_WIDTH_ESTIMATE - offsetX);
+          p.y = Math.min(Math.max(p.y, TOP_SAFE_MARGIN - offsetY + CARD_HEIGHT_ESTIMATE), bounds.height - offsetY);
+        }
         next[card.id] = p;
       }
       setCardPositions(next);

@@ -81,7 +81,6 @@ import { type IntercityRoute } from '@/lib/intercityRoutes';
 import { useNearbyDrivers } from '@/hooks/useNearbyDrivers';
 import GenderPreferenceToggle, { type GenderPreference } from './GenderPreferenceToggle';
 import { pickNativeContact } from '@/lib/nativeContactPicker';
-import PilotReadinessCard from '@/components/pilot/PilotReadinessCard';
 import LuggageSheet from '@/components/luggage/LuggageSheet';
 import LocationPermissionPrompt from '@/components/ride/LocationPermissionPrompt';
 import DestinationSearchScreen, { type SearchResultRow } from '@/components/ride/DestinationSearchScreen';

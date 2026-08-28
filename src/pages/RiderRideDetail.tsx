@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { completeTrip } from "@/lib/completeTrip";
+import { isPlausibleRideCoord, MAX_PLAUSIBLE_RIDE_KM } from "@/lib/osrm";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { resolveAvatarUrl } from "@/lib/avatarUrl";
@@ -53,7 +54,6 @@ import PaymentStatusBadge from "@/components/ride/PaymentStatusBadge";
 // Rider wallet removed — riders pay drivers directly
 import RideBottomSheet, { type SheetState } from "@/components/ride/RideBottomSheet";
 import { createFavoriteLocation } from "@/lib/businessApi";
-import PilotReadinessCard from "@/components/pilot/PilotReadinessCard";
 
 type Ride = {
   id: string;
@@ -80,6 +80,10 @@ type Ride = {
   payment_failed?: boolean | null;
   payment_failure_reason?: string | null;
   updated_at?: string;
+  /** Set once, server-side, the moment the driver's status transition into
+   * 'arrived' lands (see trg_set_driver_arrived_at) — never client-written,
+   * so both rider and driver read the same value. */
+  driver_arrived_at?: string | null;
 };
 
 export default function RiderRideDetail() {
@@ -416,8 +420,13 @@ export default function RiderRideDetail() {
   const pickupCoords = ride ? { lat: ride.pickup_lat, lng: ride.pickup_lon } : null;
   const dropoffCoords = ride ? { lat: ride.dropoff_lat, lng: ride.dropoff_lon } : null;
 
-  // Distance & ETA calculation
-  const tripMetrics = driverLocation && ride ? (() => {
+  // Distance & ETA calculation — driverLocation can be a real but
+  // geographically meaningless (0,0) row (a driver who's never sent a GPS
+  // fix), and a huge-but-finite distance from a bad location elsewhere is
+  // just as unusable. Either produces an ETA the UI has no business
+  // rendering ("9255 min away", map zoomed out to the whole continent), so
+  // both are treated as "no ETA available" here rather than displayed.
+  const tripMetrics = driverLocation && ride && isPlausibleRideCoord(driverLocation) ? (() => {
     const R = 6371;
     const targetLat = isInProgress ? ride.dropoff_lat : ride.pickup_lat;
     const targetLng = isInProgress ? ride.dropoff_lon : ride.pickup_lon;
@@ -425,6 +434,7 @@ export default function RiderRideDetail() {
     const dLon = (targetLng - driverLocation.lng) * Math.PI / 180;
     const a = Math.sin(dLat / 2) ** 2 + Math.cos(driverLocation.lat * Math.PI / 180) * Math.cos(targetLat * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
     const distanceKm = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    if (distanceKm > MAX_PLAUSIBLE_RIDE_KM) return null;
     const etaMin = Math.max(1, Math.round(distanceKm / 25 * 60));
     return { distanceKm, etaMinutes: etaMin };
   })() : null;
@@ -552,12 +562,15 @@ export default function RiderRideDetail() {
               initial={{ y: -20, opacity: 0, scale: 0.9 }}
               animate={{ y: 0, opacity: 1, scale: 1 }}
               exit={{ y: -20, opacity: 0 }}
-              className="flex items-center gap-2 bg-accent text-accent-foreground px-4 py-2 rounded-full shadow-md"
+              className="flex flex-col items-center gap-0.5 bg-accent text-accent-foreground px-4 py-2 rounded-2xl shadow-md"
             >
-              <motion.div animate={{ scale: [1, 1.3, 1] }} transition={{ repeat: Infinity, duration: 1.5 }}>
-                <MapPin className="w-4 h-4" />
-              </motion.div>
-              <span className="text-xs font-bold">Driver arrived!</span>
+              <div className="flex items-center gap-2">
+                <motion.div animate={{ scale: [1, 1.3, 1] }} transition={{ repeat: Infinity, duration: 1.5 }}>
+                  <MapPin className="w-4 h-4" />
+                </motion.div>
+                <span className="text-xs font-bold">Driver arrived!</span>
+              </div>
+              {ride?.driver_arrived_at && <ArrivedWaitingLabel arrivedAt={ride.driver_arrived_at} />}
             </motion.div>
           )}
           {isInProgress && (
@@ -704,30 +717,6 @@ export default function RiderRideDetail() {
           )}
 
           {/* ─── COMPLETED SUMMARY ─── */}
-          {ride && ride.status !== "completed" && (
-            <PilotReadinessCard
-              title="Live ride checklist"
-              subtitle="Keep this ready during the pilot trip."
-              items={[
-                {
-                  label: isPending ? "Offers pending" : "Trip connected",
-                  detail: isPending ? "Stay in the app while drivers send offers." : "Driver and rider screens are linked to this ride.",
-                  done: !isPending || offers.length > 0,
-                },
-                {
-                  label: "Safety tools visible",
-                  detail: "Use SOS if the trip feels unsafe or if support must intervene.",
-                  done: true,
-                },
-                {
-                  label: ride.payment_method === "cash" ? "Cash handoff ready" : "Payment method ready",
-                  detail: ride.payment_method === "cash" ? "Confirm cash amount with the driver before completion." : "Keep cash as backup for the controlled pilot.",
-                  done: true,
-                },
-              ]}
-            />
-          )}
-
           {ride?.status === "completed" && (
             <>
               <RideCompleteSummary
@@ -1141,4 +1130,11 @@ export default function RiderRideDetail() {
       )}
     </div>
   );
+}
+
+/** Ticks on its own 60s interval so the rest of the screen doesn't
+ * re-render once a minute just for this label. */
+function ArrivedWaitingLabel({ arrivedAt }: { arrivedAt: string }) {
+  const minutes = useMinutesSince(arrivedAt);
+  return <span className="text-[10px] font-semibold opacity-90">{formatWaitingLabel(minutes)}</span>;
 }

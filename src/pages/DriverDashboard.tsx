@@ -68,7 +68,7 @@ export default function DriverDashboard() {
 
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [activeTrip, setActiveTrip] = useState<{ id: string; pickup_address: string; dropoff_address: string; fare: number; user_id: string; status: string; pickup_lat: number; pickup_lon: number; dropoff_lat: number; dropoff_lon: number; payment_method: string; distance_km?: number | null; passenger_count?: number | null; passenger_name?: string | null; passenger_phone?: string | null } | null>(null);
+  const [activeTrip, setActiveTrip] = useState<{ id: string; pickup_address: string; dropoff_address: string; fare: number; user_id: string; status: string; pickup_lat: number; pickup_lon: number; dropoff_lat: number; dropoff_lon: number; payment_method: string; distance_km?: number | null; passenger_count?: number | null; passenger_name?: string | null; passenger_phone?: string | null; driver_arrived_at?: string | null } | null>(null);
   const [riderInfo, setRiderInfo] = useState<RiderInfo | null>(null);
   const [earningsOpen, setEarningsOpen] = useState(Boolean((location.state as { openEarnings?: boolean } | null)?.openEarnings));
   const [driverCoords, setDriverCoords] = useState<Coordinates | null>(null);
@@ -346,6 +346,7 @@ export default function DriverDashboard() {
           passenger_count: activeTripRow.passenger_count != null ? Number(activeTripRow.passenger_count) : null,
           passenger_name: null,
           passenger_phone: null,
+          driver_arrived_at: activeTripRow.driver_arrived_at != null ? String(activeTripRow.driver_arrived_at) : null,
         });
 
         // Rider's own profile (name/avatar/gender) + their completed-trip
