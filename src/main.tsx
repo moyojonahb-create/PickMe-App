@@ -14,7 +14,7 @@ import { initNativePlatform } from "./lib/nativeBridge";
 import { captureError, markTelemetryReady } from "./lib/telemetryBuffer";
 import "./index.css";
 
-const SENTRY_DSN = "https://fae54652b1b4535904d5ca4d198008f7@o4511199932645376.ingest.de.sentry.io/4511200277692496";
+const SENTRY_DSN = "https://dd32fb52f690c164bc144e1c36438bf5@o4511105677328384.ingest.de.sentry.io/4511989333098576";
 
 window.addEventListener('unhandledrejection', (event) => {
   captureError(event.reason);
