@@ -11,7 +11,7 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   return ({
   server: {
-    host: "::",
+    host: "::" ,
     port: 8080,
     // Proxy to avoid CORS issues in the browser when calling Nominatim directly.
     // Frontend can call `/api/nominatim/search?...`.
@@ -49,8 +49,8 @@ export default defineConfig(({ mode }) => {
     react(),
     mode === "development" && componentTagger(),
     mode === "production" && sentryVitePlugin({
-      org: "pickme-5v",
-      project: "pick-me",
+      org: "pickme-rides",
+      project: "cruixe-web",
       authToken: env.SENTRY_AUTH_TOKEN,
       release: { name: env.VITE_APP_VERSION || undefined },
       sourcemaps: { assets: "./dist/**" },
@@ -108,5 +108,3 @@ export default defineConfig(({ mode }) => {
   },
   });
 });
-
-
