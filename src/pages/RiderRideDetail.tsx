@@ -13,6 +13,7 @@ import { useNearbyDrivers } from "@/hooks/useNearbyDrivers";
 import { useRideViewerCount } from "@/lib/rideViewerPresence";
 import { useAgoraCall } from "@/hooks/useAgoraCall";
 import { getSecondsRemaining } from "@/lib/rideExpiry";
+import { useMinutesSince, formatWaitingLabel } from "@/hooks/useMinutesSince";
 import { goBackend } from "@/lib/goBackendClient";
 import { decimalToMinor } from "@/lib/money";
 import { isRequestedRideStatus, normalizeRideRow } from "@/lib/rideContract";

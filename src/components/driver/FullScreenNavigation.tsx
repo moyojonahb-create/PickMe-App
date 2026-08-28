@@ -434,8 +434,10 @@ export default function FullScreenNavigation({
         // does, server-side, in the same transaction as the status write)
         // — read it back so the waiting timer can start immediately instead
         // of waiting for the next full reload.
-        supabase.from('rides').select('driver_arrived_at').eq('id', activeTrip.id).maybeSingle()
-          .then(({ data }) => {
+        // driver_arrived_at isn't in the generated types yet (column added
+        // by a migration newer than the last typegen) — untyped client call.
+        (supabase as any).from('rides').select('driver_arrived_at').eq('id', activeTrip.id).maybeSingle()
+          .then(({ data }: any) => {
             if (data?.driver_arrived_at) {
               onTripUpdate({ ...activeTrip, status: newStatus, driver_arrived_at: data.driver_arrived_at });
             }

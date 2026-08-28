@@ -69,7 +69,7 @@ export default defineConfig(({ mode }) => {
       [
         ['VITE_SUPABASE_URL', ['VITE_SUPABASE_URL', 'SUPABASE_URL'], 'https://foksbnjtzubsjpeoorvo.supabase.co'],
         ['VITE_SUPABASE_PUBLISHABLE_KEY', ['VITE_SUPABASE_PUBLISHABLE_KEY', 'VITE_SUPABASE_ANON_KEY', 'SUPABASE_ANON_KEY'], 'sb_publishable_vgKlnioVW-ZyBiPeHgmaNw_411hQVXA'],
-        ['VITE_MAPBOX_ACCESS_TOKEN', ['VITE_MAPBOX_ACCESS_TOKEN'], ''],
+        ['VITE_MAPBOX_ACCESS_TOKEN', ['VITE_MAPBOX_ACCESS_TOKEN', 'VITE_MAPBOX_TOKEN', 'VITE_MAPBOX_PUBLIC_TOKEN'], 'pk.eyJ1IjoidGF1dG9uYXNvbHV0aW9ucyIsImEiOiJjbWt1MGZzOW0wMGpjM2VyM29rcWU4ZXZmIn0.T-K9P68HdR7OPDB4i36tMw'],
       ] as const
     )
       .map(([key, sources, fallback]) => [key, sources.map((s) => publicEnv(env, s)).find(Boolean) || fallback] as const)
