@@ -47,13 +47,40 @@ const Auth = () => {
     setLoginError(null);
     if (!email || !password) return;
     setIsSubmitting(true);
+
+    const identifier = loginIdentifierToEmail(email);
+    const isNetworkError = (err: unknown) => {
+      const m = (err as Error)?.message?.toLowerCase() ?? '';
+      return m.includes('failed to fetch')
+        || m.includes('networkerror')
+        || m.includes('load failed')
+        || m.includes('network request failed');
+    };
+
     try {
-      const { error } = await signIn(email, password);
-      if (error) {
-        setLoginError(error.message || 'Invalid credentials');
-      } else {
-        toast({ title: 'Welcome back!' });
-        navigate('/ride', { replace: true });
+      let lastError: Error | null = null;
+
+      // Retry transient network failures; never retry a real credential rejection.
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const { error } = await signIn(identifier, password);
+        if (!error) {
+          toast({ title: 'Welcome back!' });
+          navigate('/ride', { replace: true });
+          return;
+        }
+        lastError = error;
+        if (!isNetworkError(error)) break;
+        await new Promise((r) => setTimeout(r, 400 * 2 ** attempt)); // 400ms, 800ms
+      }
+
+      if (lastError && isNetworkError(lastError)) {
+        setLoginError("Couldn't reach CruiXe. Check your connection and try again.");
+      } else if (lastError) {
+        setLoginError(
+          lastError.message?.includes('Invalid login credentials')
+            ? 'Incorrect email/phone or password.'
+            : lastError.message || 'Sign in failed. Please try again.'
+        );
       }
     } finally {
       setIsSubmitting(false);
