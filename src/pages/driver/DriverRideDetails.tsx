@@ -163,18 +163,19 @@ export default function DriverRideDetails() {
   const note = ride.rider_note || (isParcel ? ride.parcel?.deliveryNote ?? null : null);
 
   return (
-    <div className="min-h-[100dvh] flex flex-col" style={{ background: '#F2F4F7' }}>
-      <div className="flex items-center" style={{ padding: '59px 16px 12px', gap: 10 }}>
-        <button type="button" onClick={handleClose} aria-label="Back" className="shrink-0 flex items-center justify-center rounded-full active:scale-90 transition-transform" style={{ width: 36, height: 36, background: 'rgba(17,17,17,.06)' }}>
+    <div className="min-h-[100dvh] flex flex-col relative" style={{ background: '#F2F4F7' }}>
+      {/* Floating header over the map */}
+      <div className="absolute top-0 left-0 right-0 z-20 flex items-center" style={{ padding: 'calc(env(safe-area-inset-top, 0px) + 12px) 16px 12px', gap: 10, pointerEvents: 'none' }}>
+        <button type="button" onClick={handleClose} aria-label="Back" className="shrink-0 flex items-center justify-center rounded-full active:scale-90 transition-transform" style={{ width: 36, height: 36, background: 'rgba(255,255,255,.92)', boxShadow: '0 2px 8px rgba(17,17,17,.12)', pointerEvents: 'auto' }}>
           <ChevronLeft style={{ width: 19, height: 19, color: RIDE_TEXT }} strokeWidth={2.4} />
         </button>
-        <span style={{ flex: 1, fontSize: 16, fontWeight: 700, color: RIDE_TEXT }}>Ride request</span>
+        <span style={{ flex: 1, fontSize: 16, fontWeight: 700, color: '#fff', textShadow: '0 1px 3px rgba(0,0,0,.35)', pointerEvents: 'none' }}>Ride request</span>
       </div>
 
       <div className="flex-1 overflow-y-auto" style={{ padding: '0 16px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {/* Map preview */}
-        <div className="relative" style={{ height: 190, borderRadius: 18, overflow: 'hidden' }}>
-          <LazyMapboxMap pickup={pickup} dropoff={dropoff} height="190px" className="w-full h-full" />
+        {/* Map preview — extends to the top under the floating header */}
+        <div className="relative -mx-4 -mt-4" style={{ height: 260, overflow: 'hidden' }}>
+          <LazyMapboxMap pickup={pickup} dropoff={dropoff} height="260px" className="w-full h-full" />
           {pickup && (
             <button
               type="button"
