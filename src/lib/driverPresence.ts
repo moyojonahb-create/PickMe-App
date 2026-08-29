@@ -1,5 +1,6 @@
 import { goBackend, type GoDriverPresenceRequest } from '@/lib/goBackendClient';
 import { invalidateDriverProfileCache } from '@/lib/offerHelpers';
+import { supabase } from '@/integrations/supabase/client';
 
 function getCurrentPositionSafe(timeoutMs = 4000): Promise<GeolocationPosition | null> {
   return new Promise((resolve) => {
