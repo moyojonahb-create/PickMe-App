@@ -18,6 +18,52 @@ export interface DriverPresenceResult {
   is_online: boolean;
 }
 
+/** Direct-to-database presence write used when the Go presence API is unreachable. */
+async function setPresenceViaSupabase(
+  online: boolean,
+  latitude: number | undefined,
+  longitude: number | undefined,
+  originalError: unknown,
+): Promise<void> {
+  const { data: auth } = await supabase.auth.getUser();
+  const userId = auth?.user?.id;
+  if (!userId) {
+    throw originalError instanceof Error ? originalError : new Error('You must be signed in to change your status');
+  }
+
+  const { data: driverRow } = await supabase
+    .from('drivers')
+    .select('id')
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  const driverId = (driverRow as { id?: string } | null)?.id;
+  if (!driverId) {
+    throw originalError instanceof Error ? originalError : new Error('Driver profile not found');
+  }
+
+  const { error: driverErr } = await supabase
+    .from('drivers')
+    .update({ is_online: online, updated_at: new Date().toISOString() })
+    .eq('id', driverId);
+  if (driverErr) throw new Error(driverErr.message);
+
+  try {
+    await supabase.from('live_locations').upsert(
+      {
+        driver_id: driverId,
+        is_online: online,
+        ...(latitude !== undefined && longitude !== undefined ? { latitude, longitude } : {}),
+        updated_at: new Date().toISOString(),
+      } as never,
+      { onConflict: 'driver_id' },
+    );
+  } catch {
+    // Location mirror is best-effort — the heartbeat will correct it.
+  }
+}
+
+
 /**
  * Writes driver online/offline status to the backend and only resolves once
  * the write is confirmed — callers must not flip their own UI state before
