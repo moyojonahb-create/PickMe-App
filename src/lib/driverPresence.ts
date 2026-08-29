@@ -52,11 +52,20 @@ export async function setDriverOnline(
     is_online: online,
     ...(latitude !== undefined && longitude !== undefined ? { latitude, longitude } : {}),
   };
-  const result = await goBackend.post<{ is_online?: boolean }>('/api/drivers/me/presence', payload);
 
-  if (typeof result?.is_online === 'boolean' && result.is_online !== online) {
-    throw new Error('Server did not confirm the requested status change');
+  try {
+    const result = await goBackend.post<{ is_online?: boolean }>('/api/drivers/me/presence', payload);
+
+    if (typeof result?.is_online === 'boolean' && result.is_online !== online) {
+      throw new Error('Server did not confirm the requested status change');
+    }
+  } catch (goErr) {
+    // The Go presence service isn't always reachable (not deployed / down /
+    // no VITE_API_URL configured). Presence is a simple row flag, so fall
+    // back to writing it directly — RLS still scopes it to this driver.
+    await setPresenceViaSupabase(online, latitude, longitude, goErr);
   }
+
 
   // The write succeeded server-side — any cached copy of this driver's
   // profile is now stale. Without this, a refresh a few seconds later
