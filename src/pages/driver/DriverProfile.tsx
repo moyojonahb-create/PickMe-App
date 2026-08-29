@@ -331,11 +331,21 @@ export default function DriverProfilePage() {
             aria-label={isOnline ? 'Go offline' : 'Go online'}
             onClick={handleToggleOnline}
             disabled={togglingOnline}
-            className="shrink-0 flex items-center justify-center rounded-full active:scale-90 transition-transform disabled:opacity-70"
-            style={{ width: 44, height: 44, background: 'rgba(255,255,255,.2)' }}
+            className="shrink-0 flex items-center justify-center rounded-full active:scale-90 transition-all disabled:opacity-70"
+            style={{
+              width: 44,
+              height: 44,
+              background: isOnline ? '#FFFFFF' : '#111111',
+              boxShadow: isOnline
+                ? '0 4px 14px rgba(0,0,0,.18), inset 0 0 0 .5px rgba(17,17,17,.08)'
+                : '0 4px 14px rgba(0,0,0,.35)',
+            }}
           >
-            {togglingOnline ? <Loader2 className="animate-spin" style={{ width: 20, height: 20, color: '#fff' }} /> : <Power style={{ width: 20, height: 20, color: '#fff' }} />}
+            {togglingOnline
+              ? <Loader2 className="animate-spin" style={{ width: 20, height: 20, color: isOnline ? RIDE_RED : '#fff' }} />
+              : <Power style={{ width: 20, height: 20, color: isOnline ? RIDE_RED : '#fff' }} />}
           </button>
+
           <button
             type="button"
             onClick={handleToggleOnline}
