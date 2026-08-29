@@ -70,6 +70,7 @@ export default defineConfig(({ mode }) => {
         ['VITE_SUPABASE_URL', ['VITE_SUPABASE_URL', 'SUPABASE_URL'], 'https://foksbnjtzubsjpeoorvo.supabase.co'],
         ['VITE_SUPABASE_PUBLISHABLE_KEY', ['VITE_SUPABASE_PUBLISHABLE_KEY', 'VITE_SUPABASE_ANON_KEY', 'SUPABASE_ANON_KEY'], 'sb_publishable_vgKlnioVW-ZyBiPeHgmaNw_411hQVXA'],
         ['VITE_MAPBOX_ACCESS_TOKEN', ['VITE_MAPBOX_ACCESS_TOKEN', 'VITE_MAPBOX_TOKEN', 'VITE_MAPBOX_PUBLIC_TOKEN'], 'pk.eyJ1IjoidGF1dG9uYXNvbHV0aW9ucyIsImEiOiJjbWt1MGZzOW0wMGpjM2VyM29rcWU4ZXZmIn0.T-K9P68HdR7OPDB4i36tMw'],
+        ['VITE_GO_BACKEND_URL', ['VITE_GO_BACKEND_URL', 'VITE_API_BASE_URL', 'VITE_BACKEND_URL'], 'https://koloi-ride-with-confidence-production.up.railway.app'],
       ] as const
     )
       .map(([key, sources, fallback]) => [key, sources.map((s) => publicEnv(env, s)).find(Boolean) || fallback] as const)
