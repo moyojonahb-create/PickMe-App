@@ -36,7 +36,7 @@ import { useFatigueMonitor } from "@/hooks/useFatigueMonitor";
 import FatigueAlert from "@/components/driver/FatigueAlert";
 
 import { subscribeRiderComing } from "@/lib/rideSignals";
-import { setDriverOnline } from "@/lib/driverPresence";
+import { setDriverOnline, sendPresenceHeartbeat } from "@/lib/driverPresence";
 import { useDriverRideAlerts, type DriverServiceArea } from "@/hooks/useDriverRideAlerts";
 import { useAppBootstrap } from "@/hooks/useAppBootstrap";
 
@@ -86,6 +86,9 @@ export default function DriverDashboard() {
   const [uncollectedRide, setUncollectedRide] = useState<{ id: string; fare: number; payment_method: string; dropoff_address: string; user_id: string } | null>(null);
 
   const locationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const presenceIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const latestCoordsRef = useRef<{ lat: number; lng: number } | null>(null);
+  const presenceFailuresRef = useRef(0);
   const { speak, isSupported: voiceSupported } = useVoiceNavigation({ enabled: voiceEnabled });
   // Warms the shared town-pricing cache useTownPricing() reads from
   // elsewhere — the result itself isn't needed locally on this screen.
@@ -187,7 +190,9 @@ export default function DriverDashboard() {
     const handlePos = (pos: GeolocationPosition) => {
       const { latitude, longitude } = pos.coords;
       updateDriverLocation(latitude, longitude);
-      setDriverCoords({ lat: latitude, lng: longitude });
+      const coords = { lat: latitude, lng: longitude };
+      setDriverCoords(coords);
+      latestCoordsRef.current = coords;
 
       // Fraud detection: check for GPS spoofing
       if (user && prevLocationRef.current) {
@@ -205,12 +210,34 @@ export default function DriverDashboard() {
     locationIntervalRef.current = setInterval(() => {
       navigator.geolocation.getCurrentPosition(handlePos, () => {});
     }, 10000);
+
+    // Presence heartbeat: the backend expires the Redis presence key after
+    // 90s and it is only written by this endpoint, so an online driver must
+    // re-post it periodically. A 30s interval gives us two chances to miss
+    // before dispatch stops considering them even though the UI still says
+    // Online. Heartbeat failures are counted but never take the driver offline.
+    const sendHeartbeat = async () => {
+      const ok = await sendPresenceHeartbeat(latestCoordsRef.current);
+      if (ok) {
+        presenceFailuresRef.current = 0;
+      } else {
+        presenceFailuresRef.current += 1;
+      }
+    };
+    void sendHeartbeat();
+    presenceIntervalRef.current = setInterval(() => {
+      void sendHeartbeat();
+    }, 30000);
   };
 
   const stopLocationTracking = () => {
     if (locationIntervalRef.current) {
       clearInterval(locationIntervalRef.current);
       locationIntervalRef.current = null;
+    }
+    if (presenceIntervalRef.current) {
+      clearInterval(presenceIntervalRef.current);
+      presenceIntervalRef.current = null;
     }
   };
 
