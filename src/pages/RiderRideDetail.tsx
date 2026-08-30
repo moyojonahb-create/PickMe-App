@@ -26,7 +26,7 @@ import {
   type Offer,
   type DriverProfile
 } from "@/lib/offerHelpers";
-import { RideCommunication } from "@/components/ride/RideCommunication";
+import DriverMessageSheet from "@/components/driver/DriverMessageSheet";
 import OffersModal from "@/components/OffersModal";
 import MapboxMap from "@/components/MapboxMap";
 import TripMapboxMap from "@/components/TripMapboxMap";
