@@ -32,6 +32,8 @@ import RideGlassPanel from '@/components/ride/RideGlassPanel';
 import NoteToDriverSheet from '@/components/ride/NoteToDriverSheet';
 import SafetySheet from '@/components/ride/SafetySheet';
 import ShareTripButton from '@/components/ride/ShareTripButton';
+import DriverMessageSheet from '@/components/driver/DriverMessageSheet';
+import EcoCashPaymentModal from '@/components/wallet/EcoCashPaymentModal';
 import { glassSurface, redCta, tintBlue, tintRed, RIDE_RED, RIDE_TEXT, RIDE_TEXT_2, RIDE_TEXT_3, RIDE_YELLOW } from '@/components/ride/rideGlass';
 import type { CSSProperties } from 'react';
 
@@ -139,6 +141,8 @@ export default function RideMatching() {
   const [rating, setRating] = useState(0);
   const [tipAmount, setTipAmount] = useState<number | null>(null);
   const [confirmingPayment, setConfirmingPayment] = useState(false);
+  const [messageOpen, setMessageOpen] = useState(false);
+  const [showEcoCashPay, setShowEcoCashPay] = useState(false);
   const sheetWrapRef = useRef<HTMLDivElement>(null);
   const noteLoadedForRide = useRef<string | null>(null);
   const waitStartedAt = useRef(Date.now());
@@ -1089,7 +1093,7 @@ export default function RideMatching() {
                     )}
                     <button
                       type="button"
-                      onClick={() => navigate(`/ride/${rideId}`, { state: { openMessage: true } })}
+                      onClick={() => setMessageOpen(true)}
                       aria-label="Message driver"
                       className="shrink-0 flex items-center justify-center rounded-full active:scale-90 transition-transform"
                       style={{ width: 36, height: 36, ...messageIconGlass }}
@@ -1232,11 +1236,26 @@ export default function RideMatching() {
                   <ChevronRight style={{ width: 17, height: 17, color: RIDE_TEXT_2 }} className="shrink-0" />
                 </button>
 
+                {/* EcoCash payment — same flow as RiderRideDetail, shown for
+                    non-wallet rides directly above the Message + Call row. */}
+                {ride.payment_method !== 'wallet' && (
+                  <button
+                    type="button"
+                    onClick={() => setShowEcoCashPay(true)}
+                    className="w-full flex items-center justify-center active:scale-[0.97] transition-transform"
+                    style={{ height: 48, borderRadius: 15, marginBottom: 12, gap: 8, ...redCta }}
+                  >
+                    <span style={{ fontSize: 15.5, fontWeight: 700 }} className="text-white">
+                      💰 Pay ${Number(ride.fare).toFixed(2)} with EcoCash
+                    </span>
+                  </button>
+                )}
+
                 {/* Section 5 — action row: Message + Call are the only two primary actions */}
                 <div className="flex items-center" style={{ gap: 12 }}>
                   <button
                     type="button"
-                    onClick={() => navigate(`/ride/${rideId}`, { state: { openMessage: true } })}
+                    onClick={() => setMessageOpen(true)}
                     className="shrink-0 flex items-center justify-center active:scale-[0.97] transition-transform"
                     style={{ width: 132, height: 48, borderRadius: 15, gap: 8, ...glassSurface, boxShadow: 'inset 0 .5px 0 rgba(255,255,255,.9), inset 0 0 0 1px rgba(184,17,4,.22), 0 6px 14px rgba(0,0,0,.05)' }}
                   >
@@ -1487,6 +1506,30 @@ export default function RideMatching() {
         onReuseEveryTripChange={setNoteReuseEveryTrip}
         onSave={handleSaveNote}
       />
+      {ride && user && driver && (
+        <DriverMessageSheet
+          open={messageOpen}
+          onClose={() => setMessageOpen(false)}
+          rideId={ride.id}
+          currentUserId={user.id}
+          passengerName={driver.full_name || 'Your Driver'}
+          passengerPhone={driver.phone ?? null}
+        />
+      )}
+      {ride && driver && ride.payment_method !== 'wallet' && (
+        <EcoCashPaymentModal
+          isOpen={showEcoCashPay}
+          onClose={() => setShowEcoCashPay(false)}
+          amount={Number(ride.fare)}
+          currency="$"
+          driverName={driver.vehicle_make ? `${driver.vehicle_make} Driver` : 'Driver'}
+          driverEcoCash={undefined}
+          walletPin={null}
+          onVerifyPin={async () => false}
+          onSetPin={async () => false}
+          onPaymentComplete={() => toast({ title: 'Payment sent to driver!' })}
+        />
+      )}
     </div>
   );
 }
