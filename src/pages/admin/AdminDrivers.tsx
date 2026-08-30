@@ -138,7 +138,7 @@ const AdminDrivers = () => {
   const handleForceOffline = async (driverId: string) => {
     if (!window.confirm('Take this driver offline now? They can go back online themselves.')) return;
     try {
-      const { error } = await (supabase.rpc as any)('admin_force_driver_offline', { _driver_id: driverId });
+      const { error } = await supabase.rpc('admin_force_driver_offline', { _driver_id: driverId });
       if (error) throw error;
       toast.success('Driver taken offline');
       fetchDrivers();

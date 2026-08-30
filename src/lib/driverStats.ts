@@ -118,11 +118,11 @@ export async function fetchRiderTrustSignals(riderUserId: string): Promise<Rider
     // Joined through rides (rather than filtering the embed on the rides
     // query directly, which PostgREST doesn't support) to get every rating
     // a driver has left for this rider across their ride history.
-    (supabase as any).from('ride_passenger_ratings').select('rating, rides!inner(user_id)').eq('rides.user_id', riderUserId),
+    supabase.from('ride_passenger_ratings').select('rating, rides!inner(user_id)').eq('rides.user_id', riderUserId),
   ]);
 
   const tripsWithPickMe = tripsRes.count ?? 0;
-  const ratings = ((ratingsRes.data ?? []) as { rating: number }[]).map((r) => Number(r.rating));
+  const ratings = (ratingsRes.data ?? []).map((r) => Number(r.rating));
   const averageRating = ratings.length > 0 ? Math.round((ratings.reduce((a, b) => a + b, 0) / ratings.length) * 10) / 10 : null;
 
   return { tripsWithPickMe, averageRating };
