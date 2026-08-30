@@ -140,7 +140,6 @@ export default function RiderProfile() {
                 <p className="text-[13px] text-muted-foreground mt-0.5">
                   {stats.completedRides > 0 ? `${stats.completedRides} trips` : 'No trips yet'}
                 </p>
-                {userEmail && <p className="text-[11px] text-muted-foreground/70 truncate mt-0.5">{userEmail}</p>}
               </>
             )}
             <div className="flex items-center gap-1.5 mt-2 flex-wrap">
