@@ -235,6 +235,10 @@ export default function DriverDashboard() {
       clearInterval(locationIntervalRef.current);
       locationIntervalRef.current = null;
     }
+    if (presenceIntervalRef.current) {
+      clearInterval(presenceIntervalRef.current);
+      presenceIntervalRef.current = null;
+    }
   };
 
   // Clean up location tracking on unmount
