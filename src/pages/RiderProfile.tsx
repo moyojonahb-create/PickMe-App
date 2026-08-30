@@ -21,7 +21,7 @@ import { updateMyProfileAvatar } from '@/lib/businessApi';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import BottomNavBar from '@/components/BottomNavBar';
-import CruiXeLogo from '@/components/CruiXeLogo';
+
 import { Switch } from '@/components/ui/switch';
 import { useTheme } from 'next-themes';
 import RiderPreferencesSettings from '@/components/settings/RiderPreferencesSettings';
@@ -157,26 +157,22 @@ export default function RiderProfile() {
                   {userEmail && <p className="text-[11px] text-white/80 truncate">{userEmail}</p>}
                 </>
               )}
-              <div className="flex items-center gap-1 mt-1 flex-wrap">
-                <Badge className="h-[18px] text-[10px] bg-accent text-accent-foreground border-0 px-1.5 font-bold">
-                  Rider
-                </Badge>
-                {isAdmin && user?.email?.toLowerCase() === 'moyojonahb@gmail.com' && (
-                  <Badge className="h-[18px] text-[10px] bg-white/25 text-white border-0 px-1.5 cursor-pointer backdrop-blur-sm" onClick={() => navigate(`${prefix}/admin`)}>
-                    <ShieldCheck className="w-2.5 h-2.5 mr-0.5" /> Admin
+                <div className="flex items-center gap-1 mt-1 flex-nowrap overflow-hidden">
+                  <Badge className="h-[18px] text-[10px] bg-accent text-accent-foreground border-0 px-1.5 font-bold shrink-0">
+                    Rider
                   </Badge>
-                )}
-                {isApprovedDriver && (
-                  <Badge className="h-[18px] text-[10px] bg-white/25 text-white border-0 px-1.5 cursor-pointer backdrop-blur-sm" onClick={() => navigate(`${prefix}/driver`)}>
-                    <CarFront className="w-2.5 h-2.5 mr-0.5" /> Driver
-                  </Badge>
-                )}
+                  {isAdmin && user?.email?.toLowerCase() === 'moyojonahb@gmail.com' && (
+                    <Badge className="h-[18px] text-[10px] bg-white/25 text-white border-0 px-1.5 cursor-pointer backdrop-blur-sm shrink-0" onClick={() => navigate(`${prefix}/admin`)}>
+                      <ShieldCheck className="w-2.5 h-2.5 mr-0.5" /> Admin
+                    </Badge>
+                  )}
+                  {isApprovedDriver && (
+                    <Badge className="h-[18px] text-[10px] bg-white/25 text-white border-0 px-1.5 cursor-pointer backdrop-blur-sm shrink-0" onClick={() => navigate(`${prefix}/driver`)}>
+                      <CarFront className="w-2.5 h-2.5 mr-0.5" /> Driver
+                    </Badge>
+                  )}
+                </div>
               </div>
-            </div>
-
-            <div className="bg-white rounded-full px-2.5 py-1 shadow-md flex items-center shrink-0">
-              <CruiXeLogo size="sm" />
-            </div>
           </div>
         </div>
       </div>
