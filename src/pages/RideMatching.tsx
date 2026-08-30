@@ -34,6 +34,9 @@ import SafetySheet from '@/components/ride/SafetySheet';
 import ShareTripButton from '@/components/ride/ShareTripButton';
 import DriverMessageSheet from '@/components/driver/DriverMessageSheet';
 import EcoCashPaymentModal from '@/components/wallet/EcoCashPaymentModal';
+import IncomingCallModal from '@/components/ride/IncomingCallModal';
+import ActiveCallOverlay from '@/components/ride/ActiveCallOverlay';
+import { useAgoraCall } from '@/hooks/useAgoraCall';
 import { glassSurface, redCta, tintBlue, tintRed, RIDE_RED, RIDE_TEXT, RIDE_TEXT_2, RIDE_TEXT_3, RIDE_YELLOW } from '@/components/ride/rideGlass';
 import type { CSSProperties } from 'react';
 
@@ -146,6 +149,26 @@ export default function RideMatching() {
   const [driverEcocash, setDriverEcocash] = useState<string | null>(null);
   // Rider wallet removed — direct payment to driver (mirrors RiderRideDetail).
   const walletPin: string | null = null;
+
+  // In-app voice calling (Agora) — tel: is only a fallback.
+  const {
+    callStatus,
+    isMuted,
+    isSpeaker,
+    callDuration,
+    incomingCall,
+    startCall,
+    answerCall,
+    declineCall: declineIncomingCall,
+    endCall,
+    toggleMute,
+    toggleSpeaker,
+  } = useAgoraCall({
+    rideId: ride?.id ?? null,
+    currentUserId: user?.id ?? "",
+    otherUserId: driver?.user_id ?? null,
+  });
+
   const sheetWrapRef = useRef<HTMLDivElement>(null);
   const noteLoadedForRide = useRef<string | null>(null);
   const waitStartedAt = useRef(Date.now());
