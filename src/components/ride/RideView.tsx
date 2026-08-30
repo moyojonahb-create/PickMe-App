@@ -195,6 +195,13 @@ export default function RideView() {
     observer.observe(el);
     return () => { clearTimeout(debounce); observer.disconnect(); };
   }, []);
+
+  // Clear any pending Places search debounce on unmount so the edge function
+  // request and subsequent setState don't hit a dead component.
+  useEffect(() => () => {
+    if (nominatimDebounceRef.current) clearTimeout(nominatimDebounceRef.current);
+  }, []);
+
   const [menuOpen, setMenuOpen] = useState(false);
   const [selectedTown, setSelectedTown] = useState<TownConfig>(DEFAULT_TOWN);
   // Set when the rider explicitly picks a town, so the map recenters there even
