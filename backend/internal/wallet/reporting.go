@@ -20,20 +20,22 @@ type ReportReader interface {
 }
 
 func (r *PostgresReports) WalletState(ctx context.Context, userID string) ([]map[string]any, error) {
+	// Reads from public.wallets (single row per user). Column names match
+	// the normalizers in src/lib/walletApi.ts, so no client change is needed.
 	rows, err := queryJSONRows(ctx, r.db, `
 		SELECT json_build_object(
 			'id', id,
-			'account_type', account_type,
-			'currency', currency,
-			'status', status,
-			'cached_available_balance', cached_available_balance,
-			'cached_pending_balance', cached_pending_balance,
-			'cached_liability_balance', cached_liability_balance,
+			'user_id', user_id,
+			'balance', balance,
+			'currency', 'USD',
+			'is_locked', is_locked,
+			'locked_reason', locked_reason,
+			'locked_at', locked_at,
+			'created_at', created_at,
 			'updated_at', updated_at
 		)
-		FROM public.wallet_accounts
-		WHERE owner_user_id = $1
-		ORDER BY account_type ASC
+		FROM public.wallets
+		WHERE user_id = $1
 	`, userID)
 	return rawRowsToMaps(rows, err)
 }
@@ -60,20 +62,25 @@ func (r *PostgresReports) WalletTransactions(ctx context.Context, userID string,
 }
 
 func (r *PostgresReports) WalletDeposits(ctx context.Context, userID string, limit int) ([]map[string]any, error) {
+	// Reads from public.deposit_requests. driver_id here is the auth user id,
+	// matching the RLS policy and the handler's userID argument. Column names
+	// match the normalizers in src/lib/walletApi.ts, so no client change is needed.
 	rows, err := queryJSONRows(ctx, r.db, `
 		SELECT json_build_object(
 			'id', id,
-			'amount', amount,
-			'currency', currency,
-			'payment_method', payment_method,
+			'driver_id', driver_id,
+			'amount_usd', amount_usd,
+			'currency', 'USD',
+			'ecocash_phone', ecocash_phone,
+			'ecocash_reference', ecocash_reference,
+			'proof_path', proof_path,
 			'status', status,
-			'provider_reference', provider_reference,
-			'created_at', created_at,
-			'updated_at', updated_at
+			'admin_note', admin_note,
+			'approved_at', approved_at,
+			'created_at', created_at
 		)
-		FROM public.payment_intents
-		WHERE user_id = $1
-		  AND operation IN ('manual_deposit', 'provider_deposit', 'legacy')
+		FROM public.deposit_requests
+		WHERE driver_id = $1
 		ORDER BY created_at DESC
 		LIMIT $2
 	`, userID, limit)
