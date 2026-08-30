@@ -265,12 +265,17 @@ async function request<T>(method: string, path: string, body?: unknown, isRetry 
           ? String((payload as { message?: unknown }).message)
           : `Backend request failed with ${response.status}`;
     console.warn("[GoBackend] non-2xx response", { method, path, status: response.status, message });
+    if (response.status === 401) {
+      noteAuthFailure();
+    }
     const fallbackCode = statusToCode(response.status);
     throw new GoBackendError(message, payloadToCode(payload, fallbackCode), response.status, payload);
   }
 
+  closeAuthBreaker();
   return payload as T;
 }
+
 
 export const goBackend = {
   get: <T>(path: string, signal?: AbortSignal) => request<T>("GET", path, undefined, false, signal),
