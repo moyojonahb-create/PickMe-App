@@ -8,7 +8,8 @@ import {
   CheckCircle, 
   XCircle,
   MapPin,
-  Car
+  Car,
+  PowerOff
 } from 'lucide-react';
 import AdminLayout from '@/components/admin/AdminLayout';
 import AdminGuard from '@/components/admin/AdminGuard';
@@ -131,6 +132,19 @@ const AdminDrivers = () => {
     } catch (error) {
       console.error('Error updating driver:', error);
       toast.error('Failed to update driver status');
+    }
+  };
+
+  const handleForceOffline = async (driverId: string) => {
+    if (!window.confirm('Take this driver offline now? They can go back online themselves.')) return;
+    try {
+      const { error } = await (supabase.rpc as any)('admin_force_driver_offline', { _driver_id: driverId });
+      if (error) throw error;
+      toast.success('Driver taken offline');
+      fetchDrivers();
+    } catch (error) {
+      console.error('Error forcing driver offline:', error);
+      toast.error('Failed to take driver offline');
     }
   };
 
@@ -288,6 +302,15 @@ const AdminDrivers = () => {
                                 View Details
                               </Link>
                             </DropdownMenuItem>
+                            {driver.is_online && (
+                              <DropdownMenuItem
+                                onClick={() => handleForceOffline(driver.id)}
+                                className="text-red-600"
+                              >
+                                <PowerOff className="w-4 h-4 mr-2" />
+                                Force offline
+                              </DropdownMenuItem>
+                            )}
                             {driver.status === 'pending' && (
                               <DropdownMenuItem 
                                 onClick={() => handleStatusChange(driver.id, 'approved')}
