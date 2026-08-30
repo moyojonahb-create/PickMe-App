@@ -87,7 +87,9 @@ export default function DriverDashboard() {
 
   const locationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const presenceIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const trackingGenerationRef = useRef(0);
   const latestCoordsRef = useRef<{ lat: number; lng: number } | null>(null);
+
   const presenceFailuresRef = useRef(0);
   const { speak, isSupported: voiceSupported } = useVoiceNavigation({ enabled: voiceEnabled });
   // Warms the shared town-pricing cache useTownPricing() reads from
@@ -181,12 +183,17 @@ export default function DriverDashboard() {
 
   const startLocationTracking = async () => {
     stopLocationTracking();
+    const generation = ++trackingGenerationRef.current;
     if (!navigator.geolocation) return;
     // A driver believing they're online while dispatch can't actually reach
     // them (no runtime location permission granted) is the worst failure
     // mode here — this is what makes Android's permission dialog actually
     // appear, instead of getCurrentPosition below failing silently.
     await requestNativeLocationPermission();
+    // Tracking was stopped (or restarted) while the permission prompt was
+    // open — do not install intervals nothing holds a handle to.
+    if (generation !== trackingGenerationRef.current) return;
+
     const handlePos = (pos: GeolocationPosition) => {
       const { latitude, longitude } = pos.coords;
       updateDriverLocation(latitude, longitude);
@@ -241,6 +248,7 @@ export default function DriverDashboard() {
   };
 
   const stopLocationTracking = () => {
+    trackingGenerationRef.current += 1;
     if (locationIntervalRef.current) {
       clearInterval(locationIntervalRef.current);
       locationIntervalRef.current = null;
@@ -250,6 +258,7 @@ export default function DriverDashboard() {
       presenceIntervalRef.current = null;
     }
   };
+
 
   // Clean up location tracking on unmount
   useEffect(() => {
