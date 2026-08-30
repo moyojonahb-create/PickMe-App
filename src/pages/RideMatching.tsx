@@ -34,6 +34,9 @@ import SafetySheet from '@/components/ride/SafetySheet';
 import ShareTripButton from '@/components/ride/ShareTripButton';
 import DriverMessageSheet from '@/components/driver/DriverMessageSheet';
 import EcoCashPaymentModal from '@/components/wallet/EcoCashPaymentModal';
+import IncomingCallModal from '@/components/ride/IncomingCallModal';
+import ActiveCallOverlay from '@/components/ride/ActiveCallOverlay';
+import { useAgoraCall } from '@/hooks/useAgoraCall';
 import { glassSurface, redCta, tintBlue, tintRed, RIDE_RED, RIDE_TEXT, RIDE_TEXT_2, RIDE_TEXT_3, RIDE_YELLOW } from '@/components/ride/rideGlass';
 import type { CSSProperties } from 'react';
 
@@ -146,6 +149,26 @@ export default function RideMatching() {
   const [driverEcocash, setDriverEcocash] = useState<string | null>(null);
   // Rider wallet removed — direct payment to driver (mirrors RiderRideDetail).
   const walletPin: string | null = null;
+
+  // In-app voice calling (Agora) — tel: is only a fallback.
+  const {
+    callStatus,
+    isMuted,
+    isSpeaker,
+    callDuration,
+    incomingCall,
+    startCall,
+    answerCall,
+    declineCall: declineIncomingCall,
+    endCall,
+    toggleMute,
+    toggleSpeaker,
+  } = useAgoraCall({
+    rideId: ride?.id ?? null,
+    currentUserId: user?.id ?? "",
+    otherUserId: driver?.user_id ?? null,
+  });
+
   const sheetWrapRef = useRef<HTMLDivElement>(null);
   const noteLoadedForRide = useRef<string | null>(null);
   const waitStartedAt = useRef(Date.now());
@@ -1283,16 +1306,25 @@ export default function RideMatching() {
                     <MessageCircle style={{ width: 18, height: 18, color: RIDE_RED }} />
                     <span style={{ fontSize: 14.5, fontWeight: 700, color: RIDE_RED }}>Message</span>
                   </button>
-                  <a
-                    href={driver?.phone ? `tel:${driver.phone}` : undefined}
-                    className={`flex items-center justify-center active:scale-[0.97] transition-transform ${driver?.phone ? '' : 'pointer-events-none opacity-50'}`}
+                  <button
+                    type="button"
+                    disabled={callStatus !== 'idle'}
+                    onClick={async () => {
+                      if (callStatus !== 'idle') return;
+                      try {
+                        await startCall();
+                      } catch {
+                        if (driver?.phone) window.location.href = `tel:${driver.phone}`;
+                      }
+                    }}
+                    className="flex items-center justify-center active:scale-[0.97] transition-transform disabled:opacity-60"
                     style={{ flex: 1, height: 48, borderRadius: 15, gap: 9, ...redCta }}
                   >
                     <Phone style={{ width: 18, height: 18 }} className="text-white" />
                     <span style={{ fontSize: 15.5, fontWeight: 700 }} className="text-white truncate">
-                      Call {(driver?.full_name || 'driver').split(' ')[0]}
+                      {callStatus !== 'idle' ? 'Calling…' : `Call ${(driver?.full_name || 'driver').split(' ')[0]}`}
                     </span>
-                  </a>
+                  </button>
                 </div>
 
                 {/* Section 6 — iOS home indicator */}
@@ -1551,6 +1583,25 @@ export default function RideMatching() {
           onVerifyPin={async (pin) => pin === walletPin}
           onSetPin={async () => false}
           onPaymentComplete={() => toast({ title: 'Payment sent to driver!' })}
+        />
+      )}
+      {callStatus !== "idle" && (
+        <ActiveCallOverlay
+          status={callStatus}
+          duration={callDuration}
+          isMuted={isMuted}
+          isSpeaker={isSpeaker}
+          onToggleMute={toggleMute}
+          onToggleSpeaker={toggleSpeaker}
+          onEndCall={endCall}
+          otherUserName={driver?.full_name || 'Driver'}
+        />
+      )}
+      {incomingCall && (
+        <IncomingCallModal
+          callerId={incomingCall.callerId}
+          onAnswer={answerCall}
+          onDecline={declineIncomingCall}
         />
       )}
     </div>
