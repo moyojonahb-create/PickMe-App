@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
@@ -40,6 +40,11 @@ const Signup = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
+  // Timer refs so navigating away during countdown / deferred signup
+  // cancels the work instead of writing state to an unmounted component.
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const signupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // OTP state
   const [otp, setOtp] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
@@ -71,11 +76,13 @@ const Signup = () => {
 
   // Start countdown timer
   const startCountdown = () => {
+    if (countdownRef.current) clearInterval(countdownRef.current);
     setCountdown(60);
-    const interval = setInterval(() => {
+    countdownRef.current = setInterval(() => {
       setCountdown(prev => {
         if (prev <= 1) {
-          clearInterval(interval);
+          if (countdownRef.current) clearInterval(countdownRef.current);
+          countdownRef.current = null;
           return 0;
         }
         return prev - 1;
@@ -132,7 +139,7 @@ const Signup = () => {
       setIsVerified(true);
       toast({ title: 'Phone verified!' });
       // Proceed to create account
-      setTimeout(() => completeSignup(formData), 800);
+      signupTimeoutRef.current = setTimeout(() => completeSignup(formData), 800);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Verification failed';
       toast({ title: 'Verification failed', description: message, variant: 'destructive' });
@@ -196,6 +203,12 @@ const Signup = () => {
       setIsSubmitting(false);
     }
   };
+
+  // Cancel any timers on unmount so they don't write state to a dead component.
+  useEffect(() => () => {
+    if (countdownRef.current) clearInterval(countdownRef.current);
+    if (signupTimeoutRef.current) clearTimeout(signupTimeoutRef.current);
+  }, []);
 
   // OTP Verification Step
   if (step === 'verify-phone' && formData) {
