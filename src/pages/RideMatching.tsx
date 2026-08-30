@@ -149,8 +149,13 @@ export default function RideMatching() {
   const [notifyBookerPref, setNotifyBookerPref] = useState(true);
   const [thirdPartyPassengerName, setThirdPartyPassengerName] = useState<string | null>(null);
   const prevOfferIds = useRef<Set<string>>(new Set());
+  // ids we've already looked up, resolved or not. Without this, an id that
+  // never resolves keeps `missing` non-empty forever and the effect re-runs
+  // on its own state update — an endless query loop.
+  const attemptedDriverIdsRef = useRef<Set<string>>(new Set());
 
   const isMatched = !!ride && ACCEPTED_STATUSES.includes(ride.status);
+
   // 'in_progress' is its own screen (4f, pickup already happened) — every
   // other accepted status still reads as "driver on the way to pickup" (4c).
   const inTrip = ride?.status === 'in_progress';
@@ -284,13 +289,17 @@ export default function RideMatching() {
      profiles we don't already have cached. ─────────────────────────── */
   useEffect(() => {
     const missing = Array.from(new Set(offers.map((o) => o.driver_id))).filter((id) => !driverProfiles[id]);
-    if (missing.length === 0) return;
+    const toFetch = missing.filter((id) => !attemptedDriverIdsRef.current.has(id));
+    if (toFetch.length === 0) return;
+    toFetch.forEach((id) => attemptedDriverIdsRef.current.add(id));
     let cancelled = false;
-    fetchDriversByIds(missing).then((map) => {
+    fetchDriversByIds(toFetch).then((map) => {
       if (!cancelled) setDriverProfiles((prev) => ({ ...prev, ...map }));
     }).catch(() => {});
     return () => { cancelled = true; };
-  }, [offers, driverProfiles]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [offers]);
+
 
   /* ── Chime + haptic on a genuinely new bid (not the initial load) ─── */
   useEffect(() => {
