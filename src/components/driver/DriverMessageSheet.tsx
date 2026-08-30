@@ -358,6 +358,7 @@ export default function DriverMessageSheet({
             }}
             placeholder={`Message ${firstName}…`}
             aria-label="Message"
+            className="placeholder:text-[#999999]"
             style={{
               flex: 1,
               height: 44,
