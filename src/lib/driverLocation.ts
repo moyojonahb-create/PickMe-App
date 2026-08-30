@@ -23,6 +23,7 @@ supabase.auth.onAuthStateChange((event) => {
 // Deduplicate location updates
 let lastSentLat = 0;
 let lastSentLng = 0;
+let lastSentAt = 0;
 
 const MIN_MOVE_THRESHOLD = 0.00005; // ~5m
 
