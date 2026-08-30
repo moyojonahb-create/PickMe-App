@@ -76,11 +76,13 @@ const Signup = () => {
 
   // Start countdown timer
   const startCountdown = () => {
+    if (countdownRef.current) clearInterval(countdownRef.current);
     setCountdown(60);
-    const interval = setInterval(() => {
+    countdownRef.current = setInterval(() => {
       setCountdown(prev => {
         if (prev <= 1) {
-          clearInterval(interval);
+          if (countdownRef.current) clearInterval(countdownRef.current);
+          countdownRef.current = null;
           return 0;
         }
         return prev - 1;
