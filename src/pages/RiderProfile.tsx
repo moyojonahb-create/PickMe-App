@@ -167,8 +167,8 @@ export default function RiderProfile() {
               </div>
             </div>
 
-            <div className="bg-white rounded-full px-2.5 py-1 shadow-md flex items-center shrink-0">
-              <CruiXeLogo size="sm" />
+            <div className="bg-white rounded-full px-2 py-1 shadow-md flex items-center shrink-0">
+              <CruiXeLogo size="xs" />
             </div>
           </div>
         </div>

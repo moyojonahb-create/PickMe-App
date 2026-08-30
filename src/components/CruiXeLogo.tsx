@@ -4,11 +4,12 @@ interface CruiXeLogoProps {
   className?: string;
   variant?: 'default' | 'inverted' | 'light';
   showTagline?: boolean;
-  size?: 'sm' | 'md' | 'lg' | 'xl';
+  size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
   iconOnly?: boolean;
 }
 
 const sizeClasses = {
+  xs: 'h-5',
   sm: 'h-8',
   md: 'h-10',
   // Header logo — compact on mobile, scales up moderately on larger screens
