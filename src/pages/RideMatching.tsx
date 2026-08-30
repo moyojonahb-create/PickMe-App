@@ -143,6 +143,9 @@ export default function RideMatching() {
   const [confirmingPayment, setConfirmingPayment] = useState(false);
   const [messageOpen, setMessageOpen] = useState(false);
   const [showEcoCashPay, setShowEcoCashPay] = useState(false);
+  const [driverEcocash, setDriverEcocash] = useState<string | null>(null);
+  // Rider wallet removed — direct payment to driver (mirrors RiderRideDetail).
+  const walletPin: string | null = null;
   const sheetWrapRef = useRef<HTMLDivElement>(null);
   const noteLoadedForRide = useRef<string | null>(null);
   const waitStartedAt = useRef(Date.now());
@@ -389,6 +392,24 @@ export default function RideMatching() {
     }
     fetchAssignedDriver(ride.driver_id).then(setDriver).catch(() => {});
   }, [isMatched, isComplete, ride?.driver_id, notifyBookerPref]);
+
+  // Driver's EcoCash number for the in-place payment modal — MatchedDriver
+  // (rideMatching.ts) doesn't select it, so fetch it here from the same
+  // `drivers.ecocash_number` column RiderRideDetail reads. When the column
+  // is empty the EcoCash button stays hidden rather than failing silently.
+  useEffect(() => {
+    if (!driver?.id) { setDriverEcocash(null); return; }
+    let cancelled = false;
+    supabase
+      .from('drivers')
+      .select('ecocash_number')
+      .eq('id', driver.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!cancelled) setDriverEcocash(((data as { ecocash_number?: string | null } | null)?.ecocash_number) ?? null);
+      });
+    return () => { cancelled = true; };
+  }, [driver?.id]);
 
   // Declared here (not down near the rest of the 4f live-progress block)
   // because the parcel/passenger-match SMS effects below read it in their
@@ -1238,7 +1259,7 @@ export default function RideMatching() {
 
                 {/* EcoCash payment — same flow as RiderRideDetail, shown for
                     non-wallet rides directly above the Message + Call row. */}
-                {ride.payment_method !== 'wallet' && (
+                {ride.payment_method !== 'wallet' && driverEcocash && (
                   <button
                     type="button"
                     onClick={() => setShowEcoCashPay(true)}
@@ -1516,16 +1537,16 @@ export default function RideMatching() {
           passengerPhone={driver.phone ?? null}
         />
       )}
-      {ride && driver && ride.payment_method !== 'wallet' && (
+      {ride && driver && driverEcocash && ride.payment_method !== 'wallet' && (
         <EcoCashPaymentModal
           isOpen={showEcoCashPay}
           onClose={() => setShowEcoCashPay(false)}
           amount={Number(ride.fare)}
           currency="$"
           driverName={driver.vehicle_make ? `${driver.vehicle_make} Driver` : 'Driver'}
-          driverEcoCash={undefined}
-          walletPin={null}
-          onVerifyPin={async () => false}
+          driverEcoCash={driverEcocash}
+          walletPin={walletPin}
+          onVerifyPin={async (pin) => pin === walletPin}
           onSetPin={async () => false}
           onPaymentComplete={() => toast({ title: 'Payment sent to driver!' })}
         />
