@@ -310,7 +310,7 @@ export default function DriverProfilePage() {
             {[
               { label: 'This week', value: weekStats ? fmtUSD(weekStats.weekEarnings) : '—' },
               { label: 'Completed', value: weekStats?.completionRate != null ? `${weekStats.completionRate}%` : '—' },
-              { label: 'On CruiXe', value: weekStats ? `${weekStats.monthsOnPickMe} mo` : '—' },
+              { label: 'On CruiXe', value: weekStats ? `${weekStats.monthsOnPickMe} months` : '—' },
             ].map((s, i) => (
               <div
                 key={s.label}
