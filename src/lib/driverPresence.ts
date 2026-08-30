@@ -137,7 +137,7 @@ export async function sendPresenceHeartbeat(
   // updates.
   void coords;
 
-  const payload = { status: 'heartbeat' } as GoDriverPresenceRequest;
+  const payload = { status: 'heartbeat' } as unknown as GoDriverPresenceRequest;
 
   try {
     await goBackend.post<unknown>('/api/drivers/me/presence', payload);
