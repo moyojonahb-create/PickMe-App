@@ -190,7 +190,9 @@ export default function DriverDashboard() {
     const handlePos = (pos: GeolocationPosition) => {
       const { latitude, longitude } = pos.coords;
       updateDriverLocation(latitude, longitude);
-      setDriverCoords({ lat: latitude, lng: longitude });
+      const coords = { lat: latitude, lng: longitude };
+      setDriverCoords(coords);
+      latestCoordsRef.current = coords;
 
       // Fraud detection: check for GPS spoofing
       if (user && prevLocationRef.current) {
@@ -208,6 +210,24 @@ export default function DriverDashboard() {
     locationIntervalRef.current = setInterval(() => {
       navigator.geolocation.getCurrentPosition(handlePos, () => {});
     }, 10000);
+
+    // Presence heartbeat: the backend expires the Redis presence key after
+    // 90s and it is only written by this endpoint, so an online driver must
+    // re-post it periodically. A 30s interval gives us two chances to miss
+    // before dispatch stops considering them even though the UI still says
+    // Online. Heartbeat failures are counted but never take the driver offline.
+    const sendHeartbeat = async () => {
+      const ok = await sendPresenceHeartbeat(latestCoordsRef.current);
+      if (ok) {
+        presenceFailuresRef.current = 0;
+      } else {
+        presenceFailuresRef.current += 1;
+      }
+    };
+    void sendHeartbeat();
+    presenceIntervalRef.current = setInterval(() => {
+      void sendHeartbeat();
+    }, 30000);
   };
 
   const stopLocationTracking = () => {
