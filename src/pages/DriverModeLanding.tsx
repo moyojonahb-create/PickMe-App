@@ -34,7 +34,7 @@ export default function DriverModeLanding() {
 
   const handleDriverAction = () => {
     if (user && isDriver && isApproved) {
-      navigate('/driver/dashboard');
+      navigate('/driver/profile');
       return;
     }
     if (user && isDriver) {
