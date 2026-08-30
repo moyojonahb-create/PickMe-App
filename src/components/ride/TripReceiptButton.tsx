@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { Download, Loader2, FileText } from 'lucide-react';
+import { Loader2, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 
-interface TripReceiptData {
+export interface TripReceiptData {
   rideId: string;
   pickupAddress: string;
   dropoffAddress: string;
@@ -18,13 +18,9 @@ interface TripReceiptData {
   riderName?: string;
 }
 
-export default function TripReceiptButton({ data }: { data: TripReceiptData }) {
-  const [generating, setGenerating] = useState(false);
-
-  const generateReceipt = async () => {
-    setGenerating(true);
-    try {
-      const receiptHtml = `
+export async function openTripReceipt(data: TripReceiptData): Promise<void> {
+  try {
+    const receiptHtml = `
 <!DOCTYPE html>
 <html>
 <head>
@@ -94,30 +90,40 @@ export default function TripReceiptButton({ data }: { data: TripReceiptData }) {
 </body>
 </html>`;
 
-      // Open in new window for print/save
-      const printWindow = window.open('', '_blank');
-      if (printWindow) {
-        printWindow.document.write(receiptHtml);
-        printWindow.document.close();
-        // Auto-trigger print dialog after load
-        printWindow.onload = () => {
-          setTimeout(() => printWindow.print(), 300);
-        };
-        toast.success('Receipt opened — use Print > Save as PDF');
-      } else {
-        // Fallback: download as HTML
-        const blob = new Blob([receiptHtml], { type: 'text/html' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `CruiXe-Receipt-${data.rideId.substring(0, 8)}.html`;
-        a.click();
-        URL.revokeObjectURL(url);
-        toast.success('Receipt downloaded');
-      }
-    } catch (err) {
-      console.error('Receipt generation failed:', err);
-      toast.error('Failed to generate receipt');
+    // Open in new window for print/save
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(receiptHtml);
+      printWindow.document.close();
+      // Auto-trigger print dialog after load
+      printWindow.onload = () => {
+        setTimeout(() => printWindow.print(), 300);
+      };
+      toast.success('Receipt opened — use Print > Save as PDF');
+    } else {
+      // Fallback: download as HTML
+      const blob = new Blob([receiptHtml], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `CruiXe-Receipt-${data.rideId.substring(0, 8)}.html`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success('Receipt downloaded');
+    }
+  } catch (err) {
+    console.error('Receipt generation failed:', err);
+    toast.error('Failed to generate receipt');
+  }
+}
+
+export default function TripReceiptButton({ data }: { data: TripReceiptData }) {
+  const [generating, setGenerating] = useState(false);
+
+  const generateReceipt = async () => {
+    setGenerating(true);
+    try {
+      await openTripReceipt(data);
     } finally {
       setGenerating(false);
     }
