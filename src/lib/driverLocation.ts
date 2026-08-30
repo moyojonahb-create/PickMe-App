@@ -49,7 +49,8 @@ export async function updateDriverLocation(
   if (
     dLat < MIN_MOVE_THRESHOLD &&
     dLng < MIN_MOVE_THRESHOLD &&
-    lastSentLat !== 0
+    lastSentLat !== 0 &&
+    Date.now() - lastSentAt < MAX_SILENCE_MS
   ) {
     return;
   }
