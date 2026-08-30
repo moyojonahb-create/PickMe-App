@@ -4,7 +4,7 @@ interface CruiXeLogoProps {
   className?: string;
   variant?: 'default' | 'inverted' | 'light';
   showTagline?: boolean;
-  size?: 'sm' | 'md' | 'lg' | 'xl';
+  size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
   iconOnly?: boolean;
 }
 
