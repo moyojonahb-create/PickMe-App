@@ -1585,6 +1585,25 @@ export default function RideMatching() {
           onPaymentComplete={() => toast({ title: 'Payment sent to driver!' })}
         />
       )}
+      {callStatus !== "idle" && (
+        <ActiveCallOverlay
+          status={callStatus}
+          duration={callDuration}
+          isMuted={isMuted}
+          isSpeaker={isSpeaker}
+          onToggleMute={toggleMute}
+          onToggleSpeaker={toggleSpeaker}
+          onEndCall={endCall}
+          otherUserName={driver?.full_name || 'Driver'}
+        />
+      )}
+      {incomingCall && (
+        <IncomingCallModal
+          callerId={incomingCall.callerId}
+          onAnswer={answerCall}
+          onDecline={declineIncomingCall}
+        />
+      )}
     </div>
   );
 }
