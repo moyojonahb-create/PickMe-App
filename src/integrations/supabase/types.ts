@@ -334,6 +334,38 @@ export type Database = {
         }
         Relationships: []
       }
+      driver_offline_actions: {
+        Row: {
+          admin_id: string | null
+          created_at: string
+          driver_id: string
+          id: string
+          reason: string | null
+        }
+        Insert: {
+          admin_id?: string | null
+          created_at?: string
+          driver_id: string
+          id?: string
+          reason?: string | null
+        }
+        Update: {
+          admin_id?: string | null
+          created_at?: string
+          driver_id?: string
+          id?: string
+          reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "driver_offline_actions_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "drivers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       driver_queue: {
         Row: {
           created_at: string
@@ -1668,6 +1700,48 @@ export type Database = {
           },
         ]
       }
+      ride_passenger_ratings: {
+        Row: {
+          comment: string | null
+          created_at: string
+          driver_id: string
+          id: string
+          rating: number
+          ride_id: string
+        }
+        Insert: {
+          comment?: string | null
+          created_at?: string
+          driver_id: string
+          id?: string
+          rating: number
+          ride_id: string
+        }
+        Update: {
+          comment?: string | null
+          created_at?: string
+          driver_id?: string
+          id?: string
+          rating?: number
+          ride_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ride_passenger_ratings_ride_id_fkey"
+            columns: ["ride_id"]
+            isOneToOne: false
+            referencedRelation: "pending_rides_safe"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ride_passenger_ratings_ride_id_fkey"
+            columns: ["ride_id"]
+            isOneToOne: false
+            referencedRelation: "rides"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ride_preferences: {
         Row: {
           cool_temperature: boolean
@@ -2724,6 +2798,10 @@ export type Database = {
       }
       admin_flag_user: {
         Args: { p_reason: string; p_severity?: string; p_user_id: string }
+        Returns: Json
+      }
+      admin_force_driver_offline: {
+        Args: { _driver_id: string; _reason?: string }
         Returns: Json
       }
       admin_list_student_profiles: {
