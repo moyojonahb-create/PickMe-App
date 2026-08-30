@@ -1533,6 +1533,8 @@ export default function RideMatching() {
           onClose={() => setMessageOpen(false)}
           rideId={ride.id}
           currentUserId={user.id}
+          viewerRole="rider"
+          driverUserId={driver.user_id}
           passengerName={driver.full_name || 'Your Driver'}
           passengerPhone={driver.phone ?? null}
         />

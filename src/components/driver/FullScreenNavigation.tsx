@@ -622,6 +622,8 @@ export default function FullScreenNavigation({
         onClose={() => setChatOpen(false)}
         rideId={activeTrip.id}
         currentUserId={userId}
+        viewerRole="driver"
+        driverUserId={userId}
         passengerName={passengerName}
         passengerPhone={dialNumber}
         etaMinutes={etaMinutes}
