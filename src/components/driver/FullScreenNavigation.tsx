@@ -23,7 +23,7 @@ import { eventString } from "@/lib/backendSocketClient";
 import { useRideRealtime } from "@/hooks/useRideRealtime";
 import { useUnreadRideMessages } from "@/hooks/useUnreadRideMessages";
 import { useVoiceNavigation } from "@/hooks/useVoiceNavigation";
-import { RideCommunication } from "@/components/ride/RideCommunication";
+import DriverMessageSheet from "@/components/driver/DriverMessageSheet";
 import SafetySheet from "@/components/ride/SafetySheet";
 import { goBackend } from "@/lib/goBackendClient";
 import { createNotification } from "@/lib/businessApi";
