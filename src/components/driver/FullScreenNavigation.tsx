@@ -257,6 +257,11 @@ export default function FullScreenNavigation({
   onStartCall,
   callStatus,
 }: FullScreenNavigationProps) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const isMapp = location.pathname.startsWith('/mapp');
+  const profilePath = isMapp ? '/mapp/profile' : '/profile';
+
   const [route, setRoute] = useState<{ geometry: string; steps: RouteStep[]; distanceKm: number; durationMinutes: number } | null>(null);
   const [routeFailed, setRouteFailed] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
