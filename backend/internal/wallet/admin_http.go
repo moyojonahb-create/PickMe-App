@@ -1854,7 +1854,12 @@ func walletResult(c *fiber.Ctx, status int, result any, err error) error {
 		if errors.Is(err, ErrPilotAccessDenied) {
 			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Wallet internal pilot access required"})
 		}
-		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "Wallet operation could not be completed"})
+		// Unrecognized failure — almost always a query or database error, not a
+		// business-rule conflict. Report it rather than swallowing it: this
+		// catch-all previously returned a silent 409 and hid a wallet query
+		// that had been failing on every request.
+		observability.CaptureError(err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Wallet operation could not be completed"})
 	}
 	return c.Status(status).JSON(result)
 }
