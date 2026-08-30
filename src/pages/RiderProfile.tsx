@@ -317,6 +317,13 @@ export default function RiderProfile() {
           <LogOut className="w-4 h-4 mr-2" /> Sign Out
         </Button>
 
+        {/* Brand mark + build, the conventional foot of a settings list.
+            Version is what a tester quotes when reporting a bug. */}
+        <div className="flex flex-col items-center gap-1.5 pt-4 pb-2 opacity-60">
+          <CruiXeLogo size="sm" variant="default" />
+          <p className="text-[10px] text-muted-foreground">Version {import.meta.env.VITE_APP_VERSION || '1.0.0'}</p>
+        </div>
+
         <div className="h-20" />
       </div>
 
