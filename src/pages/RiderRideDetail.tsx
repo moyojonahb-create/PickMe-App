@@ -321,41 +321,6 @@ export default function RiderRideDetail() {
     } catch (e: unknown) { toast.error("Failed to cancel ride", { description: (e as Error).message }); }
   };
 
-  // Rider declined the driver who accepted their bid (or the 50s confirm
-  // window ran out) — release this ride and re-request an equivalent one so
-  // it re-enters the open pool for other drivers, using the same cancel +
-  // request-ride primitives as everywhere else in the app rather than a new
-  // "reopen for other drivers" backend transition.
-  const handleDeclineDriver = async () => {
-    setShowAcceptedOverlay(false);
-    if (!ride) { nav("/ride"); return; }
-    const declined = ride;
-    try {
-      await goBackend.post(`/api/rides/${declined.id}/status`, { status: "cancelled" });
-      const result = await requestRide({
-        pickup_address: declined.pickup_address,
-        dropoff_address: declined.dropoff_address,
-        fare: declined.fare,
-        distance_km: declined.distance_km,
-        duration_minutes: declined.duration_minutes,
-        pickup_lat: declined.pickup_lat,
-        pickup_lng: declined.pickup_lon,
-        dropoff_lat: declined.dropoff_lat,
-        dropoff_lng: declined.dropoff_lon,
-        payment_method: declined.payment_method,
-      });
-      if (result.ok) {
-        toast.info("Looking for another driver…");
-        nav(`/ride/${result.ride.id}/matching`, { replace: true });
-      } else {
-        toast.error("Could not release this ride", { description: result.error });
-        nav("/ride");
-      }
-    } catch (e: unknown) {
-      toast.error("Failed to decline driver", { description: (e as Error).message });
-      nav("/ride");
-    }
-  };
 
   // Memoized so this screen's own 1s countdown re-render (secondsLeft,
   // below) doesn't rebuild these arrays every tick when offers/driversById
