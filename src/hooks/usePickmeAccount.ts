@@ -25,7 +25,9 @@ export function usePickmeAccount() {
       pickme_account: (data as { pickme_account?: string } | null)?.pickme_account ?? null,
     });
     setLoading(false);
-  }, [user]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
+
 
   useEffect(() => { load(); }, [load]);
 

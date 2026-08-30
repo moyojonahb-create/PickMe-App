@@ -60,7 +60,9 @@ export default function RideHistory() {
       return;
     }
     if (user) fetchRides();
-  }, [user, authLoading]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, authLoading]);
+
 
   const fetchRides = async () => {
     if (!user) return;
