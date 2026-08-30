@@ -613,34 +613,16 @@ export default function FullScreenNavigation({
         </button>
       </div>
 
-      <AnimatePresence>
-        {chatOpen && (
-          <motion.div
-            initial={{ opacity: 0, x: 100 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 100 }}
-            className="absolute right-4 z-20 w-[calc(100%-2rem)] max-w-sm overflow-hidden rounded-2xl border border-border/40 bg-card/95 shadow-2xl backdrop-blur-xl"
-            style={{ top: 'calc(env(safe-area-inset-top) + 130px)' }}
-          >
-            <div className="flex items-center justify-between border-b border-border/30 px-4 py-3">
-              <p className="text-sm font-bold">Chat with passenger</p>
-              <button onClick={() => setChatOpen(false)} className="flex h-7 w-7 items-center justify-center rounded-full bg-secondary">
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </div>
-            <div className="max-h-[280px] overflow-y-auto">
-              <RideCommunication
-                rideId={activeTrip.id}
-                currentUserId={userId}
-                otherUserPhone={riderPhone}
-                riderId={activeTrip.user_id}
-                onStartCall={onStartCall}
-                callActive={callStatus !== 'idle'}
-              />
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <DriverMessageSheet
+        open={chatOpen}
+        onClose={() => setChatOpen(false)}
+        rideId={activeTrip.id}
+        currentUserId={userId}
+        passengerName={passengerName}
+        passengerPhone={dialNumber}
+        etaMinutes={etaMinutes}
+      />
+
 
       {/* Bottom sheet */}
       <div className="absolute left-0 right-0 bottom-0 z-20">
