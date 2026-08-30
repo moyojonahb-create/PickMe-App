@@ -17,14 +17,17 @@ async function getUserId(): Promise<string | null> {
 supabase.auth.onAuthStateChange((event) => {
   if (event === "SIGNED_OUT") {
     cachedUserId = null;
+    lastSentAt = 0;
   }
 });
 
 // Deduplicate location updates
 let lastSentLat = 0;
 let lastSentLng = 0;
+let lastSentAt = 0;
 
 const MIN_MOVE_THRESHOLD = 0.00005; // ~5m
+const MAX_SILENCE_MS = 25_000; // backend expires driver location after 60s, so never stay silent longer than this even when stationary
 
 /**
  * Update driver location
@@ -47,7 +50,8 @@ export async function updateDriverLocation(
   if (
     dLat < MIN_MOVE_THRESHOLD &&
     dLng < MIN_MOVE_THRESHOLD &&
-    lastSentLat !== 0
+    lastSentLat !== 0 &&
+    Date.now() - lastSentAt < MAX_SILENCE_MS
   ) {
     return;
   }
@@ -60,6 +64,7 @@ export async function updateDriverLocation(
     await goBackend.post("/api/drivers/me/location", payload);
     lastSentLat = lat;
     lastSentLng = lng;
+    lastSentAt = Date.now();
   } catch (error) {
     console.error("[DriverLocation] Failed to update location:", error);
   }
