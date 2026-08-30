@@ -139,7 +139,7 @@ const Signup = () => {
       setIsVerified(true);
       toast({ title: 'Phone verified!' });
       // Proceed to create account
-      setTimeout(() => completeSignup(formData), 800);
+      signupTimeoutRef.current = setTimeout(() => completeSignup(formData), 800);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Verification failed';
       toast({ title: 'Verification failed', description: message, variant: 'destructive' });
