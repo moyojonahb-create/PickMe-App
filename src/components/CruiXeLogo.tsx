@@ -9,6 +9,7 @@ interface CruiXeLogoProps {
 }
 
 const sizeClasses = {
+  xs: 'h-5',
   sm: 'h-8',
   md: 'h-10',
   // Header logo — compact on mobile, scales up moderately on larger screens
