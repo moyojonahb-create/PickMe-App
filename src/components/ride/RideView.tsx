@@ -400,7 +400,7 @@ export default function RideView() {
   useRideRealtime(currentRideId, {
     onOfferChange: applyRideOfferEvent,
     onRideChange: () => {
-      if (currentRideId) navigate(`/ride/${currentRideId}`, { replace: true });
+      if (currentRideId) navigate(`/ride/${currentRideId}/matching`, { replace: true });
     },
   });
 
@@ -1199,7 +1199,7 @@ export default function RideView() {
       await acceptOffer(currentRideId, offerId);
       setOffersOpen(false);
       toast({ title: 'Offer accepted', description: 'Waiting for the backend confirmation.' });
-      navigate(`/ride/${currentRideId}`, { replace: true });
+      navigate(`/ride/${currentRideId}/matching`, { replace: true });
     } catch (error: unknown) {
       toast({ title: 'Failed to accept offer', description: (error as Error).message, variant: 'destructive' });
     }
