@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowUp,
@@ -258,9 +258,7 @@ export default function FullScreenNavigation({
   callStatus,
 }: FullScreenNavigationProps) {
   const navigate = useNavigate();
-  const location = useLocation();
-  const isMapp = location.pathname.startsWith('/mapp');
-  const profilePath = isMapp ? '/mapp/profile' : '/profile';
+  const profilePath = '/driver/profile';
 
   const [route, setRoute] = useState<{ geometry: string; steps: RouteStep[]; distanceKm: number; durationMinutes: number } | null>(null);
   const [routeFailed, setRouteFailed] = useState(false);
@@ -294,7 +292,11 @@ export default function FullScreenNavigation({
       if (!eventStatus) return;
 
       if (eventStatus === "completed" || eventStatus === "cancelled") {
-        if (voiceEnabled) speak("Trip completed. Returning to dashboard.", true);
+        if (eventStatus === "cancelled") {
+          navigate(profilePath, { replace: true });
+        } else if (voiceEnabled) {
+          speak("Trip completed. Returning to dashboard.", true);
+        }
         onTripComplete();
         return;
       }
@@ -499,8 +501,8 @@ export default function FullScreenNavigation({
         });
       }
       toast.info('Ride cancelled');
+      navigate(profilePath, { replace: true });
       onTripComplete();
-      navigate(profilePath);
     } catch (e: unknown) {
       // 404/409/410 mean the server has no cancellable ride in this state —
       // the screen is showing stale local state, so release the driver rather
@@ -508,8 +510,8 @@ export default function FullScreenNavigation({
       const status = e instanceof GoBackendError ? e.status : undefined;
       if (status === 404 || status === 409 || status === 410) {
         toast.info('This trip is no longer active');
+        navigate(profilePath, { replace: true });
         onTripComplete();
-        navigate(profilePath);
       } else {
         toast.error('Could not cancel', {
           description: 'The trip is still active. Check your connection and try again.',
