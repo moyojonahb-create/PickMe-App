@@ -63,6 +63,7 @@ export async function updateDriverLocation(
     await goBackend.post("/api/drivers/me/location", payload);
     lastSentLat = lat;
     lastSentLng = lng;
+    lastSentAt = Date.now();
   } catch (error) {
     console.error("[DriverLocation] Failed to update location:", error);
   }
