@@ -43,6 +43,8 @@ export default function DriverRideRequests() {
   const [undoRide, setUndoRide] = useState<EnrichedRideRequest | null>(null);
   const lastRideIds = useRef<Set<string>>(new Set());
   const refreshDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastExpirySweep = useRef(0);
+
 
   useEffect(() => {
     navigator.geolocation?.getCurrentPosition(
