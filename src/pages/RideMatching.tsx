@@ -1139,11 +1139,20 @@ export default function RideMatching() {
                       type="button"
                       onClick={() => setMessageOpen(true)}
                       aria-label="Message driver"
-                      className="shrink-0 flex items-center justify-center rounded-full active:scale-90 transition-transform"
+                      className="relative shrink-0 flex items-center justify-center rounded-full active:scale-90 transition-transform"
                       style={{ width: 36, height: 36, ...messageIconGlass }}
                     >
                       <MessageCircle style={{ width: 17, height: 17, color: RIDE_RED }} />
+                      {unreadMessages > 0 && (
+                        <span
+                          className="absolute flex items-center justify-center rounded-full"
+                          style={{ top: -2, right: -2, minWidth: 16, height: 16, padding: '0 3px', background: RIDE_RED, color: '#fff', fontSize: 9.5, fontWeight: 800, boxShadow: '0 0 0 2px rgba(255,255,255,.95)' }}
+                        >
+                          {unreadMessages > 9 ? '9+' : unreadMessages}
+                        </span>
+                      )}
                     </button>
+
                   </div>
                 </div>
 
