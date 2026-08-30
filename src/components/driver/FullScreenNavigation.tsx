@@ -25,7 +25,7 @@ import { useUnreadRideMessages } from "@/hooks/useUnreadRideMessages";
 import { useVoiceNavigation } from "@/hooks/useVoiceNavigation";
 import DriverMessageSheet from "@/components/driver/DriverMessageSheet";
 import SafetySheet from "@/components/ride/SafetySheet";
-import { goBackend } from "@/lib/goBackendClient";
+import { goBackend, GoBackendError } from "@/lib/goBackendClient";
 import { createNotification } from "@/lib/businessApi";
 import { supabase } from "@/lib/supabaseClient";
 import { haptic } from "@/lib/haptics";
@@ -495,7 +495,18 @@ export default function FullScreenNavigation({
       toast.info('Ride cancelled');
       onTripComplete();
     } catch (e: unknown) {
-      toast.error('Could not cancel', { description: (e as Error).message });
+      // 404/409/410 mean the server has no cancellable ride in this state —
+      // the screen is showing stale local state, so release the driver rather
+      // than trapping them on a navigation screen for a trip that is over.
+      const status = e instanceof GoBackendError ? e.status : undefined;
+      if (status === 404 || status === 409 || status === 410) {
+        toast.info('This trip is no longer active');
+        onTripComplete();
+      } else {
+        toast.error('Could not cancel', {
+          description: 'The trip is still active. Check your connection and try again.',
+        });
+      }
     } finally {
       setCancelling(false);
       setCancelReasonOpen(false);
@@ -736,9 +747,14 @@ export default function FullScreenNavigation({
                             toast.info('No phone number available for this passenger');
                             return;
                           }
-                          onStartCall();
+                          haptic('light');
+                          try {
+                            onStartCall();
+                          } catch {
+                            window.location.href = `tel:${dialNumber}`;
+                          }
                         }}
-                        disabled={callStatus !== 'idle' || !dialNumber}
+                        disabled={callStatus !== 'idle'}
                         aria-label="Call passenger"
                         className="flex items-center justify-center rounded-full active:scale-90 transition-transform disabled:opacity-50"
                         style={{ width: 40, height: 40, background: RIDE_RED_GRADIENT, boxShadow: '0 6px 14px rgba(184,17,4,.3)' }}
@@ -800,9 +816,9 @@ export default function FullScreenNavigation({
                       onClick={() => { haptic('light'); setCancelReasonOpen(true); }}
                       disabled={!canCancel}
                       className="relative shrink-0 flex items-center justify-center overflow-hidden select-none active:scale-[0.97] transition-transform disabled:opacity-40"
-                      style={{ width: 104, height: 48, borderRadius: 15, ...glassSurface }}
+                      style={{ width: 104, height: 48, borderRadius: 15, background: '#fff', border: '1.5px solid rgba(184,17,4,.35)' }}
                     >
-                      <span className="relative" style={{ fontSize: 13.5, fontWeight: 700, color: RIDE_TEXT_2 }}>Cancel</span>
+                      <span className="relative" style={{ fontSize: 13.5, fontWeight: 700, color: '#B81104' }}>Cancel</span>
                     </button>
                     {isArrivedWaiting ? (
                       <button
