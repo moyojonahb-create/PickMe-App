@@ -393,6 +393,24 @@ export default function RideMatching() {
     fetchAssignedDriver(ride.driver_id).then(setDriver).catch(() => {});
   }, [isMatched, isComplete, ride?.driver_id, notifyBookerPref]);
 
+  // Driver's EcoCash number for the in-place payment modal — MatchedDriver
+  // (rideMatching.ts) doesn't select it, so fetch it here from the same
+  // `drivers.ecocash_number` column RiderRideDetail reads. When the column
+  // is empty the EcoCash button stays hidden rather than failing silently.
+  useEffect(() => {
+    if (!driver?.id) { setDriverEcocash(null); return; }
+    let cancelled = false;
+    supabase
+      .from('drivers')
+      .select('ecocash_number')
+      .eq('id', driver.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!cancelled) setDriverEcocash(((data as { ecocash_number?: string | null } | null)?.ecocash_number) ?? null);
+      });
+    return () => { cancelled = true; };
+  }, [driver?.id]);
+
   // Declared here (not down near the rest of the 4f live-progress block)
   // because the parcel/passenger-match SMS effects below read it in their
   // dependency arrays — a `const` referenced before its declaration line
