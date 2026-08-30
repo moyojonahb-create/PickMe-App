@@ -178,8 +178,10 @@ async function authHeaders(): Promise<Record<string, string>> {
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
   if (!token) {
+    noteAuthFailure();
     throw new GoBackendError("Not authenticated", "UNAUTHENTICATED", 401);
   }
+
   return {
     Authorization: `Bearer ${token}`,
   };
