@@ -210,12 +210,16 @@ export default function DriverRideRequests() {
       </div>
       <div className="absolute inset-0 pointer-events-none" style={{ background: 'rgba(17,17,17,.12)' }} />
 
-      {/* Floating top chrome */}
+      {/* Floating top chrome — status pill sits in the top-left corner,
+          wallet pill stays on its own row below-right. */}
+      <span
+        className="absolute z-20 inline-flex items-center shrink-0"
+        style={{ top: 'calc(env(safe-area-inset-top) + 10px)', left: 16, height: 40, padding: '0 14px', borderRadius: 999, gap: 7, ...glassSurface }}
+      >
+        <span className="rounded-full" style={{ width: 7, height: 7, background: isOnline ? '#22A447' : '#9AA1AD' }} />
+        <span style={{ fontSize: 13, fontWeight: 700, color: RIDE_TEXT }}>{isOnline ? 'Online' : 'Offline'}</span>
+      </span>
       <div className="absolute inset-x-0 z-20 flex items-center" style={{ top: 59, left: 16, right: 16, gap: 10 }}>
-        <span className="inline-flex items-center shrink-0" style={{ height: 44, padding: '0 14px', borderRadius: 999, gap: 7, ...glassSurface }}>
-          <span className="rounded-full" style={{ width: 7, height: 7, background: isOnline ? '#22A447' : '#9AA1AD' }} />
-          <span style={{ fontSize: 13, fontWeight: 700, color: RIDE_TEXT }}>{isOnline ? 'Online' : 'Offline'}</span>
-        </span>
         <button
           type="button"
           onClick={() => navigate('/driver/wallet')}
