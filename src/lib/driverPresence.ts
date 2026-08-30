@@ -1,4 +1,4 @@
-import { goBackend, type GoDriverPresenceRequest } from '@/lib/goBackendClient';
+import { goBackend, GoBackendError, type GoDriverPresenceRequest } from '@/lib/goBackendClient';
 import { invalidateDriverProfileCache } from '@/lib/offerHelpers';
 import { supabase } from '@/integrations/supabase/client';
 
