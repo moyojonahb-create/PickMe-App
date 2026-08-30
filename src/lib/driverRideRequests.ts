@@ -64,7 +64,7 @@ export async function fetchEnrichedOpenRides(driverGender?: string | null): Prom
     userIds.length > 0
       ? supabase.from('profiles').select('user_id, gender, full_name, avatar_url').in('user_id', userIds)
       : Promise.resolve({ data: [] as { user_id: string; gender: string | null; full_name: string | null; avatar_url: string | null }[] }),
-    supabase.from('ride_parcel_details').select('ride_id, package_size, recipient_name, delivery_note, who_pays, photo_path').in('ride_id', rideIds),
+    (supabase as any).from('ride_parcel_details').select('ride_id, package_size, recipient_name, delivery_note, who_pays, photo_path').in('ride_id', rideIds),
     // Same trip_events / event_type: 'rider_note' log RideMatching.tsx and
     // FullScreenNavigation.tsx read — a driver deciding whether to accept
     // needs the same note the rider actually sent, not a separate copy.

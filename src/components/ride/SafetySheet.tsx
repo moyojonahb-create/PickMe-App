@@ -105,7 +105,7 @@ export default function SafetySheet({
       const { data: auth } = await supabase.auth.getUser();
       const uid = auth?.user?.id;
       if (!uid) { if (!cancelled) setContactLoaded(true); return; }
-      const { data } = await supabase
+      const { data } = await (supabase as any)
         .from('profiles')
         .select('emergency_contact_name, emergency_contact_phone')
         .eq('user_id', uid)
