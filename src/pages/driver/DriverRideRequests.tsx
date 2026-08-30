@@ -43,6 +43,8 @@ export default function DriverRideRequests() {
   const [undoRide, setUndoRide] = useState<EnrichedRideRequest | null>(null);
   const lastRideIds = useRef<Set<string>>(new Set());
   const refreshDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastExpirySweep = useRef(0);
+
 
   useEffect(() => {
     navigator.geolocation?.getCurrentPosition(
@@ -96,8 +98,15 @@ export default function DriverRideRequests() {
 
   const refresh = useCallback(async () => {
     try {
-      await expireOldRides();
+      // The expiry sweep is a write-heavy admin RPC — at a 5s refresh cadence
+      // it only needs to run once a minute, and it must never delay showing a
+      // freshly broadcast request, so it is fired-and-forgotten.
+      if (Date.now() - lastExpirySweep.current > 60_000) {
+        lastExpirySweep.current = Date.now();
+        void expireOldRides();
+      }
       const profile = await getDriverProfile();
+
       const online = profile?.is_online ?? false;
       setIsOnline(online);
       if (!online) {
@@ -150,13 +159,20 @@ export default function DriverRideRequests() {
     // per system-wide ride write was a real O(rides × drivers) query storm.
     const scheduleRefresh = () => {
       if (refreshDebounceRef.current) clearTimeout(refreshDebounceRef.current);
-      refreshDebounceRef.current = setTimeout(refresh, 1500);
+      refreshDebounceRef.current = setTimeout(refresh, 400);
     };
     const channel = supabase
       .channel('driver-open-rides-list')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'rides' }, scheduleRefresh)
+      // A brand new request must land on the driver's screen immediately —
+      // no debounce on INSERT. Status churn from other rides stays debounced.
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'rides' }, () => refresh())
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'rides' }, scheduleRefresh)
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'rides' }, scheduleRefresh)
       .subscribe();
-    const id = setInterval(refresh, 45000);
+    // Fallback poll: realtime can drop on mobile networks, so guarantee a new
+    // request is seen within 5s regardless.
+    const id = setInterval(refresh, 5000);
+
     return () => {
       supabase.removeChannel(channel);
       clearInterval(id);
