@@ -48,7 +48,7 @@ import ActiveCallOverlay from "@/components/ride/ActiveCallOverlay";
 import VoiceCallButton from "@/components/ride/VoiceCallButton";
 import ShareTripButton from "@/components/ride/ShareTripButton";
 
-import { requestRide } from "@/lib/requestRide";
+
 import EcoCashPaymentModal from "@/components/wallet/EcoCashPaymentModal";
 import PayRideButton from "@/components/ride/PayRideButton";
 import PaymentStatusBadge from "@/components/ride/PaymentStatusBadge";
