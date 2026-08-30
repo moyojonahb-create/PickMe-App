@@ -1,4 +1,4 @@
-import { goBackend, type GoDriverPresenceRequest } from '@/lib/goBackendClient';
+import { goBackend, GoBackendError, type GoDriverPresenceRequest } from '@/lib/goBackendClient';
 import { invalidateDriverProfileCache } from '@/lib/offerHelpers';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -122,16 +122,20 @@ export async function setDriverOnline(
   return { is_online: online };
 }
 
+export type PresenceHeartbeatResult = 'ok' | 'failed' | 'not_online';
+
 /**
  * Lightweight presence heartbeat. The backend expires the Redis presence key
  * after 90s and it is only written by this endpoint, so an online driver must
  * re-post it periodically or dispatch stops considering them even though the
- * UI still says Online. This function never throws, never toasts, never falls
- * back to a Supabase write, and never invalidates the profile cache.
+ * UI still says Online. The backend answers with 409 "driver_not_online" when
+ * the driver is no longer considered online (e.g. an admin took them offline).
+ * This function never throws, never toasts, never falls back to a Supabase
+ * write, and never invalidates the profile cache.
  */
 export async function sendPresenceHeartbeat(
   coords?: { lat: number; lng: number } | null
-): Promise<boolean> {
+): Promise<PresenceHeartbeatResult> {
   // `coords` is accepted for API symmetry but the heartbeat path does not
   // read it; location is kept fresh by the separate /api/drivers/me/location
   // updates.
@@ -141,8 +145,11 @@ export async function sendPresenceHeartbeat(
 
   try {
     await goBackend.post<unknown>('/api/drivers/me/presence', payload);
-    return true;
-  } catch {
-    return false;
+    return 'ok';
+  } catch (err) {
+    if (err instanceof GoBackendError && err.status === 409) {
+      return 'not_online';
+    }
+    return 'failed';
   }
 }

@@ -217,11 +217,21 @@ export default function DriverDashboard() {
     // before dispatch stops considering them even though the UI still says
     // Online. Heartbeat failures are counted but never take the driver offline.
     const sendHeartbeat = async () => {
-      const ok = await sendPresenceHeartbeat(latestCoordsRef.current);
-      if (ok) {
+      const result = await sendPresenceHeartbeat(latestCoordsRef.current);
+      if (result === 'ok') {
         presenceFailuresRef.current = 0;
-      } else {
+      } else if (result === 'failed') {
+        // Flaky network: count the miss but stay online. Only the server or an
+        // explicit driver action may change online status.
         presenceFailuresRef.current += 1;
+      } else if (result === 'not_online') {
+        // The server says this driver is already offline (e.g. admin action).
+        stopLocationTracking();
+        setIsOnline(false);
+        setProfile(p => p ? { ...p, is_online: false } : p);
+        toast.info("You've been taken offline", {
+          description: "An administrator ended your online session.",
+        });
       }
     };
     void sendHeartbeat();
