@@ -217,39 +217,6 @@ export default function RiderProfile() {
           />
         </div>
 
-        <div className="rounded-2xl border border-white/60 dark:border-white/10 bg-white/55 dark:bg-white/[0.06] backdrop-blur-xl backdrop-saturate-150 p-3.5 shadow-[0_8px_28px_rgba(0,0,0,0.08)]">
-          <div className="flex items-center justify-between gap-2">
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-muted-foreground">Account overview</p>
-              <p className="mt-1 text-sm font-semibold text-foreground font-display">Your ride essentials, all in one place</p>
-            </div>
-            <Badge className="bg-primary/10 text-primary border-0">Premium</Badge>
-          </div>
-          <div className="mt-3 grid grid-cols-3 gap-2">
-            <div className="rounded-xl bg-white/45 dark:bg-white/[0.05] border border-white/50 dark:border-white/10 backdrop-blur-md p-2.5">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Trips</p>
-              <p className="mt-1 text-base font-black text-foreground font-display">{stats.completedRides || 0}</p>
-            </div>
-            <div className="rounded-xl bg-primary/10 border border-primary/15 backdrop-blur-md p-2.5">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Wallet</p>
-              <p className="mt-1 text-base font-black text-foreground font-display">${walletLoading ? '—' : walletBalance.toFixed(2)}</p>
-            </div>
-            <div className="rounded-xl bg-accent/10 border border-accent/20 backdrop-blur-md p-2.5">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Safety</p>
-              <p className="mt-1 text-base font-black text-foreground font-display">SOS ready</p>
-            </div>
-          </div>
-          <div className="mt-3 grid gap-2 sm:grid-cols-2">
-            <button onClick={() => navigate('/history')} className="rounded-xl border border-white/50 dark:border-white/10 bg-white/40 dark:bg-white/[0.04] backdrop-blur-md p-3 text-left active:scale-[0.99] transition-all">
-              <p className="text-sm font-semibold text-foreground font-display">Ride history</p>
-              <p className="text-[11px] text-muted-foreground">Review recent trips, fares, and pickups.</p>
-            </button>
-            <button onClick={() => navigate('/wallet')} className="rounded-xl border border-white/50 dark:border-white/10 bg-white/40 dark:bg-white/[0.04] backdrop-blur-md p-3 text-left active:scale-[0.99] transition-all">
-              <p className="text-sm font-semibold text-foreground font-display">Wallet shortcuts</p>
-              <p className="text-[11px] text-muted-foreground">Deposit, transfer, and keep your balance in view.</p>
-            </button>
-          </div>
-        </div>
 
         {/* Referral Card */}
         {stats.referralCode && (
@@ -334,11 +301,18 @@ export default function RiderProfile() {
           </div>
 
           <NavRow
+            icon={<History className="w-4 h-4 text-primary" />}
+            label="Ride history"
+            sublabel="Past trips, fares and pickups"
+            onClick={() => navigate('/history')}
+          />
+          <NavRow
             icon={<User className="w-4 h-4 text-primary" />}
             label="Edit Profile"
             sublabel="Photo, name, phone"
             onClick={() => navigate(`${prefix}/edit-profile`)}
           />
+
           <NavRow
             icon={<Shield className="w-4 h-4 text-primary" />}
             label="Safety"
