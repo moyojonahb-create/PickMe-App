@@ -80,7 +80,6 @@ interface FullScreenNavigationProps {
 
 const ROUTE_REFETCH_INTERVAL = 30_000;
 const MIN_MOVE_M = 50;
-const CANCEL_HOLD_MS = 2000;
 // A driver ending the trip more than this far from the recorded drop-off
 // gets an "are you sure" — an accidental early end strands a passenger
 // mid-journey with a completed trip on record.
@@ -272,14 +271,9 @@ export default function FullScreenNavigation({
   const lastFetchPos = useRef<Coordinates | null>(null);
   const lastFetchTime = useRef(0);
 
-  // Hold-to-cancel (~2s, visible progress, releasing early cancels the hold).
-  const [holdProgress, setHoldProgress] = useState(0);
-  const [holding, setHolding] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [cancelReasonOpen, setCancelReasonOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
-  const holdRaf = useRef<number | null>(null);
-  const holdStart = useRef<number | null>(null);
 
   const { speak, isSupported: voiceSupported } = useVoiceNavigation({ enabled: voiceEnabled });
   useWakeLock();
@@ -508,42 +502,6 @@ export default function FullScreenNavigation({
     }
   };
 
-  const stepHold = () => {
-    if (holdStart.current == null) return;
-    const elapsed = Date.now() - holdStart.current;
-    const progress = Math.min(1, elapsed / CANCEL_HOLD_MS);
-    setHoldProgress(progress);
-    if (progress >= 1) {
-      if (holdRaf.current) cancelAnimationFrame(holdRaf.current);
-      holdStart.current = null;
-      setHolding(false);
-      haptic('success');
-      setCancelReasonOpen(true);
-      return;
-    }
-    holdRaf.current = requestAnimationFrame(stepHold);
-  };
-
-  const startHold = () => {
-    if (holding || !canCancel) return;
-    setHolding(true);
-    holdStart.current = Date.now();
-    haptic('light');
-    holdRaf.current = requestAnimationFrame(stepHold);
-  };
-
-  const cancelHoldPress = () => {
-    if (!holding) return;
-    setHolding(false);
-    holdStart.current = null;
-    if (holdRaf.current) cancelAnimationFrame(holdRaf.current);
-    if (holdProgress > 0 && holdProgress < 1) haptic('error');
-    setHoldProgress(0);
-  };
-
-  useEffect(() => {
-    return () => { if (holdRaf.current) cancelAnimationFrame(holdRaf.current); };
-  }, []);
 
   const passengerName = activeTrip.passenger_name || riderInfo?.full_name || 'Passenger';
   const dialNumber = activeTrip.passenger_phone || riderPhone;
@@ -839,19 +797,12 @@ export default function FullScreenNavigation({
                   <div className="flex items-center" style={{ gap: 12 }}>
                     <button
                       type="button"
-                      onPointerDown={startHold}
-                      onPointerUp={cancelHoldPress}
-                      onPointerLeave={cancelHoldPress}
-                      onPointerCancel={cancelHoldPress}
+                      onClick={() => { haptic('light'); setCancelReasonOpen(true); }}
                       disabled={!canCancel}
-                      className="relative shrink-0 flex items-center justify-center overflow-hidden select-none disabled:opacity-40"
-                      style={{ width: 104, height: 48, borderRadius: 15, ...glassSurface, touchAction: 'none' }}
+                      className="relative shrink-0 flex items-center justify-center overflow-hidden select-none active:scale-[0.97] transition-transform disabled:opacity-40"
+                      style={{ width: 104, height: 48, borderRadius: 15, ...glassSurface }}
                     >
-                      <span
-                        className="absolute inset-y-0 left-0 pointer-events-none"
-                        style={{ width: `${holdProgress * 100}%`, background: 'rgba(184,17,4,.16)', transition: holding ? 'none' : 'width .2s ease' }}
-                      />
-                      <span className="relative" style={{ fontSize: 13.5, fontWeight: 700, color: RIDE_TEXT_2 }}>Hold to cancel</span>
+                      <span className="relative" style={{ fontSize: 13.5, fontWeight: 700, color: RIDE_TEXT_2 }}>Cancel</span>
                     </button>
                     {isArrivedWaiting ? (
                       <button
