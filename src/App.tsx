@@ -1,5 +1,5 @@
 import { useEffect, lazy, Suspense } from "react";
-import { BrowserRouter, HashRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, HashRouter, Routes, Route, Navigate, useParams } from "react-router-dom";
 import { Capacitor } from "@capacitor/core";
 import AuthGuard from "./components/AuthGuard";
 import AdminGuard from "./components/admin/AdminGuard";
@@ -25,8 +25,15 @@ const Auth = lazy(() => import("./pages/Auth"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const Signup = lazy(() => import("./pages/Signup"));
 const DriverDashboard = lazy(() => import("./pages/DriverDashboard"));
-const RiderRideDetail = lazy(() => import("./pages/RiderRideDetail"));
 const RideMatching = lazy(() => import("./pages/RideMatching"));
+
+// Old links, notifications and deep links point at the deleted rider
+// ride-detail screen — bounce them to the matching screen, which now covers
+// the whole rider trip lifecycle.
+function RideDetailRedirect() {
+  const { rideId } = useParams();
+  return <Navigate to={`/ride/${rideId}/matching`} replace />;
+}
 const AppDashboard = lazy(() => import("./pages/AppDashboard"));
 
 // ─── Secondary screens ───
@@ -152,8 +159,8 @@ export default function App() {
           {/* Ride page is the landing experience — no sign-in required to browse/plan a ride */}
           <Route path="/ride" element={<SuspenseWrap variant="ride"><Ride /></SuspenseWrap>} />
           <Route path="/ride/:rideId/matching" element={<SuspenseWrap variant="ride"><AuthGuard><RideMatching /></AuthGuard></SuspenseWrap>} />
-          <Route path="/ride/:rideId" element={<SuspenseWrap><AuthGuard><RiderRideDetail /></AuthGuard></SuspenseWrap>} />
-          <Route path="/rider/ride/:rideId" element={<SuspenseWrap><AuthGuard><RiderRideDetail /></AuthGuard></SuspenseWrap>} />
+          <Route path="/ride/:rideId" element={<RideDetailRedirect />} />
+          <Route path="/rider/ride/:rideId" element={<RideDetailRedirect />} />
           <Route path="/history" element={<SuspenseWrap><AuthGuard><RideHistory /></AuthGuard></SuspenseWrap>} />
           <Route path="/ride-history" element={<Navigate to="/history" replace />} />
           <Route path="/profile" element={<SuspenseWrap variant="profile"><AuthGuard><RiderProfile /></AuthGuard></SuspenseWrap>} />

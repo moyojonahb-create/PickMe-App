@@ -28,7 +28,6 @@ const publicPages: Loader[] = [
 // ─── Authenticated rider pages ───
 const riderPages: Loader[] = [
   () => import("@/pages/Ride"),
-  () => import("@/pages/RiderRideDetail"),
   () => import("@/pages/AppDashboard"),
   () => import("@/pages/RideHistory"),
   () => import("@/pages/RiderProfile"),
