@@ -26,6 +26,7 @@ let lastSentLng = 0;
 let lastSentAt = 0;
 
 const MIN_MOVE_THRESHOLD = 0.00005; // ~5m
+const MAX_SILENCE_MS = 25_000; // backend expires driver location after 60s, so never stay silent longer than this even when stationary
 
 /**
  * Update driver location
