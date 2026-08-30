@@ -47,8 +47,8 @@ import IncomingCallModal from "@/components/ride/IncomingCallModal";
 import ActiveCallOverlay from "@/components/ride/ActiveCallOverlay";
 import VoiceCallButton from "@/components/ride/VoiceCallButton";
 import ShareTripButton from "@/components/ride/ShareTripButton";
-import DriverBidAcceptedModal from "@/components/ride/DriverBidAcceptedModal";
-import { requestRide } from "@/lib/requestRide";
+
+
 import EcoCashPaymentModal from "@/components/wallet/EcoCashPaymentModal";
 import PayRideButton from "@/components/ride/PayRideButton";
 import PaymentStatusBadge from "@/components/ride/PaymentStatusBadge";
@@ -119,9 +119,6 @@ export default function RiderRideDetail() {
   // RideBottomSheet's own already-computed height so pickup/dropoff/route
   // always frame above the sheet instead of partly under it.
   const [sheetHeightPx, setSheetHeightPx] = useState(260);
-  const [showAcceptedOverlay, setShowAcceptedOverlay] = useState(false);
-  const showAcceptedOverlayRef = useRef(showAcceptedOverlay);
-  useEffect(() => { showAcceptedOverlayRef.current = showAcceptedOverlay; }, [showAcceptedOverlay]);
 
   // Rider wallet removed — direct payment to driver
   const walletPin: string | null = null;
@@ -162,26 +159,15 @@ export default function RiderRideDetail() {
     const wasAccepted = ride?.status !== "accepted" && data.status === "accepted";
     const wasArrived = ride?.status !== "driver_arrived" && ride?.status !== "arrived" && (data.status === "driver_arrived" || data.status === "arrived");
     const wasCompleted = ride?.status !== "completed" && data.status === "completed";
-    const cancelledWhileConfirming = showAcceptedOverlayRef.current && data.status === "cancelled";
     setRide(data);
 
     if (wasAccepted) {
-      // Haptic fires from DriverBidAcceptedModal itself when it opens — it
-      // owns the full "driver accepted" moment (50s confirm/decline),
-      // replacing the old auto-dismissing celebration overlay. No sound on
-      // the rider side for this — connection sounds are driver-only.
-      setShowAcceptedOverlay(true);
       setModalOpen(false);
       try {
         if (typeof globalThis.Notification !== "undefined" && Notification.permission === "granted") {
           new Notification("🎉 Driver Accepted!", { body: "Your ride has been confirmed. Driver is on the way!", icon: "/icons/cruixe-icon-192.png" });
         }
       } catch (_) {}
-    }
-
-    if (cancelledWhileConfirming) {
-      setShowAcceptedOverlay(false);
-      toast.info("This driver cancelled the ride", { description: "Please request a new ride." });
     }
 
     if (wasArrived) {
@@ -335,41 +321,6 @@ export default function RiderRideDetail() {
     } catch (e: unknown) { toast.error("Failed to cancel ride", { description: (e as Error).message }); }
   };
 
-  // Rider declined the driver who accepted their bid (or the 50s confirm
-  // window ran out) — release this ride and re-request an equivalent one so
-  // it re-enters the open pool for other drivers, using the same cancel +
-  // request-ride primitives as everywhere else in the app rather than a new
-  // "reopen for other drivers" backend transition.
-  const handleDeclineDriver = async () => {
-    setShowAcceptedOverlay(false);
-    if (!ride) { nav("/ride"); return; }
-    const declined = ride;
-    try {
-      await goBackend.post(`/api/rides/${declined.id}/status`, { status: "cancelled" });
-      const result = await requestRide({
-        pickup_address: declined.pickup_address,
-        dropoff_address: declined.dropoff_address,
-        fare: declined.fare,
-        distance_km: declined.distance_km,
-        duration_minutes: declined.duration_minutes,
-        pickup_lat: declined.pickup_lat,
-        pickup_lng: declined.pickup_lon,
-        dropoff_lat: declined.dropoff_lat,
-        dropoff_lng: declined.dropoff_lon,
-        payment_method: declined.payment_method,
-      });
-      if (result.ok) {
-        toast.info("Looking for another driver…");
-        nav(`/ride/${result.ride.id}/matching`, { replace: true });
-      } else {
-        toast.error("Could not release this ride", { description: result.error });
-        nav("/ride");
-      }
-    } catch (e: unknown) {
-      toast.error("Failed to decline driver", { description: (e as Error).message });
-      nav("/ride");
-    }
-  };
 
   // Memoized so this screen's own 1s countdown re-render (secondsLeft,
   // below) doesn't rebuild these arrays every tick when offers/driversById
@@ -634,24 +585,6 @@ export default function RiderRideDetail() {
         </motion.div>
       )}
 
-      {/* ═══ DRIVER ACCEPTED YOUR RIDE — 50s confirm popup ═══ */}
-      <DriverBidAcceptedModal
-        open={showAcceptedOverlay}
-        driver={driverProfile ? {
-          name: driverName || 'Your Driver',
-          avatarUrl: (driverProfile as Record<string, unknown>).avatar_url as string ?? null,
-          gender: (driverProfile as Record<string, unknown>).gender as string ?? null,
-          ratingAvg: (driverProfile as Record<string, unknown>).rating_avg as number ?? null,
-          vehicleMake: driverProfile.vehicle_make,
-          vehicleModel: driverProfile.vehicle_model,
-          vehicleColor: driverProfile.vehicle_color,
-          plateNumber: driverProfile.plate_number,
-        } : null}
-        fare={ride?.fare ?? 0}
-        etaMinutes={etaMinutes}
-        onConfirm={() => setShowAcceptedOverlay(false)}
-        onDecline={handleDeclineDriver}
-      />
 
       {/* ═══ ON-MAP LIVE TRIP INFO ═══ */}
       {isInProgress && sheetState === 'collapsed' && (
