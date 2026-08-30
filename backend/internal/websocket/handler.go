@@ -84,12 +84,14 @@ func NewHandler(manager *Manager, riders *ConnectionRegistry, drivers *Connectio
 		messageLimiter := newConnectionMessageLimiter(defaultMessageRateLimit, defaultMessageRateWindow)
 
 		for {
-			_, msg, err := kws.Conn.ReadMessage()
-			if err != nil {
+		_, msg, err := kws.Conn.ReadMessage()
+		if err != nil {
+			if !isBenignDisconnect(err) {
 				observability.CaptureError(err)
-				log.Println("Read error:", err)
-				break
 			}
+			log.Println("Read error:", err)
+			break
+		}
 
 			observability.RecordWebSocketMessageReceived()
 			log.Printf("WEBSOCKET_MESSAGE_RECEIVED user_id=%s bytes=%d", userID, len(msg))

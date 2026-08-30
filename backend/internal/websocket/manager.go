@@ -336,7 +336,9 @@ func (m *Manager) writeLoop(conn *socketio.Websocket, state *clientState) {
 		case payload := <-state.send:
 			_ = conn.Conn.SetWriteDeadline(time.Now().Add(defaultWriteTimeout))
 			if err := conn.Conn.WriteMessage(1, payload); err != nil {
-				observability.CaptureError(err)
+				if !isBenignDisconnect(err) {
+					observability.CaptureError(err)
+				}
 				log.Println("WebSocket write error:", err)
 				m.RemoveClient(conn)
 				return
@@ -344,7 +346,9 @@ func (m *Manager) writeLoop(conn *socketio.Websocket, state *clientState) {
 		case <-ticker.C:
 			_ = conn.Conn.SetWriteDeadline(time.Now().Add(defaultWriteTimeout))
 			if err := conn.Conn.WriteMessage(9, nil); err != nil {
-				observability.CaptureError(err)
+				if !isBenignDisconnect(err) {
+					observability.CaptureError(err)
+				}
 				log.Println("WebSocket heartbeat error:", err)
 				m.RemoveClient(conn)
 				return

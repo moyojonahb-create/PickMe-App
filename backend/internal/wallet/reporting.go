@@ -40,21 +40,28 @@ func (r *PostgresReports) WalletState(ctx context.Context, userID string) ([]map
 	return rawRowsToMaps(rows, err)
 }
 
+// Columns here must match public.wallet_transactions as it actually exists
+// (id, wallet_id, user_id, amount, transaction_type, description, ride_id,
+// reference_code, created_at). An earlier version selected status/currency/
+// total_amount/source_type/source_id/payment_provider and filtered on
+// owner_user_id/created_by — none of which are columns on that table — so
+// every call 500'd with SQLSTATE 42703. The shape below is exactly what
+// normalizeTransaction in src/lib/walletApi.ts reads.
 func (r *PostgresReports) WalletTransactions(ctx context.Context, userID string, limit int) ([]map[string]any, error) {
 	rows, err := queryJSONRows(ctx, r.db, `
 		SELECT json_build_object(
 			'id', id,
+			'wallet_id', wallet_id,
+			'user_id', user_id,
+			'amount', amount,
 			'transaction_type', transaction_type,
-			'status', status,
-			'currency', currency,
-			'total_amount', total_amount,
-			'source_type', source_type,
-			'source_id', source_id,
-			'payment_provider', payment_provider,
+			'description', description,
+			'ride_id', ride_id,
+			'reference_code', reference_code,
 			'created_at', created_at
 		)
 		FROM public.wallet_transactions
-		WHERE owner_user_id = $1 OR created_by = $1
+		WHERE user_id = $1
 		ORDER BY created_at DESC
 		LIMIT $2
 	`, userID, limit)
