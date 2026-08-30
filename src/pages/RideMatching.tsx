@@ -37,6 +37,8 @@ import EcoCashPaymentModal from '@/components/wallet/EcoCashPaymentModal';
 import IncomingCallModal from '@/components/ride/IncomingCallModal';
 import ActiveCallOverlay from '@/components/ride/ActiveCallOverlay';
 import { useAgoraCall } from '@/hooks/useAgoraCall';
+import { useUnreadRideMessages } from '@/hooks/useUnreadRideMessages';
+
 import { glassSurface, redCta, tintBlue, tintRed, RIDE_RED, RIDE_TEXT, RIDE_TEXT_2, RIDE_TEXT_3, RIDE_YELLOW } from '@/components/ride/rideGlass';
 import type { CSSProperties } from 'react';
 
