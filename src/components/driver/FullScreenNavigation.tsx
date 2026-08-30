@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowUp,
