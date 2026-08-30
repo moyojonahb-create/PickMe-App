@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowUp,
@@ -256,6 +257,11 @@ export default function FullScreenNavigation({
   onStartCall,
   callStatus,
 }: FullScreenNavigationProps) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const isMapp = location.pathname.startsWith('/mapp');
+  const profilePath = isMapp ? '/mapp/profile' : '/profile';
+
   const [route, setRoute] = useState<{ geometry: string; steps: RouteStep[]; distanceKm: number; durationMinutes: number } | null>(null);
   const [routeFailed, setRouteFailed] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
@@ -494,6 +500,7 @@ export default function FullScreenNavigation({
       }
       toast.info('Ride cancelled');
       onTripComplete();
+      navigate(profilePath);
     } catch (e: unknown) {
       // 404/409/410 mean the server has no cancellable ride in this state —
       // the screen is showing stale local state, so release the driver rather
@@ -502,6 +509,7 @@ export default function FullScreenNavigation({
       if (status === 404 || status === 409 || status === 410) {
         toast.info('This trip is no longer active');
         onTripComplete();
+        navigate(profilePath);
       } else {
         toast.error('Could not cancel', {
           description: 'The trip is still active. Check your connection and try again.',
