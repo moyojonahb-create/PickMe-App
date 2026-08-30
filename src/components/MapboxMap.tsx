@@ -426,7 +426,8 @@ function InnerMapboxMap({
   followZoom = 17,
   recenterSignal,
   bottomInset = 260,
-}: MapboxMapProps & { mapboxgl: MapboxGL }) {
+  onInitError,
+}: MapboxMapProps & { mapboxgl: MapboxGL; onInitError: (err: Error) => void }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapboxMapInstance | null>(null);
   const markersRef = useRef<Array<{ remove: () => void }>>([]);
@@ -464,13 +465,23 @@ function InnerMapboxMap({
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
 
-    const map = new mapboxgl.Map({
-      container: containerRef.current,
-      style: "mapbox://styles/mapbox/streets-v12",
-      center: [center.lng, center.lat],
-      zoom: defaultZoom,
-      attributionControl: true,
-    });
+    let map: MapboxMapInstance;
+    try {
+      map = new mapboxgl.Map({
+        container: containerRef.current,
+        style: "mapbox://styles/mapbox/streets-v12",
+        center: [center.lng, center.lat],
+        zoom: defaultZoom,
+        attributionControl: true,
+      });
+    } catch (err) {
+      // Mapbox GL throws synchronously when WebGL is unavailable — older
+      // devices, disabled hardware acceleration, some Android WebViews.
+      // Unhandled, this escapes the effect and the error boundary blanks the
+      // whole screen; the driver still needs everything else on it.
+      onInitError(err instanceof Error ? err : new Error("Map failed to start"));
+      return;
+    }
 
     mapRef.current = map;
     map.on("load", () => {
@@ -688,6 +699,8 @@ function MapboxMap(props: MapboxMapProps) {
     setRetryKey((key) => key + 1);
   }, []);
 
+  const handleInitError = useCallback((err: Error) => setError(err), []);
+
   useEffect(() => {
     let cancelled = false;
     if (!token) return;
@@ -714,7 +727,17 @@ function MapboxMap(props: MapboxMapProps) {
   }
 
   if (error) {
-    return <MapboxFailure className={className} height={height} message={error.message} onRetry={retry} />;
+    const isWebGl = /webgl/i.test(error.message);
+    return (
+      <MapboxFailure
+        className={className}
+        height={height}
+        message={isWebGl
+          ? "This device can't display the map — WebGL isn't available. Try enabling hardware acceleration, or update your browser."
+          : error.message}
+        onRetry={retry}
+      />
+    );
   }
 
   if (!mapboxgl) {
@@ -731,7 +754,7 @@ function MapboxMap(props: MapboxMapProps) {
     );
   }
 
-  return <InnerMapboxMap {...props} mapboxgl={mapboxgl} />;
+  return <InnerMapboxMap {...props} mapboxgl={mapboxgl} onInitError={handleInitError} />;
 }
 
 export default memo(MapboxMap);
