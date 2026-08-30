@@ -794,13 +794,14 @@ export default function RideMatching() {
         <>
           <button
             onClick={() => {
-              // Matched: this just opens the fuller trip view, nothing to
-              // lose. Still searching: the ride is still `pending` on the
-              // server — navigating straight to /ride used to abandon it
-              // silently, so drivers kept receiving a request the rider had
-              // already walked away from. Route through the same cancel
-              // confirmation the explicit Cancel action uses instead.
-              if (isMatched) navigate(`/ride/${rideId}`);
+              // Matched: go home to the rider dashboard; the ride keeps
+              // running in the background and can be re-entered via history.
+              // Still searching: the ride is still `pending` on the server —
+              // navigating away used to abandon it silently, so drivers kept
+              // receiving a request the rider had already walked away from.
+              // Route through the same cancel confirmation the explicit
+              // Cancel action uses instead.
+              if (isMatched) navigate('/app');
               else setCancelSheetOpen(true);
             }}
             aria-label="Back"
@@ -1022,7 +1023,18 @@ export default function RideMatching() {
                 <div className="flex items-center" style={{ gap: 12 }}>
                   <button
                     type="button"
-                    onClick={() => navigate(`/ride/${rideId}`)}
+                    onClick={() => ride && void openTripReceipt({
+                      rideId: ride.id,
+                      pickupAddress: ride.pickup_address,
+                      dropoffAddress: ride.dropoff_address,
+                      fare: ride.fare,
+                      distanceKm: ride.distance_km,
+                      durationMinutes: ride.duration_minutes,
+                      driverName: driver?.full_name ?? undefined,
+                      vehicleInfo: driver ? `${driver.vehicle_make || ''} ${driver.vehicle_model || ''}`.trim() || undefined : undefined,
+                      plateNumber: driver?.plate_number || undefined,
+                      paymentMethod: ride.payment_method,
+                    })}
                     className="shrink-0 flex items-center justify-center active:scale-[0.97] transition-transform"
                     style={{ width: 110, height: 48, borderRadius: 15, ...receiptGlass }}
                   >
