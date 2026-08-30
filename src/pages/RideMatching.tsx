@@ -37,6 +37,8 @@ import EcoCashPaymentModal from '@/components/wallet/EcoCashPaymentModal';
 import IncomingCallModal from '@/components/ride/IncomingCallModal';
 import ActiveCallOverlay from '@/components/ride/ActiveCallOverlay';
 import { useAgoraCall } from '@/hooks/useAgoraCall';
+import { useUnreadRideMessages } from '@/hooks/useUnreadRideMessages';
+
 import { glassSurface, redCta, tintBlue, tintRed, RIDE_RED, RIDE_TEXT, RIDE_TEXT_2, RIDE_TEXT_3, RIDE_YELLOW } from '@/components/ride/rideGlass';
 import type { CSSProperties } from 'react';
 
@@ -149,6 +151,8 @@ export default function RideMatching() {
   const [driverEcocash, setDriverEcocash] = useState<string | null>(null);
   // Rider wallet removed — direct payment to driver (mirrors RiderRideDetail).
   const walletPin: string | null = null;
+  const unreadMessages = useUnreadRideMessages(ride?.id, user?.id, messageOpen);
+
 
   // In-app voice calling (Agora) — tel: is only a fallback.
   const {
@@ -1139,11 +1143,20 @@ export default function RideMatching() {
                       type="button"
                       onClick={() => setMessageOpen(true)}
                       aria-label="Message driver"
-                      className="shrink-0 flex items-center justify-center rounded-full active:scale-90 transition-transform"
+                      className="relative shrink-0 flex items-center justify-center rounded-full active:scale-90 transition-transform"
                       style={{ width: 36, height: 36, ...messageIconGlass }}
                     >
                       <MessageCircle style={{ width: 17, height: 17, color: RIDE_RED }} />
+                      {unreadMessages > 0 && (
+                        <span
+                          className="absolute flex items-center justify-center rounded-full"
+                          style={{ top: -2, right: -2, minWidth: 16, height: 16, padding: '0 3px', background: RIDE_RED, color: '#fff', fontSize: 9.5, fontWeight: 800, boxShadow: '0 0 0 2px rgba(255,255,255,.95)' }}
+                        >
+                          {unreadMessages > 9 ? '9+' : unreadMessages}
+                        </span>
+                      )}
                     </button>
+
                   </div>
                 </div>
 
@@ -1300,12 +1313,21 @@ export default function RideMatching() {
                   <button
                     type="button"
                     onClick={() => setMessageOpen(true)}
-                    className="shrink-0 flex items-center justify-center active:scale-[0.97] transition-transform"
+                    className="relative shrink-0 flex items-center justify-center active:scale-[0.97] transition-transform"
                     style={{ width: 132, height: 48, borderRadius: 15, gap: 8, ...glassSurface, boxShadow: 'inset 0 .5px 0 rgba(255,255,255,.9), inset 0 0 0 1px rgba(184,17,4,.22), 0 6px 14px rgba(0,0,0,.05)' }}
                   >
                     <MessageCircle style={{ width: 18, height: 18, color: RIDE_RED }} />
                     <span style={{ fontSize: 14.5, fontWeight: 700, color: RIDE_RED }}>Message</span>
+                    {unreadMessages > 0 && (
+                      <span
+                        className="absolute flex items-center justify-center rounded-full"
+                        style={{ top: -2, right: -2, minWidth: 16, height: 16, padding: '0 3px', background: RIDE_RED, color: '#fff', fontSize: 9.5, fontWeight: 800, boxShadow: '0 0 0 2px rgba(255,255,255,.95)' }}
+                      >
+                        {unreadMessages > 9 ? '9+' : unreadMessages}
+                      </span>
+                    )}
                   </button>
+
                   <button
                     type="button"
                     disabled={callStatus !== 'idle'}

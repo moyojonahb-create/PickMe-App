@@ -86,12 +86,43 @@ export function useAgoraCall({
     setSessionId(id);
   }, []);
 
+  // Catch up on a ringing call whose INSERT event we missed (screen mounted
+  // late, app backgrounded, socket reconnecting).
+  const checkForPendingCall = useCallback(async () => {
+    if (!currentUserId) return;
+    if (callStatusRef.current !== "idle") return;
+    if (incomingCallRef.current) return;
+    const { data } = await supabase
+      .from("call_sessions")
+      .select("id, caller_id, created_at")
+      .eq("callee_id", currentUserId)
+      .eq("status", "ringing")
+      .gte("created_at", new Date(Date.now() - 60_000).toISOString())
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!data) return;
+    if (callStatusRef.current !== "idle" || incomingCallRef.current) return;
+    startRingtone('incoming');
+    showCallNotification(data.caller_id as string);
+    setIncomingCall({ sessionId: data.id as string, callerId: data.caller_id as string });
+  }, [currentUserId]);
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void checkForPendingCall();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [checkForPendingCall]);
+
   // Listen for incoming calls and status changes via realtime
   useEffect(() => {
     if (!currentUserId) return;
 
     const channel = supabase
       .channel(`call-session-${currentUserId}-${Date.now()}`)
+
       .on(
         "postgres_changes",
         {
@@ -148,12 +179,15 @@ export function useAgoraCall({
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') void checkForPendingCall();
+      });
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [currentUserId]);
+  }, [currentUserId, checkForPendingCall]);
+
 
   const cleanup = useCallback(async () => {
     // Stop any ringtone — without this, unmounting mid-ring (nav away, trip
@@ -338,7 +372,14 @@ export function useAgoraCall({
   );
 
   const startCall = useCallback(async () => {
+    if (otherUserId === currentUserId) {
+      toast.error("Can't call yourself", {
+        description: "This ride's rider and driver are the same account. Use a second account to test calling.",
+      });
+      return;
+    }
     if (!rideId || !currentUserId || !otherUserId) {
+
       toast.error("Cannot start call", {
         description: "Missing ride or user info",
       });

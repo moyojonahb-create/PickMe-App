@@ -214,24 +214,26 @@ export default function DriverMessageSheet({
   useEffect(() => {
     if (!open || !rideId) return;
     const channel = supabase.channel(`presence-ride-${rideId}`, {
-      config: { presence: { key: currentUserId } },
+      config: { presence: { key: `${viewerRole}-${currentUserId}` } },
     });
     const sync = () => {
-      const state = channel.presenceState();
-      setOtherOnline(Object.keys(state).some((k) => k !== currentUserId));
+      const state = channel.presenceState() as Record<string, Array<{ role?: string }>>;
+      const present = Object.values(state).flat();
+      setOtherOnline(present.some((p) => p.role && p.role !== viewerRole));
     };
     channel
       .on('presence', { event: 'sync' }, sync)
       .on('presence', { event: 'join' }, sync)
       .on('presence', { event: 'leave' }, sync)
       .subscribe((status) => {
-        if (status === 'SUBSCRIBED') void channel.track({ userId: currentUserId });
+        if (status === 'SUBSCRIBED') void channel.track({ userId: currentUserId, role: viewerRole });
       });
     return () => {
       setOtherOnline(false);
       supabase.removeChannel(channel);
     };
-  }, [open, rideId, currentUserId]);
+  }, [open, rideId, currentUserId, viewerRole]);
+
 
   const send = useCallback(
     async (raw: string, retryId?: string) => {

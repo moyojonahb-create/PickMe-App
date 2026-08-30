@@ -25,7 +25,22 @@ export function useUnreadRideMessages(
     setUnreadCount(0);
     if (!rideId || !currentUserId) return;
 
+    let cancelled = false;
+
+    // Seed from persisted receipts so closing/reopening a screen keeps the badge.
+    void (async () => {
+      const { count } = await supabase
+        .from('messages')
+        .select('id', { count: 'exact', head: true })
+        .eq('ride_id', rideId)
+        .neq('sender_id', currentUserId)
+        .is('read_at', null);
+      if (cancelled || chatOpenRef.current) return;
+      setUnreadCount(count ?? 0);
+    })();
+
     const channel = supabase
+
       .channel(`ride-messages-badge-${rideId}`)
       .on(
         'postgres_changes',
@@ -40,8 +55,9 @@ export function useUnreadRideMessages(
       )
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    return () => { cancelled = true; supabase.removeChannel(channel); };
   }, [rideId, currentUserId]);
+
 
   return unreadCount;
 }
