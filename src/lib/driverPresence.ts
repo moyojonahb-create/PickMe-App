@@ -132,10 +132,12 @@ export async function setDriverOnline(
 export async function sendPresenceHeartbeat(
   coords?: { lat: number; lng: number } | null
 ): Promise<boolean> {
-  const payload: GoDriverPresenceRequest = {
-    is_online: true,
-    ...(coords ? { latitude: coords.lat, longitude: coords.lng } : {}),
-  };
+  // `coords` is accepted for API symmetry but the heartbeat path does not
+  // read it; location is kept fresh by the separate /api/drivers/me/location
+  // updates.
+  void coords;
+
+  const payload = { status: 'heartbeat' } as unknown as GoDriverPresenceRequest;
 
   try {
     await goBackend.post<unknown>('/api/drivers/me/presence', payload);
