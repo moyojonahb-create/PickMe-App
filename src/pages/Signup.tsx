@@ -204,6 +204,12 @@ const Signup = () => {
     }
   };
 
+  // Cancel any timers on unmount so they don't write state to a dead component.
+  useEffect(() => () => {
+    if (countdownRef.current) clearInterval(countdownRef.current);
+    if (signupTimeoutRef.current) clearTimeout(signupTimeoutRef.current);
+  }, []);
+
   // OTP Verification Step
   if (step === 'verify-phone' && formData) {
     if (isVerified) {
