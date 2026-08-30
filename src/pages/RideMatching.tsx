@@ -143,6 +143,9 @@ export default function RideMatching() {
   const [confirmingPayment, setConfirmingPayment] = useState(false);
   const [messageOpen, setMessageOpen] = useState(false);
   const [showEcoCashPay, setShowEcoCashPay] = useState(false);
+  const [driverEcocash, setDriverEcocash] = useState<string | null>(null);
+  // Rider wallet removed — direct payment to driver (mirrors RiderRideDetail).
+  const walletPin: string | null = null;
   const sheetWrapRef = useRef<HTMLDivElement>(null);
   const noteLoadedForRide = useRef<string | null>(null);
   const waitStartedAt = useRef(Date.now());
