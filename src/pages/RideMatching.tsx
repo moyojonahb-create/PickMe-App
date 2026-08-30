@@ -275,7 +275,7 @@ export default function RideMatching() {
   // always starting off, if the rider set one from RideView earlier.
   useEffect(() => {
     if (!user?.id) return;
-    supabase.from('profiles').select('default_ride_note').eq('user_id', user.id).maybeSingle()
+    (supabase as any).from('profiles').select('default_ride_note').eq('user_id', user.id).maybeSingle()
       .then(({ data }) => { if (data?.default_ride_note) setNoteReuseEveryTrip(true); });
   }, [user?.id]);
 
@@ -347,7 +347,7 @@ export default function RideMatching() {
   useEffect(() => {
     if (!rideId) return;
     let cancelled = false;
-    supabase.from('ride_passenger_contacts').select('notify_booker, passenger_name').eq('ride_id', rideId).maybeSingle()
+    (supabase as any).from('ride_passenger_contacts').select('notify_booker, passenger_name').eq('ride_id', rideId).maybeSingle()
       .then(({ data }) => {
         if (cancelled) return;
         setNotifyBookerPref(data?.notify_booker ?? true);
@@ -399,7 +399,7 @@ export default function RideMatching() {
     (async () => {
       try {
         const [{ data: contact }, { data: authData }, { data: sessionData }] = await Promise.all([
-          supabase.from('ride_parcel_contacts').select('recipient_phone').eq('ride_id', rideId).maybeSingle(),
+          (supabase as any).from('ride_parcel_contacts').select('recipient_phone').eq('ride_id', rideId).maybeSingle(),
           supabase.auth.getUser(),
           supabase.auth.getSession(),
         ]);

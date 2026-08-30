@@ -308,7 +308,7 @@ export default function RideView() {
     if (!user?.id) { setProfileName(''); return; }
     let cancelled = false;
     (async () => {
-      const { data } = await supabase
+      const { data } = await (supabase as any)
         .from('profiles')
         .select('full_name, default_ride_note')
         .eq('user_id', user.id)
@@ -1123,7 +1123,7 @@ export default function RideView() {
       // Judging fields (size/note/who-pays/photo) are openly readable so a
       // browsing driver can decide whether to accept before matching — only
       // the recipient's phone lives in the separate, matched-only table.
-      await supabase.from('ride_parcel_details').insert([{
+      await (supabase as any).from('ride_parcel_details').insert([{
         ride_id: rideId,
         package_size: data.packageSize,
         recipient_name: data.recipientName.trim(),
@@ -1131,7 +1131,7 @@ export default function RideView() {
         who_pays: data.whoPays,
         photo_path: data.photoPath,
       }] as never);
-      await supabase.from('ride_parcel_contacts').insert([{
+      await (supabase as any).from('ride_parcel_contacts').insert([{
         ride_id: rideId,
         recipient_phone: recipientPhone,
       }] as never);

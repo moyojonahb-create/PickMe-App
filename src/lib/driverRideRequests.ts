@@ -64,7 +64,7 @@ export async function fetchEnrichedOpenRides(driverGender?: string | null): Prom
     userIds.length > 0
       ? supabase.from('profiles').select('user_id, gender, full_name, avatar_url').in('user_id', userIds)
       : Promise.resolve({ data: [] as { user_id: string; gender: string | null; full_name: string | null; avatar_url: string | null }[] }),
-    supabase.from('ride_parcel_details').select('ride_id, package_size, recipient_name, delivery_note, who_pays, photo_path').in('ride_id', rideIds),
+    (supabase as any).from('ride_parcel_details').select('ride_id, package_size, recipient_name, delivery_note, who_pays, photo_path').in('ride_id', rideIds),
     // Same trip_events / event_type: 'rider_note' log RideMatching.tsx and
     // FullScreenNavigation.tsx read — a driver deciding whether to accept
     // needs the same note the rider actually sent, not a separate copy.
@@ -75,7 +75,7 @@ export async function fetchEnrichedOpenRides(driverGender?: string | null): Prom
   const luggageSet = new Set((luggageRes.data ?? []).map((l) => l.ride_id));
   const genderMap = new Map((profilesRes.data ?? []).map((p) => [p.user_id, p.gender]));
   const profileMap = new Map((profilesRes.data ?? []).map((p) => [p.user_id, p]));
-  const parcelMap = new Map((parcelRes.data ?? []).map((p) => [p.ride_id, p]));
+  const parcelMap = new Map(((parcelRes.data ?? []) as Record<string, any>[]).map((p) => [p.ride_id as string, p]));
   const noteMap = new Map<string, string>();
   for (const row of noteRes.data ?? []) {
     if (noteMap.has(row.ride_id)) continue; // rows are newest-first — keep only the latest per ride

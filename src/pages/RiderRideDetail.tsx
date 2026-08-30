@@ -205,7 +205,7 @@ export default function RiderRideDetail() {
         const { data: driverData } = await supabase.from("drivers").select("*").or(`id.eq.${data.driver_id},user_id.eq.${data.driver_id}`).maybeSingle();
         if (driverData) {
           const resolvedAvatar = await resolveAvatarUrl(driverData.avatar_url);
-          setDriverProfile({ ...driverData, avatar_url: resolvedAvatar });
+          setDriverProfile({ ...driverData, avatar_url: resolvedAvatar } as any);
           const { data: profileData } = await supabase.from("profiles").select("full_name, phone").eq("user_id", driverData.user_id).maybeSingle();
           if (profileData?.phone) setDriverPhone(profileData.phone);
           if (profileData?.full_name) setDriverName(profileData.full_name);

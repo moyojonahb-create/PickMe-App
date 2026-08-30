@@ -84,7 +84,7 @@ export default function DriverProfilePage() {
     try {
       const [driverProfile, profileRow] = await Promise.all([
         getDriverProfile(),
-        supabase.from('profiles').select('full_name, phone, emergency_contact_name, emergency_contact_phone').eq('user_id', user.id).maybeSingle(),
+        (supabase as any).from('profiles').select('full_name, phone, emergency_contact_name, emergency_contact_phone').eq('user_id', user.id).maybeSingle(),
       ]);
       setProfile(driverProfile);
       setFullName(profileRow.data?.full_name || user.email?.split('@')[0] || 'Driver');
@@ -119,10 +119,10 @@ export default function DriverProfilePage() {
       })
       .catch(() => setProofStatus(null));
 
-    supabase.from('driver_documents').select('document_type, status, expiry_date').eq('driver_id', user.id)
+    (supabase as any).from('driver_documents').select('document_type, status, expiry_date').eq('driver_id', user.id)
       .then(({ data }) => setDocuments((data as DriverDocRow[]) ?? []), () => setDocuments([]));
 
-    const { data: photoRow } = await supabase.from('drivers').select('vehicle_photo_url').eq('user_id', user.id).maybeSingle();
+    const { data: photoRow } = await (supabase as any).from('drivers').select('vehicle_photo_url').eq('user_id', user.id).maybeSingle();
     if (photoRow) {
       setProfile((prev) => (prev ? { ...prev, vehicle_photo_url: photoRow.vehicle_photo_url } : prev));
     }
