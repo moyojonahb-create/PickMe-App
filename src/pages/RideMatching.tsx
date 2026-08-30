@@ -1537,16 +1537,16 @@ export default function RideMatching() {
           passengerPhone={driver.phone ?? null}
         />
       )}
-      {ride && driver && ride.payment_method !== 'wallet' && (
+      {ride && driver && driverEcocash && ride.payment_method !== 'wallet' && (
         <EcoCashPaymentModal
           isOpen={showEcoCashPay}
           onClose={() => setShowEcoCashPay(false)}
           amount={Number(ride.fare)}
           currency="$"
           driverName={driver.vehicle_make ? `${driver.vehicle_make} Driver` : 'Driver'}
-          driverEcoCash={undefined}
-          walletPin={null}
-          onVerifyPin={async () => false}
+          driverEcoCash={driverEcocash}
+          walletPin={walletPin}
+          onVerifyPin={async (pin) => pin === walletPin}
           onSetPin={async () => false}
           onPaymentComplete={() => toast({ title: 'Payment sent to driver!' })}
         />
