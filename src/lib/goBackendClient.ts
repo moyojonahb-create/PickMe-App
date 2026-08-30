@@ -1,6 +1,37 @@
 import { supabase } from "@/integrations/supabase/client";
 import { authReady } from "@/lib/authReady";
 
+// Auth circuit breaker. A 401 is not something retrying fixes, so after a few
+// consecutive ones we stop dialling the backend for a short window and let
+// callers fall through to their Supabase fallback immediately. Any success, or
+// a fresh sign-in/token refresh, closes the breaker at once — the Go backend
+// stays the primary path.
+const AUTH_FAILURE_THRESHOLD = 3;
+const AUTH_BREAKER_MS = 30_000;
+let consecutiveAuthFailures = 0;
+let authBreakerUntil = 0;
+
+function closeAuthBreaker() {
+  consecutiveAuthFailures = 0;
+  authBreakerUntil = 0;
+}
+
+function noteAuthFailure() {
+  consecutiveAuthFailures += 1;
+  if (consecutiveAuthFailures >= AUTH_FAILURE_THRESHOLD) {
+    authBreakerUntil = Date.now() + AUTH_BREAKER_MS;
+  }
+}
+
+// A new session or refreshed token is exactly the condition that makes the
+// backend usable again — reopen immediately rather than waiting out the window.
+supabase.auth.onAuthStateChange((event) => {
+  if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'SIGNED_OUT') {
+    closeAuthBreaker();
+  }
+});
+
+
 export type GoBackendErrorCode =
   | "UNAUTHENTICATED"
   | "FORBIDDEN"
@@ -147,8 +178,10 @@ async function authHeaders(): Promise<Record<string, string>> {
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
   if (!token) {
+    noteAuthFailure();
     throw new GoBackendError("Not authenticated", "UNAUTHENTICATED", 401);
   }
+
   return {
     Authorization: `Bearer ${token}`,
   };
@@ -195,10 +228,17 @@ async function doFetch(method: string, path: string, headers: Record<string, str
 }
 
 async function request<T>(method: string, path: string, body?: unknown, isRetry = false, signal?: AbortSignal): Promise<T> {
+  if (Date.now() < authBreakerUntil) {
+    // Skip the network entirely; callers treat UNAUTHENTICATED as
+    // "backend unavailable" and use their Supabase fallback.
+    throw new GoBackendError("Backend auth circuit open", "UNAUTHENTICATED", 401);
+  }
+
   // Resolved outside the fetch try/catch below so an auth failure (no/expired
   // session) surfaces as UNAUTHENTICATED instead of being masked as a generic
   // network error.
   const headers = await authHeaders();
+
   const response = await doFetch(method, path, headers, body, signal);
 
   // The session looked valid client-side but the server rejected the token
@@ -210,7 +250,11 @@ async function request<T>(method: string, path: string, body?: unknown, isRetry 
     if (!refreshError && refreshed.session) {
       return request<T>(method, path, body, true, signal);
     }
+    // Refresh didn't help; this is a real auth failure. Count it so the
+    // breaker can open and stop us from hammering the backend.
+    noteAuthFailure();
   }
+
 
   const payload = await parseResponse(response);
   if (!response.ok) {
@@ -221,12 +265,17 @@ async function request<T>(method: string, path: string, body?: unknown, isRetry 
           ? String((payload as { message?: unknown }).message)
           : `Backend request failed with ${response.status}`;
     console.warn("[GoBackend] non-2xx response", { method, path, status: response.status, message });
+    if (response.status === 401) {
+      noteAuthFailure();
+    }
     const fallbackCode = statusToCode(response.status);
     throw new GoBackendError(message, payloadToCode(payload, fallbackCode), response.status, payload);
   }
 
+  closeAuthBreaker();
   return payload as T;
 }
+
 
 export const goBackend = {
   get: <T>(path: string, signal?: AbortSignal) => request<T>("GET", path, undefined, false, signal),
