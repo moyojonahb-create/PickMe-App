@@ -174,10 +174,10 @@ export default function RiderProfile() {
             color="yellow"
           />
           <QuickAction
-            icon={<History className="w-4 h-4" />}
-            label="Trips"
-            sublabel={stats.completedRides > 0 ? `${stats.completedRides} trips` : 'No trips'}
-            onClick={() => navigate('/history')}
+            icon={<Shield className="w-4 h-4" />}
+            label="Safety"
+            sublabel="SOS & contacts"
+            onClick={() => navigate('/safety')}
             color="yellow"
           />
           <QuickAction
