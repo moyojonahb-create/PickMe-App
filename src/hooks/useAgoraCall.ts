@@ -372,7 +372,14 @@ export function useAgoraCall({
   );
 
   const startCall = useCallback(async () => {
+    if (otherUserId === currentUserId) {
+      toast.error("Can't call yourself", {
+        description: "This ride's rider and driver are the same account. Use a second account to test calling.",
+      });
+      return;
+    }
     if (!rideId || !currentUserId || !otherUserId) {
+
       toast.error("Cannot start call", {
         description: "Missing ride or user info",
       });
