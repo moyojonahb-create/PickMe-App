@@ -1,6 +1,37 @@
 import { supabase } from "@/integrations/supabase/client";
 import { authReady } from "@/lib/authReady";
 
+// Auth circuit breaker. A 401 is not something retrying fixes, so after a few
+// consecutive ones we stop dialling the backend for a short window and let
+// callers fall through to their Supabase fallback immediately. Any success, or
+// a fresh sign-in/token refresh, closes the breaker at once — the Go backend
+// stays the primary path.
+const AUTH_FAILURE_THRESHOLD = 3;
+const AUTH_BREAKER_MS = 30_000;
+let consecutiveAuthFailures = 0;
+let authBreakerUntil = 0;
+
+function closeAuthBreaker() {
+  consecutiveAuthFailures = 0;
+  authBreakerUntil = 0;
+}
+
+function noteAuthFailure() {
+  consecutiveAuthFailures += 1;
+  if (consecutiveAuthFailures >= AUTH_FAILURE_THRESHOLD) {
+    authBreakerUntil = Date.now() + AUTH_BREAKER_MS;
+  }
+}
+
+// A new session or refreshed token is exactly the condition that makes the
+// backend usable again — reopen immediately rather than waiting out the window.
+supabase.auth.onAuthStateChange((event) => {
+  if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'SIGNED_OUT') {
+    closeAuthBreaker();
+  }
+});
+
+
 export type GoBackendErrorCode =
   | "UNAUTHENTICATED"
   | "FORBIDDEN"
