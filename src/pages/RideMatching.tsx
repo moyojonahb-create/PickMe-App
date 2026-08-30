@@ -1506,6 +1506,30 @@ export default function RideMatching() {
         onReuseEveryTripChange={setNoteReuseEveryTrip}
         onSave={handleSaveNote}
       />
+      {ride && user && driver && (
+        <DriverMessageSheet
+          open={messageOpen}
+          onClose={() => setMessageOpen(false)}
+          rideId={ride.id}
+          currentUserId={user.id}
+          passengerName={driver.full_name || 'Your Driver'}
+          passengerPhone={driver.phone ?? null}
+        />
+      )}
+      {ride && driver && ride.payment_method !== 'wallet' && (
+        <EcoCashPaymentModal
+          isOpen={showEcoCashPay}
+          onClose={() => setShowEcoCashPay(false)}
+          amount={Number(ride.fare)}
+          currency="$"
+          driverName={driver.vehicle_make ? `${driver.vehicle_make} Driver` : 'Driver'}
+          driverEcoCash={undefined}
+          walletPin={null}
+          onVerifyPin={async () => false}
+          onSetPin={async () => false}
+          onPaymentComplete={() => toast({ title: 'Payment sent to driver!' })}
+        />
+      )}
     </div>
   );
 }
