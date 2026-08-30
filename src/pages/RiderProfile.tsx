@@ -145,7 +145,10 @@ export default function RiderProfile() {
             ) : (
               <>
                 <h1 className="text-2xl font-bold text-foreground leading-tight truncate font-display">{userName}</h1>
-                {userEmail && <p className="text-xs text-muted-foreground truncate mt-0.5">{userEmail}</p>}
+                <p className="text-[13px] text-muted-foreground mt-0.5">
+                  {stats.completedRides > 0 ? `${stats.completedRides} trips` : 'No trips yet'}
+                </p>
+                {userEmail && <p className="text-[11px] text-muted-foreground/70 truncate mt-0.5">{userEmail}</p>}
               </>
             )}
             <div className="flex items-center gap-1.5 mt-2 flex-wrap">
@@ -204,6 +207,7 @@ export default function RiderProfile() {
         </div>
 
 
+        <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground pt-2 px-1">Offers</p>
         {/* Referral Card */}
         {stats.referralCode && (
           <div className="glass-card rounded-2xl p-3.5 bg-gradient-to-r from-primary/5 to-accent/5">
@@ -263,6 +267,7 @@ export default function RiderProfile() {
           </div>
         </button>
 
+        <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground pt-3 px-1">Settings</p>
         {/* Preferences — collapsible */}
         <details className="glass-card rounded-2xl overflow-hidden group">
           <summary className="flex items-center justify-between px-4 py-3 cursor-pointer list-none active:scale-[0.98] transition-all">
