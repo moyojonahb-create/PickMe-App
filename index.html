@@ -103,22 +103,25 @@
     <script type="module" src="/src/main.tsx"></script>
     <script>
       // inDrive-style splash: stays visible until the app's data bootstrap
-      // signals ready (see src/hooks/useAppBootstrap.tsx), with a minimum
-      // display time so it never "flashes". A second, brand-tagline splash
-      // then holds for a fixed beat before revealing the app underneath.
+      // signals ready (see src/hooks/useAppBootstrap.tsx), with a short floor
+      // so it never flashes on a fast load. A second, brand-tagline splash
+      // then holds for a short beat before revealing the app underneath.
       (function () {
         window.__splashReady = false;
         window.__splashMinDone = false;
 
         // Start fetching/decoding the tagline image the instant the page
-        // loads, well ahead of the 6s first splash — so it's already ready
+        // loads, well ahead of the first splash — so it's already ready
         // to paint rather than popping in blank when the crossfade starts.
         var preloadTagline = new Image();
         preloadTagline.src = '/brand/cruixe-splash-tagline.png';
 
-        var SECOND_SPLASH_DURATION = 6000;
+        var SECOND_SPLASH_DURATION = 1200;
+        var secondSplashStarted = false;
 
         function showSecondSplash() {
+          if (secondSplashStarted) return;
+          secondSplashStarted = true;
           var first = document.getElementById('instant-splash');
           var second = document.getElementById('instant-splash-2');
           if (!second) return;
@@ -142,29 +145,29 @@
           showSecondSplash();
         }
 
-        // First splash always holds for a fixed 6s, regardless of how fast
-        // bootstrap resolves — it's a brand beat now, not a progress readout.
+        // First splash floor: keeps the logo visible long enough that it
+        // never flashes on a fast load, while still letting bootstrap drive
+        // the real transition.
         setTimeout(function () {
           window.__splashMinDone = true;
           tryHide();
-        }, 6000);
+        }, 800);
 
         // React calls window.__dismissSplash() once the bootstrap resolves
         // (or its own timeout elapses and continues with cached data). Still
-        // gated by the 6s minimum above so it never cuts the brand beat short.
+        // gated by the short floor above so it never cuts the splash short.
         window.__dismissSplash = function () {
           window.__splashReady = true;
           tryHide();
         };
 
-        // Hard fallback only — the real dismiss is data-driven above. This
-        // just guarantees the splash never gets stuck if React itself fails
-        // to mount/bootstrap for some reason.
+        // Hard fallback only — covers React failing to mount or bootstrap
+        // never resolving. The real dismiss is data-driven above.
         setTimeout(function () {
           window.__splashMinDone = true;
           window.__splashReady = true;
           tryHide();
-        }, 12000);
+        }, 8000);
 
       })();
     </script>
