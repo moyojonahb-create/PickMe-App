@@ -1093,7 +1093,7 @@ export default function RideMatching() {
                     )}
                     <button
                       type="button"
-                      onClick={() => navigate(`/ride/${rideId}`, { state: { openMessage: true } })}
+                      onClick={() => setMessageOpen(true)}
                       aria-label="Message driver"
                       className="shrink-0 flex items-center justify-center rounded-full active:scale-90 transition-transform"
                       style={{ width: 36, height: 36, ...messageIconGlass }}
@@ -1240,7 +1240,7 @@ export default function RideMatching() {
                 <div className="flex items-center" style={{ gap: 12 }}>
                   <button
                     type="button"
-                    onClick={() => navigate(`/ride/${rideId}`, { state: { openMessage: true } })}
+                    onClick={() => setMessageOpen(true)}
                     className="shrink-0 flex items-center justify-center active:scale-[0.97] transition-transform"
                     style={{ width: 132, height: 48, borderRadius: 15, gap: 8, ...glassSurface, boxShadow: 'inset 0 .5px 0 rgba(255,255,255,.9), inset 0 0 0 1px rgba(184,17,4,.22), 0 6px 14px rgba(0,0,0,.05)' }}
                   >
