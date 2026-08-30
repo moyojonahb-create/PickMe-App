@@ -179,12 +179,15 @@ export function useAgoraCall({
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') void checkForPendingCall();
+      });
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [currentUserId]);
+  }, [currentUserId, checkForPendingCall]);
+
 
   const cleanup = useCallback(async () => {
     // Stop any ringtone — without this, unmounting mid-ring (nav away, trip
