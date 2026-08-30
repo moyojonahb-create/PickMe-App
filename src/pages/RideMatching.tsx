@@ -32,6 +32,8 @@ import RideGlassPanel from '@/components/ride/RideGlassPanel';
 import NoteToDriverSheet from '@/components/ride/NoteToDriverSheet';
 import SafetySheet from '@/components/ride/SafetySheet';
 import ShareTripButton from '@/components/ride/ShareTripButton';
+import DriverMessageSheet from '@/components/driver/DriverMessageSheet';
+import EcoCashPaymentModal from '@/components/wallet/EcoCashPaymentModal';
 import { glassSurface, redCta, tintBlue, tintRed, RIDE_RED, RIDE_TEXT, RIDE_TEXT_2, RIDE_TEXT_3, RIDE_YELLOW } from '@/components/ride/rideGlass';
 import type { CSSProperties } from 'react';
 
@@ -139,6 +141,8 @@ export default function RideMatching() {
   const [rating, setRating] = useState(0);
   const [tipAmount, setTipAmount] = useState<number | null>(null);
   const [confirmingPayment, setConfirmingPayment] = useState(false);
+  const [messageOpen, setMessageOpen] = useState(false);
+  const [showEcoCashPay, setShowEcoCashPay] = useState(false);
   const sheetWrapRef = useRef<HTMLDivElement>(null);
   const noteLoadedForRide = useRef<string | null>(null);
   const waitStartedAt = useRef(Date.now());
