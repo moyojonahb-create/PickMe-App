@@ -38,6 +38,10 @@ export default function EmergencyButton({ rideId, pickupAddress, dropoffAddress,
   const lastPosRef = useRef<{ lat: number; lng: number; at: number } | null>(null);
   const rideIdRef = useRef(rideId);
   rideIdRef.current = rideId;
+  const driverNameRef = useRef(driverName);
+  const pickupAddressRef = useRef(pickupAddress);
+  const dropoffAddressRef = useRef(dropoffAddress);
+
 
   const emergencyContacts = [
     { label: "Police (ZRP)", number: "995", color: "bg-destructive/10 border-destructive/20" },
@@ -112,8 +116,15 @@ export default function EmergencyButton({ rideId, pickupAddress, dropoffAddress,
     return () => { if (countdownRef.current) clearInterval(countdownRef.current); };
   }, []);
 
+  useEffect(() => {
+    driverNameRef.current = driverName;
+    pickupAddressRef.current = pickupAddress;
+    dropoffAddressRef.current = dropoffAddress;
+  }, [driverName, pickupAddress, dropoffAddress]);
+
 
   const shareEmergencyLocation = async () => {
+
     try {
       const pos = await new Promise<GeolocationPosition>((resolve, reject) =>
         navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 5000 })
@@ -122,12 +133,13 @@ export default function EmergencyButton({ rideId, pickupAddress, dropoffAddress,
       const mapsLink = `https://www.mapbox.com/directions?destination=${longitude},${latitude}`;
       const text = [
         `🆘 EMERGENCY — I need help!`,
-        driverName ? `Driver: ${driverName}` : '',
-        pickupAddress ? `From: ${pickupAddress}` : '',
-        dropoffAddress ? `To: ${dropoffAddress}` : '',
+        driverNameRef.current ? `Driver: ${driverNameRef.current}` : '',
+        pickupAddressRef.current ? `From: ${pickupAddressRef.current}` : '',
+        dropoffAddressRef.current ? `To: ${dropoffAddressRef.current}` : '',
         `My location: ${mapsLink}`,
-        rideId ? `Ride ID: ${rideId.substring(0, 8)}` : '',
+        rideIdRef.current ? `Ride ID: ${rideIdRef.current.substring(0, 8)}` : '',
       ].filter(Boolean).join('\n');
+
 
       if (navigator.share) {
         await navigator.share({ title: 'Emergency - CruiXe', text });
