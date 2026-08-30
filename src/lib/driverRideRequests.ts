@@ -75,7 +75,7 @@ export async function fetchEnrichedOpenRides(driverGender?: string | null): Prom
   const luggageSet = new Set((luggageRes.data ?? []).map((l) => l.ride_id));
   const genderMap = new Map((profilesRes.data ?? []).map((p) => [p.user_id, p.gender]));
   const profileMap = new Map((profilesRes.data ?? []).map((p) => [p.user_id, p]));
-  const parcelMap = new Map((parcelRes.data ?? []).map((p) => [p.ride_id, p]));
+  const parcelMap = new Map(((parcelRes.data ?? []) as Record<string, any>[]).map((p) => [p.ride_id as string, p]));
   const noteMap = new Map<string, string>();
   for (const row of noteRes.data ?? []) {
     if (noteMap.has(row.ride_id)) continue; // rows are newest-first — keep only the latest per ride
