@@ -1049,6 +1049,17 @@ export default function RiderRideDetail() {
           dropoffAddress={ride.dropoff_address}
         />
       )}
+
+      {ride && user && (
+        <DriverMessageSheet
+          open={showCommunication}
+          onClose={() => setShowCommunication(false)}
+          rideId={ride.id}
+          currentUserId={user.id}
+          passengerName={driverName || 'Your Driver'}
+          passengerPhone={driverPhone}
+        />
+      )}
     </div>
   );
 }
