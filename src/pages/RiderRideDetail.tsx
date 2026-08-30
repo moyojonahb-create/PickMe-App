@@ -26,7 +26,7 @@ import {
   type Offer,
   type DriverProfile
 } from "@/lib/offerHelpers";
-import { RideCommunication } from "@/components/ride/RideCommunication";
+import DriverMessageSheet from "@/components/driver/DriverMessageSheet";
 import OffersModal from "@/components/OffersModal";
 import MapboxMap from "@/components/MapboxMap";
 import TripMapboxMap from "@/components/TripMapboxMap";
@@ -835,7 +835,7 @@ export default function RiderRideDetail() {
                     <Phone className="h-5 w-5 text-foreground" />
                     <span className="text-[11px] font-medium text-foreground">Call</span>
                   </a>
-                  <button onClick={() => { setShowCommunication(!showCommunication); setSheetState('half'); }} className="relative flex flex-col items-center gap-1.5 py-3 rounded-2xl border border-border active:scale-95 transition-transform">
+                  <button onClick={() => setShowCommunication(true)} className="relative flex flex-col items-center gap-1.5 py-3 rounded-2xl border border-border active:scale-95 transition-transform">
                     <span className="relative">
                       <MessageCircle className="h-5 w-5 text-foreground" />
                       {unreadMessages > 0 && (
@@ -940,19 +940,6 @@ export default function RiderRideDetail() {
                 </Button>
               )}
 
-              {/* Communication panel */}
-              {showCommunication && user && (
-                <div className="bg-muted/30 rounded-2xl p-3 border border-border/30">
-                  <RideCommunication
-                    rideId={ride.id}
-                    currentUserId={user.id}
-                    otherUserPhone={driverPhone}
-                    riderId={ride.user_id}
-                    onStartCall={startCall}
-                    callActive={callStatus !== 'idle'}
-                  />
-                </div>
-              )}
             </>
           )}
 
@@ -1060,6 +1047,17 @@ export default function RiderRideDetail() {
           startedAt={null}
           pickupAddress={ride.pickup_address}
           dropoffAddress={ride.dropoff_address}
+        />
+      )}
+
+      {ride && user && (
+        <DriverMessageSheet
+          open={showCommunication}
+          onClose={() => setShowCommunication(false)}
+          rideId={ride.id}
+          currentUserId={user.id}
+          passengerName={driverName || 'Your Driver'}
+          passengerPhone={driverPhone}
         />
       )}
     </div>
