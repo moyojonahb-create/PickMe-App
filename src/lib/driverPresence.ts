@@ -121,3 +121,26 @@ export async function setDriverOnline(
 
   return { is_online: online };
 }
+
+/**
+ * Lightweight presence heartbeat. The backend expires the Redis presence key
+ * after 90s and it is only written by this endpoint, so an online driver must
+ * re-post it periodically or dispatch stops considering them even though the
+ * UI still says Online. This function never throws, never toasts, never falls
+ * back to a Supabase write, and never invalidates the profile cache.
+ */
+export async function sendPresenceHeartbeat(
+  coords?: { lat: number; lng: number } | null
+): Promise<boolean> {
+  const payload: GoDriverPresenceRequest = {
+    is_online: true,
+    ...(coords ? { latitude: coords.lat, longitude: coords.lng } : {}),
+  };
+
+  try {
+    await goBackend.post<unknown>('/api/drivers/me/presence', payload);
+    return true;
+  } catch {
+    return false;
+  }
+}
