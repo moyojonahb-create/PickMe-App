@@ -1056,6 +1056,8 @@ export default function RiderRideDetail() {
           onClose={() => setShowCommunication(false)}
           rideId={ride.id}
           currentUserId={user.id}
+          viewerRole="rider"
+          driverUserId={((driverProfile as Record<string, unknown>)?.user_id as string) ?? ''}
           passengerName={driverName || 'Your Driver'}
           passengerPhone={driverPhone}
         />
