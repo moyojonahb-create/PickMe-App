@@ -1259,7 +1259,7 @@ export default function RideMatching() {
 
                 {/* EcoCash payment — same flow as RiderRideDetail, shown for
                     non-wallet rides directly above the Message + Call row. */}
-                {ride.payment_method !== 'wallet' && (
+                {ride.payment_method !== 'wallet' && driverEcocash && (
                   <button
                     type="button"
                     onClick={() => setShowEcoCashPay(true)}
