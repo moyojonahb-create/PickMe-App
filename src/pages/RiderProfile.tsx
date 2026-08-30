@@ -202,10 +202,10 @@ export default function RiderProfile() {
         <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground pt-2 px-1">Offers</p>
         {/* Referral Card */}
         {stats.referralCode && (
-          <div className="glass-card rounded-2xl p-3.5 bg-gradient-to-r from-primary/5 to-accent/5">
+          <div className="glass-card rounded-2xl p-3.5 bg-gradient-to-r from-yellow-100 to-amber-50 border border-yellow-200 dark:from-yellow-950/40 dark:to-amber-950/30 dark:border-yellow-800/60">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Gift className="w-4 h-4 text-accent" />
+                <Gift className="w-4 h-4 text-yellow-600 dark:text-yellow-400" />
                 <div>
                   <p className="text-sm font-semibold text-foreground">Invite & Earn $2</p>
                   <p className="text-[10px] text-muted-foreground">
@@ -217,7 +217,7 @@ export default function RiderProfile() {
               </div>
               <button
                 onClick={handleCopyReferral}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-primary text-primary-foreground text-xs font-bold active:scale-95 transition-all"
+                className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-yellow-500 text-yellow-950 text-xs font-bold active:scale-95 transition-all dark:bg-yellow-400 dark:text-yellow-950"
               >
                 {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
                 {stats.referralCode}
