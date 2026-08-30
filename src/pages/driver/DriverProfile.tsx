@@ -264,21 +264,21 @@ export default function DriverProfilePage() {
   return (
     <div className="min-h-[100dvh] pb-24" style={{ background: '#F2F4F7', fontFamily: "-apple-system, 'SF Pro Text', 'SF Pro Display', system-ui, sans-serif" }}>
       {/* Header */}
-      <div style={{ background: RIDE_RED_GRADIENT, padding: '44px 16px 14px' }}>
+      <div style={{ background: RIDE_RED_GRADIENT, padding: 'calc(env(safe-area-inset-top) + 12px) 16px 12px' }}>
         <div className="max-w-lg mx-auto">
           <div className="flex items-center" style={{ gap: 11 }}>
             <label className="relative shrink-0 cursor-pointer">
-              <div className="rounded-full bg-white/95 overflow-hidden flex items-center justify-center" style={{ width: 50, height: 50, boxShadow: '0 0 0 2px rgba(255,255,255,.4)' }}>
+              <div className="rounded-full bg-white/95 overflow-hidden flex items-center justify-center" style={{ width: 42, height: 42, boxShadow: '0 0 0 2px rgba(255,255,255,.4)' }}>
                 <img src={profile.avatar_url || defaultDriverAvatar} alt={fullName} className="w-full h-full object-cover" />
               </div>
-              <span className="absolute -bottom-0.5 -right-0.5 rounded-full bg-white flex items-center justify-center border-2" style={{ width: 19, height: 19, borderColor: RIDE_RED }}>
+              <span className="absolute -bottom-0.5 -right-0.5 rounded-full bg-white flex items-center justify-center border-2" style={{ width: 17, height: 17, borderColor: RIDE_RED }}>
                 {uploadingAvatar ? <Loader2 className="w-2.5 h-2.5 animate-spin" style={{ color: RIDE_RED }} /> : <Camera className="w-2.5 h-2.5" style={{ color: RIDE_RED }} />}
               </span>
               <input type="file" accept="image/*" className="hidden" onChange={handleAvatarFile} disabled={uploadingAvatar} />
             </label>
 
             <div className="flex-1 min-w-0">
-              <p className="truncate text-white" style={{ fontSize: 18, fontWeight: 700 }}>{fullName}</p>
+              <p className="truncate text-white" style={{ fontSize: 16, fontWeight: 700 }}>{fullName}</p>
               <div className="flex items-center flex-wrap" style={{ marginTop: 1, gap: 5, fontSize: 11.5, color: 'rgba(255,255,255,.85)' }}>
                 <span className="flex items-center" style={{ gap: 3 }}>
                   <Star style={{ width: 11, height: 11 }} fill="#fff" color="#fff" />
@@ -304,16 +304,21 @@ export default function DriverProfilePage() {
             </button>
           </div>
 
-          {/* Stat pills */}
-          <div className="flex" style={{ marginTop: 12, gap: 8 }}>
+          {/* Stat strip — one row with dividers instead of three stacked
+              boxes; same three numbers, roughly half the height. */}
+          <div className="flex" style={{ marginTop: 10, background: 'rgba(255,255,255,.94)', borderRadius: 12, overflow: 'hidden' }}>
             {[
               { label: 'This week', value: weekStats ? fmtUSD(weekStats.weekEarnings) : '—' },
               { label: 'Completed', value: weekStats?.completionRate != null ? `${weekStats.completionRate}%` : '—' },
               { label: 'On CruiXe', value: weekStats ? `${weekStats.monthsOnPickMe} mo` : '—' },
-            ].map((s) => (
-              <div key={s.label} className="flex-1 flex flex-col items-center" style={{ background: 'rgba(255,255,255,.94)', borderRadius: 12, padding: '7px 4px' }}>
-                <span style={{ fontSize: 9, fontWeight: 700, color: RIDE_TEXT_2, textTransform: 'uppercase', letterSpacing: '.04em' }}>{s.label}</span>
-                <span className="tabular-nums" style={{ fontSize: 15, fontWeight: 700, color: RIDE_TEXT, marginTop: 1 }}>{s.value}</span>
+            ].map((s, i) => (
+              <div
+                key={s.label}
+                className="flex-1 flex flex-col items-center justify-center"
+                style={{ padding: '5px 4px', borderLeft: i === 0 ? 'none' : '1px solid rgba(0,0,0,.07)' }}
+              >
+                <span className="tabular-nums" style={{ fontSize: 13.5, fontWeight: 700, color: RIDE_TEXT, lineHeight: 1.15 }}>{s.value}</span>
+                <span style={{ fontSize: 8.5, fontWeight: 600, color: RIDE_TEXT_2, textTransform: 'uppercase', letterSpacing: '.04em', lineHeight: 1.2 }}>{s.label}</span>
               </div>
             ))}
           </div>
