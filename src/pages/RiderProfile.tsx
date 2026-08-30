@@ -301,11 +301,18 @@ export default function RiderProfile() {
           </div>
 
           <NavRow
+            icon={<History className="w-4 h-4 text-primary" />}
+            label="Ride history"
+            sublabel="Past trips, fares and pickups"
+            onClick={() => navigate('/history')}
+          />
+          <NavRow
             icon={<User className="w-4 h-4 text-primary" />}
             label="Edit Profile"
             sublabel="Photo, name, phone"
             onClick={() => navigate(`${prefix}/edit-profile`)}
           />
+
           <NavRow
             icon={<Shield className="w-4 h-4 text-primary" />}
             label="Safety"
