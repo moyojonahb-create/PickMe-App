@@ -108,14 +108,6 @@ export default function RiderProfile() {
 
   return (
     <div className="min-h-[100dvh] bg-background relative">
-      {/* Ambient brand wash. backdrop-blur over a flat background is invisible —
-          these blurred blobs are what the glass cards actually refract. */}
-      <div aria-hidden className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute -top-16 -right-20 w-72 h-72 rounded-full bg-primary/20 blur-3xl" />
-        <div className="absolute top-1/3 -left-24 w-64 h-64 rounded-full bg-accent/15 blur-3xl" />
-        <div className="absolute bottom-0 right-1/4 w-60 h-60 rounded-full bg-primary/10 blur-3xl" />
-      </div>
-
       {/* Account header. /profile is a bottom-nav tab root, so there is
           deliberately no back button — there is nothing to go back to. */}
       <div className="relative z-10 px-4 pt-[calc(env(safe-area-inset-top)+16px)] pb-2">
