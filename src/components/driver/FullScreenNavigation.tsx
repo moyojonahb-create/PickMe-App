@@ -393,6 +393,31 @@ export default function FullScreenNavigation({
     setLastSpokenStepIndex(currentStepIndex);
   }, [currentStep, currentStepIndex, voiceEnabled, lastSpokenStepIndex, distToManeuverM, speak]);
 
+  // Self-heal: verify on mount that this ride still exists and is still in an
+  // active state. DriverDashboard clears activeTrip only inside refresh(), so
+  // a ride that expired, was cancelled by the rider, or was cleaned up
+  // server-side can leave the driver stranded on a full-screen navigation for
+  // a trip that no longer exists. One read on mount closes that hole.
+  useEffect(() => {
+    let cancelled = false;
+    const ACTIVE = ['accepted', 'enroute', 'enroute_pickup', 'in_progress', 'arrived'];
+    void (async () => {
+      const { data, error } = await supabase
+        .from('rides')
+        .select('status')
+        .eq('id', activeTrip.id)
+        .maybeSingle();
+      if (cancelled || error) return;
+      const status = (data as { status?: string } | null)?.status;
+      if (!data || (status && !ACTIVE.includes(status))) {
+        toast.info('This trip is no longer active');
+        onTripComplete();
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTrip.id]);
+
   // Straight-line fallback distance/ETA when OSRM couldn't be reached.
   const straightDistanceM = driverCoords ? haversineM(driverCoords, destination) : 0;
   const totalDistanceKm = route ? route.distanceKm : straightDistanceM / 1000;
