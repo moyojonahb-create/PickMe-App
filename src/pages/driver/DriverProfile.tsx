@@ -126,7 +126,13 @@ export default function DriverProfilePage() {
     if (photoRow) {
       setProfile((prev) => (prev ? { ...prev, vehicle_photo_url: photoRow.vehicle_photo_url } : prev));
     }
-  }, [user]);
+    // Keyed on user?.id, not the user object: useAuth's onAuthStateChange
+    // fires more than once during startup, each time handing back a
+    // new-but-equivalent user object. Depending on object identity recreates
+    // this callback, re-runs the effect, and flips loading back on — which is
+    // what made this screen flicker between content and skeleton on open.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   useEffect(() => { load(); }, [load]);
 
