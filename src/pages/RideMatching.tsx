@@ -1236,6 +1236,21 @@ export default function RideMatching() {
                   <ChevronRight style={{ width: 17, height: 17, color: RIDE_TEXT_2 }} className="shrink-0" />
                 </button>
 
+                {/* EcoCash payment — same flow as RiderRideDetail, shown for
+                    non-wallet rides directly above the Message + Call row. */}
+                {ride.payment_method !== 'wallet' && (
+                  <button
+                    type="button"
+                    onClick={() => setShowEcoCashPay(true)}
+                    className="w-full flex items-center justify-center active:scale-[0.97] transition-transform"
+                    style={{ height: 48, borderRadius: 15, marginBottom: 12, gap: 8, ...redCta }}
+                  >
+                    <span style={{ fontSize: 15.5, fontWeight: 700 }} className="text-white">
+                      💰 Pay ${Number(ride.fare).toFixed(2)} with EcoCash
+                    </span>
+                  </button>
+                )}
+
                 {/* Section 5 — action row: Message + Call are the only two primary actions */}
                 <div className="flex items-center" style={{ gap: 12 }}>
                   <button
