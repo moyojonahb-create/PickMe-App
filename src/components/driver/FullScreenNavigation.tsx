@@ -771,18 +771,22 @@ export default function FullScreenNavigation({
                           </span>
                         )}
                       </button>
-                      {dialNumber && (
-                        <button
-                          type="button"
-                          onClick={onStartCall}
-                          disabled={callStatus !== 'idle'}
-                          aria-label="Call passenger"
-                          className="flex items-center justify-center rounded-full active:scale-90 transition-transform disabled:opacity-60"
-                          style={{ width: 40, height: 40, background: RIDE_RED_GRADIENT, boxShadow: '0 6px 14px rgba(184,17,4,.3)' }}
-                        >
-                          <Phone style={{ width: 18, height: 18 }} className="text-white" />
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!dialNumber) {
+                            toast.info('No phone number available for this passenger');
+                            return;
+                          }
+                          onStartCall();
+                        }}
+                        disabled={callStatus !== 'idle' || !dialNumber}
+                        aria-label="Call passenger"
+                        className="flex items-center justify-center rounded-full active:scale-90 transition-transform disabled:opacity-50"
+                        style={{ width: 40, height: 40, background: RIDE_RED_GRADIENT, boxShadow: '0 6px 14px rgba(184,17,4,.3)' }}
+                      >
+                        <Phone style={{ width: 18, height: 18 }} className="text-white" />
+                      </button>
                     </div>
                   </div>
 
