@@ -17,6 +17,7 @@ async function getUserId(): Promise<string | null> {
 supabase.auth.onAuthStateChange((event) => {
   if (event === "SIGNED_OUT") {
     cachedUserId = null;
+    lastSentAt = 0;
   }
 });
 
