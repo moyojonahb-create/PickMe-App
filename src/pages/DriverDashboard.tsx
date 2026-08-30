@@ -36,7 +36,7 @@ import { useFatigueMonitor } from "@/hooks/useFatigueMonitor";
 import FatigueAlert from "@/components/driver/FatigueAlert";
 
 import { subscribeRiderComing } from "@/lib/rideSignals";
-import { setDriverOnline } from "@/lib/driverPresence";
+import { setDriverOnline, sendPresenceHeartbeat } from "@/lib/driverPresence";
 import { useDriverRideAlerts, type DriverServiceArea } from "@/hooks/useDriverRideAlerts";
 import { useAppBootstrap } from "@/hooks/useAppBootstrap";
 
