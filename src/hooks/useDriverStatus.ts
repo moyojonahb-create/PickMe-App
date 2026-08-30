@@ -74,7 +74,9 @@ export function useDriverStatus(): DriverStatus {
     };
 
     checkDriverStatus();
-  }, [user, authLoading]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, authLoading]);
+
 
   return state;
 }

@@ -36,7 +36,9 @@ export default function EditProfile() {
     if (!authLoading && !user) { navigate('/auth'); return; }
     if (user && !loaded) loadProfile();
     else if (user && cachedProfile) resolveAvatarUrl(cachedProfile.avatar_url).then(setAvatarUrl);
-  }, [user, authLoading]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, authLoading]);
+
 
   const loadProfile = async () => {
     const { data } = await supabase

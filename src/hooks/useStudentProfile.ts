@@ -59,7 +59,9 @@ export function useStudentProfile() {
       .maybeSingle();
     setProfile((data as unknown as StudentProfile | null) ?? null);
     setLoading(false);
-  }, [user]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
+
 
   useEffect(() => { fetch(); }, [fetch]);
 
@@ -118,7 +120,9 @@ export function useStudentDiscountAvailable() {
     const used = count ?? 0;
     setUsedToday(used);
     setAvailable(used < 4 && (profile.fraud_score ?? 0) < 50);
-  }, [user, profile]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, profile?.id]);
+
 
   useEffect(() => { refresh(); }, [refresh]);
 
