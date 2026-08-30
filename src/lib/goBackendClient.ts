@@ -228,10 +228,17 @@ async function doFetch(method: string, path: string, headers: Record<string, str
 }
 
 async function request<T>(method: string, path: string, body?: unknown, isRetry = false, signal?: AbortSignal): Promise<T> {
+  if (Date.now() < authBreakerUntil) {
+    // Skip the network entirely; callers treat UNAUTHENTICATED as
+    // "backend unavailable" and use their Supabase fallback.
+    throw new GoBackendError("Backend auth circuit open", "UNAUTHENTICATED", 401);
+  }
+
   // Resolved outside the fetch try/catch below so an auth failure (no/expired
   // session) surfaces as UNAUTHENTICATED instead of being masked as a generic
   // network error.
   const headers = await authHeaders();
+
   const response = await doFetch(method, path, headers, body, signal);
 
   // The session looked valid client-side but the server rejected the token
