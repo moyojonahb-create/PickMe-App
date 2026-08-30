@@ -81,7 +81,7 @@ export default function DriverModeLanding() {
           className="flex items-center gap-4 p-5 rounded-2xl glass-card hover:bg-foreground/[0.02] transition-colors mb-2"
         >
           <img src={pickMeCarFront} alt="" className="h-12 w-auto object-contain shrink-0" />
-          <span className="text-lg font-semibold text-foreground flex-1 text-left">Driver</span>
+          <span className="text-lg font-semibold text-foreground flex-1 text-left">Let's drive</span>
           <ChevronRight className="w-5 h-5 text-muted-foreground" />
         </button>
 
