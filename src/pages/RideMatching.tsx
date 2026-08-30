@@ -149,6 +149,8 @@ export default function RideMatching() {
   const [driverEcocash, setDriverEcocash] = useState<string | null>(null);
   // Rider wallet removed — direct payment to driver (mirrors RiderRideDetail).
   const walletPin: string | null = null;
+  const unreadMessages = useUnreadRideMessages(ride?.id, user?.id, messageOpen);
+
 
   // In-app voice calling (Agora) — tel: is only a fallback.
   const {
