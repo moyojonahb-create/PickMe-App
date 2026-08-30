@@ -86,6 +86,9 @@ export default function DriverDashboard() {
   const [uncollectedRide, setUncollectedRide] = useState<{ id: string; fare: number; payment_method: string; dropoff_address: string; user_id: string } | null>(null);
 
   const locationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const presenceIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const latestCoordsRef = useRef<{ lat: number; lng: number } | null>(null);
+  const presenceFailuresRef = useRef(0);
   const { speak, isSupported: voiceSupported } = useVoiceNavigation({ enabled: voiceEnabled });
   // Warms the shared town-pricing cache useTownPricing() reads from
   // elsewhere — the result itself isn't needed locally on this screen.
