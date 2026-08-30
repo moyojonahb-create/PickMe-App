@@ -1306,16 +1306,25 @@ export default function RideMatching() {
                     <MessageCircle style={{ width: 18, height: 18, color: RIDE_RED }} />
                     <span style={{ fontSize: 14.5, fontWeight: 700, color: RIDE_RED }}>Message</span>
                   </button>
-                  <a
-                    href={driver?.phone ? `tel:${driver.phone}` : undefined}
-                    className={`flex items-center justify-center active:scale-[0.97] transition-transform ${driver?.phone ? '' : 'pointer-events-none opacity-50'}`}
+                  <button
+                    type="button"
+                    disabled={callStatus !== 'idle'}
+                    onClick={async () => {
+                      if (callStatus !== 'idle') return;
+                      try {
+                        await startCall();
+                      } catch {
+                        if (driver?.phone) window.location.href = `tel:${driver.phone}`;
+                      }
+                    }}
+                    className="flex items-center justify-center active:scale-[0.97] transition-transform disabled:opacity-60"
                     style={{ flex: 1, height: 48, borderRadius: 15, gap: 9, ...redCta }}
                   >
                     <Phone style={{ width: 18, height: 18 }} className="text-white" />
                     <span style={{ fontSize: 15.5, fontWeight: 700 }} className="text-white truncate">
-                      Call {(driver?.full_name || 'driver').split(' ')[0]}
+                      {callStatus !== 'idle' ? 'Calling…' : `Call ${(driver?.full_name || 'driver').split(' ')[0]}`}
                     </span>
-                  </a>
+                  </button>
                 </div>
 
                 {/* Section 6 — iOS home indicator */}
