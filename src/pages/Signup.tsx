@@ -40,6 +40,11 @@ const Signup = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
+  // Timer refs so navigating away during countdown / deferred signup
+  // cancels the work instead of writing state to an unmounted component.
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const signupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // OTP state
   const [otp, setOtp] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
