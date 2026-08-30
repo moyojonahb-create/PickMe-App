@@ -32,6 +32,7 @@ import RideGlassPanel from '@/components/ride/RideGlassPanel';
 import NoteToDriverSheet from '@/components/ride/NoteToDriverSheet';
 import SafetySheet from '@/components/ride/SafetySheet';
 import ShareTripButton from '@/components/ride/ShareTripButton';
+import { openTripReceipt } from '@/components/ride/TripReceiptButton';
 import DriverMessageSheet from '@/components/driver/DriverMessageSheet';
 import EcoCashPaymentModal from '@/components/wallet/EcoCashPaymentModal';
 import IncomingCallModal from '@/components/ride/IncomingCallModal';
