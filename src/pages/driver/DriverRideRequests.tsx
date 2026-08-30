@@ -150,13 +150,20 @@ export default function DriverRideRequests() {
     // per system-wide ride write was a real O(rides × drivers) query storm.
     const scheduleRefresh = () => {
       if (refreshDebounceRef.current) clearTimeout(refreshDebounceRef.current);
-      refreshDebounceRef.current = setTimeout(refresh, 1500);
+      refreshDebounceRef.current = setTimeout(refresh, 400);
     };
     const channel = supabase
       .channel('driver-open-rides-list')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'rides' }, scheduleRefresh)
+      // A brand new request must land on the driver's screen immediately —
+      // no debounce on INSERT. Status churn from other rides stays debounced.
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'rides' }, () => refresh())
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'rides' }, scheduleRefresh)
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'rides' }, scheduleRefresh)
       .subscribe();
-    const id = setInterval(refresh, 45000);
+    // Fallback poll: realtime can drop on mobile networks, so guarantee a new
+    // request is seen within 5s regardless.
+    const id = setInterval(refresh, 5000);
+
     return () => {
       supabase.removeChannel(channel);
       clearInterval(id);
