@@ -96,8 +96,15 @@ export default function DriverRideRequests() {
 
   const refresh = useCallback(async () => {
     try {
-      await expireOldRides();
+      // The expiry sweep is a write-heavy admin RPC — at a 5s refresh cadence
+      // it only needs to run once a minute, and it must never delay showing a
+      // freshly broadcast request, so it is fired-and-forgotten.
+      if (Date.now() - lastExpirySweep.current > 60_000) {
+        lastExpirySweep.current = Date.now();
+        void expireOldRides();
+      }
       const profile = await getDriverProfile();
+
       const online = profile?.is_online ?? false;
       setIsOnline(online);
       if (!online) {
