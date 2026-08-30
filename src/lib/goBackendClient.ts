@@ -250,7 +250,11 @@ async function request<T>(method: string, path: string, body?: unknown, isRetry 
     if (!refreshError && refreshed.session) {
       return request<T>(method, path, body, true, signal);
     }
+    // Refresh didn't help; this is a real auth failure. Count it so the
+    // breaker can open and stop us from hammering the backend.
+    noteAuthFailure();
   }
+
 
   const payload = await parseResponse(response);
   if (!response.ok) {
