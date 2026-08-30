@@ -503,13 +503,16 @@ func (h *Handler) Heartbeat(c *fiber.Ctx) error {
 	if req.DriverID != "" && req.DriverID != authUserID {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Cannot send heartbeat for another driver"})
 	}
-	req.DriverID = authUserID
+  req.DriverID = authUserID
 
+	// Going online is Online()'s job; a heartbeat only refreshes a driver who is
+	// already online, so an admin force-offline is not undone by the driver's
+	// next beat.
 	commandTag, err := h.db.Exec(context.Background(), `
 		UPDATE public.drivers
-		SET is_online = true,
-		    updated_at = NOW()
+		SET updated_at = NOW()
 		WHERE user_id = $1
+		  AND is_online = true
 	`, req.DriverID)
 
 	if err != nil {
@@ -517,7 +520,7 @@ func (h *Handler) Heartbeat(c *fiber.Ctx) error {
 	}
 
 	if commandTag.RowsAffected() == 0 {
-		return c.Status(404).JSON(fiber.Map{"error": "Driver not found"})
+		return c.Status(409).JSON(fiber.Map{"error": "driver_not_online"})
 	}
 
 	if _, err := h.db.Exec(context.Background(), `
@@ -525,6 +528,7 @@ func (h *Handler) Heartbeat(c *fiber.Ctx) error {
 		SET is_online = true,
 		    updated_at = NOW()
 		WHERE user_id = $1
+		  AND is_online = true
 	`, req.DriverID); err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
