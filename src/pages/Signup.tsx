@@ -90,13 +90,13 @@ const Signup = () => {
     }, 1000);
   };
 
-  // Send OTP via twilio-otp edge function (unauthenticated - we haven't signed up yet)
+  // Send OTP via omniflex-otp edge function (unauthenticated - we haven't signed up yet)
   const sendOtp = async (phoneNumber: string) => {
     if (countdown > 0) return;
     setIsSendingOtp(true);
     try {
       const res = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/twilio-otp`,
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/omniflex-otp`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY },
@@ -123,7 +123,7 @@ const Signup = () => {
     setIsVerifying(true);
     try {
       const res = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/twilio-otp`,
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/omniflex-otp`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY },
