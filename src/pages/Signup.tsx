@@ -15,15 +15,20 @@ import { lovable } from '@/integrations/lovable/index';
 import { updateMyProfile } from '@/lib/businessApi';
 
 const signupSchema = z.object({
-  fullName: z.string().min(2, 'Full Name is required').max(100, 'Name too long'),
-  idNumber: z.string().min(1, 'ID Number is required').max(50, 'ID too long'),
+  fullName: z.string().trim().min(2, 'Full Name is required').max(100, 'Name too long'),
+  nickname: z.string().trim().max(24, 'Nickname too long')
+    .regex(/^[a-zA-Z0-9._-]*$/, 'Only letters, numbers, dots, dashes and underscores')
+    .optional().or(z.literal('')),
   phone: z.string()
-    .min(10, 'Phone number must be at least 10 digits')
+    .min(9, 'Phone number must be at least 9 digits')
     .max(20, 'Phone number too long')
-    .regex(/^\+?[0-9\s-]+$/, 'Enter a valid phone number'),
-  email: z.string().email('Enter a valid email address').max(255, 'Email too long').optional().or(z.literal('')),
-  password: z.string().min(6, 'Password must be at least 6 characters').max(72, 'Password too long')
+    .regex(/^(\+263|0)[0-9\s-]{8,}$/, 'Use 077... or +263...'),
+  email: z.string().trim().email('Enter a valid email address').max(255, 'Email too long').optional().or(z.literal('')),
+  password: z.string().min(8, 'Password must be at least 8 characters').max(72, 'Password too long')
     .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~])/, 'Must include uppercase, lowercase, number, and special character'),
+}).refine((d) => !d.nickname || d.nickname.length >= 3, {
+  path: ['nickname'],
+  message: 'Nickname must be at least 3 characters',
 });
 
 type SignupFormData = z.infer<typeof signupSchema>;
