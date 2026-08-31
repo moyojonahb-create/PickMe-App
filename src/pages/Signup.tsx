@@ -157,6 +157,7 @@ const Signup = () => {
   const onSubmitDetails = async (data: SignupFormData) => {
     const formattedData = {
       ...data,
+      nickname: data.nickname?.trim() || '',
       phone: formatPhoneNumber(data.phone),
     };
 
@@ -172,6 +173,15 @@ const Signup = () => {
       return;
     }
 
+    // Nickname must be unique (it doubles as a sign-in identifier)
+    if (formattedData.nickname) {
+      const { data: taken } = await supabase.rpc('nickname_is_taken', { _nickname: formattedData.nickname });
+      if (taken) {
+        form.setError('nickname', { message: 'That nickname is already taken.' });
+        return;
+      }
+    }
+
     // Email uniqueness is enforced by Supabase Auth at signup time
 
     setFormData(formattedData);
@@ -183,8 +193,11 @@ const Signup = () => {
   const completeSignup = async (data: SignupFormData) => {
     setIsSubmitting(true);
     try {
-      const email = data.email || `${data.phone.replace(/\+/g, '')}@pickme.phone`;
-      const { error } = await signUp(email, data.password, data.fullName);
+      const email = data.email?.trim() || `${data.phone.replace(/\+/g, '')}@pickme.phone`;
+      const { error } = await signUp(email, data.password, data.fullName, {
+        nickname: data.nickname || undefined,
+        phone: data.phone,
+      });
       if (error) {
         let message = error.message;
         if (message.includes('already registered')) {
