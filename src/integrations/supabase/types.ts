@@ -1350,6 +1350,7 @@ export type Database = {
           gender_preference: string
           hearing_impaired: boolean
           id: string
+          nickname: string | null
           phone: string | null
           pickme_account: string | null
           quiet_ride: boolean
@@ -1367,6 +1368,7 @@ export type Database = {
           gender_preference?: string
           hearing_impaired?: boolean
           id?: string
+          nickname?: string | null
           phone?: string | null
           pickme_account?: string | null
           quiet_ride?: boolean
@@ -1384,6 +1386,7 @@ export type Database = {
           gender_preference?: string
           hearing_impaired?: boolean
           id?: string
+          nickname?: string | null
           phone?: string | null
           pickme_account?: string | null
           quiet_ride?: boolean
@@ -2874,6 +2877,7 @@ export type Database = {
         Returns: Json
       }
       dispatch_scheduled_rides: { Args: never; Returns: number }
+      email_for_nickname: { Args: { _nickname: string }; Returns: string }
       expire_old_rides: { Args: never; Returns: number }
       generate_pickme_account: { Args: never; Returns: string }
       get_driver_id: { Args: { _user_id: string }; Returns: string }
@@ -2899,6 +2903,7 @@ export type Database = {
           user_id: string
         }[]
       }
+      nickname_is_taken: { Args: { _nickname: string }; Returns: boolean }
       pay_ride_from_wallet: { Args: { p_ride_id: string }; Returns: Json }
       realtime_topic_entity_id: {
         Args: { p_prefixes: string; p_topic: string }
