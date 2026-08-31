@@ -61,7 +61,7 @@ const Signup = () => {
     resolver: zodResolver(signupSchema),
     defaultValues: {
       fullName: '',
-      idNumber: '',
+      nickname: '',
       phone: '',
       email: '',
       password: '',
