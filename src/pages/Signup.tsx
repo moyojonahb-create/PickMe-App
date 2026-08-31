@@ -175,7 +175,7 @@ const Signup = () => {
 
     // Nickname must be unique (it doubles as a sign-in identifier)
     if (formattedData.nickname) {
-      const { data: taken } = await supabase.rpc('nickname_is_taken', { _nickname: formattedData.nickname });
+      const { data: taken } = await (supabase.rpc as any)('nickname_is_taken', { _nickname: formattedData.nickname });
       if (taken) {
         form.setError('nickname', { message: 'That nickname is already taken.' });
         return;
