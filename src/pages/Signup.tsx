@@ -353,15 +353,19 @@ const Signup = () => {
               </FormItem>
             )} />
 
-            <FormField control={form.control} name="idNumber" render={({ field }) => (
+            <FormField control={form.control} name="nickname" render={({ field }) => (
               <FormItem>
-                <FormLabel className="text-foreground font-semibold">ID Number</FormLabel>
+                <FormLabel className="text-foreground font-semibold">
+                  Nickname <span className="text-muted-foreground font-normal">(optional)</span>
+                </FormLabel>
                 <FormControl>
-                  <Input placeholder="National ID or Passport" className="h-12 rounded-2xl border-border bg-background text-foreground" {...field} />
+                  <Input placeholder="e.g. jonahb" autoComplete="username" className="h-12 rounded-2xl border-border bg-background text-foreground" {...field} />
                 </FormControl>
+                <p className="text-xs text-muted-foreground">This is the name shown in the app. You can also sign in with it.</p>
                 <FormMessage />
               </FormItem>
             )} />
+
 
             <FormField control={form.control} name="phone" render={({ field }) => (
               <FormItem>
