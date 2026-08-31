@@ -48,7 +48,7 @@ const Auth = () => {
     if (!email || !password) return;
     setIsSubmitting(true);
 
-    const identifier = loginIdentifierToEmail(email);
+    const identifier = await loginIdentifierToEmail(email);
     const isNetworkError = (err: unknown) => {
       const m = (err as Error)?.message?.toLowerCase() ?? '';
       return m.includes('failed to fetch')
@@ -119,11 +119,17 @@ const Auth = () => {
     return cleaned;
   };
 
-  const loginIdentifierToEmail = (identifier: string) => {
+  const loginIdentifierToEmail = async (identifier: string) => {
     const v = identifier.trim();
     if (v.includes('@')) return v;
-    const formatted = formatPhone(v);
-    return `${formatted.replace(/\+/g, '')}@pickme.phone`;
+    // Phone number → synthetic email used at signup
+    if (/^\+?[0-9\s-]+$/.test(v)) {
+      const formatted = formatPhone(v);
+      return `${formatted.replace(/\+/g, '')}@pickme.phone`;
+    }
+    // Otherwise treat it as a nickname and resolve it to the account's email
+    const { data } = await (supabase.rpc as any)('email_for_nickname', { _nickname: v });
+    return (data as string | null) || v;
   };
 
   const handleSignup = async (e: React.FormEvent) => {
@@ -262,11 +268,11 @@ const Auth = () => {
                 </div>
               )}
               <div className="space-y-2">
-                <Label htmlFor="login-email">Email or Phone</Label>
+                <Label htmlFor="login-email">Email, nickname or phone</Label>
                 <Input
                   id="login-email"
                   type="text"
-                  placeholder="you@example.com or +263..."
+                  placeholder="you@example.com, nickname or +263..."
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   autoComplete="username"
@@ -316,7 +322,7 @@ const Auth = () => {
                 </button>
               </div>
 
-              <p className="text-xs text-muted-foreground">Use the same email or phone number you registered with.</p>
+              <p className="text-xs text-muted-foreground">Sign in with your email, nickname, or phone number.</p>
 
               <Button type="submit" className="w-full h-12 rounded-xl" style={{ background: 'var(--gradient-primary)' }} disabled={isSubmitting}>
                 {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}

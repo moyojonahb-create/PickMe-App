@@ -317,11 +317,11 @@ export default function RideView() {
     (async () => {
       const { data } = await (supabase as any)
         .from('profiles')
-        .select('full_name, default_ride_note')
+        .select('full_name, nickname, default_ride_note')
         .eq('user_id', user.id)
         .maybeSingle();
       if (cancelled) return;
-      if (data?.full_name) setProfileName(data.full_name);
+      if (data?.nickname || data?.full_name) setProfileName(data.nickname || data.full_name);
       if (data?.default_ride_note) { setRiderNote(data.default_ride_note); setNoteReuseEveryTrip(true); }
     })();
     return () => { cancelled = true; };

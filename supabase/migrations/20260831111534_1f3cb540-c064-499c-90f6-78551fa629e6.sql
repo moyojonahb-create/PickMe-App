@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.email_for_nickname(text) FROM authenticated;

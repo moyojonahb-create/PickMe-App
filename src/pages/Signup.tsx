@@ -15,15 +15,20 @@ import { lovable } from '@/integrations/lovable/index';
 import { updateMyProfile } from '@/lib/businessApi';
 
 const signupSchema = z.object({
-  fullName: z.string().min(2, 'Full Name is required').max(100, 'Name too long'),
-  idNumber: z.string().min(1, 'ID Number is required').max(50, 'ID too long'),
+  fullName: z.string().trim().min(2, 'Full Name is required').max(100, 'Name too long'),
+  nickname: z.string().trim().max(24, 'Nickname too long')
+    .regex(/^[a-zA-Z0-9._-]*$/, 'Only letters, numbers, dots, dashes and underscores')
+    .optional().or(z.literal('')),
   phone: z.string()
-    .min(10, 'Phone number must be at least 10 digits')
+    .min(9, 'Phone number must be at least 9 digits')
     .max(20, 'Phone number too long')
-    .regex(/^\+?[0-9\s-]+$/, 'Enter a valid phone number'),
-  email: z.string().email('Enter a valid email address').max(255, 'Email too long').optional().or(z.literal('')),
-  password: z.string().min(6, 'Password must be at least 6 characters').max(72, 'Password too long')
+    .regex(/^(\+263|0)[0-9\s-]{8,}$/, 'Use 077... or +263...'),
+  email: z.string().trim().email('Enter a valid email address').max(255, 'Email too long').optional().or(z.literal('')),
+  password: z.string().min(8, 'Password must be at least 8 characters').max(72, 'Password too long')
     .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~])/, 'Must include uppercase, lowercase, number, and special character'),
+}).refine((d) => !d.nickname || d.nickname.length >= 3, {
+  path: ['nickname'],
+  message: 'Nickname must be at least 3 characters',
 });
 
 type SignupFormData = z.infer<typeof signupSchema>;
@@ -56,7 +61,7 @@ const Signup = () => {
     resolver: zodResolver(signupSchema),
     defaultValues: {
       fullName: '',
-      idNumber: '',
+      nickname: '',
       phone: '',
       email: '',
       password: '',
@@ -152,6 +157,7 @@ const Signup = () => {
   const onSubmitDetails = async (data: SignupFormData) => {
     const formattedData = {
       ...data,
+      nickname: data.nickname?.trim() || '',
       phone: formatPhoneNumber(data.phone),
     };
 
@@ -167,6 +173,15 @@ const Signup = () => {
       return;
     }
 
+    // Nickname must be unique (it doubles as a sign-in identifier)
+    if (formattedData.nickname) {
+      const { data: taken } = await (supabase.rpc as any)('nickname_is_taken', { _nickname: formattedData.nickname });
+      if (taken) {
+        form.setError('nickname', { message: 'That nickname is already taken.' });
+        return;
+      }
+    }
+
     // Email uniqueness is enforced by Supabase Auth at signup time
 
     setFormData(formattedData);
@@ -178,8 +193,11 @@ const Signup = () => {
   const completeSignup = async (data: SignupFormData) => {
     setIsSubmitting(true);
     try {
-      const email = data.email || `${data.phone.replace(/\+/g, '')}@pickme.phone`;
-      const { error } = await signUp(email, data.password, data.fullName);
+      const email = data.email?.trim() || `${data.phone.replace(/\+/g, '')}@pickme.phone`;
+      const { error } = await signUp(email, data.password, data.fullName, {
+        nickname: data.nickname || undefined,
+        phone: data.phone,
+      });
       if (error) {
         let message = error.message;
         if (message.includes('already registered')) {
@@ -348,15 +366,19 @@ const Signup = () => {
               </FormItem>
             )} />
 
-            <FormField control={form.control} name="idNumber" render={({ field }) => (
+            <FormField control={form.control} name="nickname" render={({ field }) => (
               <FormItem>
-                <FormLabel className="text-foreground font-semibold">ID Number</FormLabel>
+                <FormLabel className="text-foreground font-semibold">
+                  Nickname <span className="text-muted-foreground font-normal">(optional)</span>
+                </FormLabel>
                 <FormControl>
-                  <Input placeholder="National ID or Passport" className="h-12 rounded-2xl border-border bg-background text-foreground" {...field} />
+                  <Input placeholder="e.g. jonahb" autoComplete="username" className="h-12 rounded-2xl border-border bg-background text-foreground" {...field} />
                 </FormControl>
+                <p className="text-xs text-muted-foreground">This is the name shown in the app. You can also sign in with it.</p>
                 <FormMessage />
               </FormItem>
             )} />
+
 
             <FormField control={form.control} name="phone" render={({ field }) => (
               <FormItem>
