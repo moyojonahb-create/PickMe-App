@@ -529,11 +529,30 @@ export default function FullScreenNavigation({
       navigate(profilePath, { replace: true });
       onTripComplete();
     } catch (e: unknown) {
-      // 404/409/410 mean the server has no cancellable ride in this state —
-      // the screen is showing stale local state, so release the driver rather
-      // than trapping them on a navigation screen for a trip that is over.
+      // A 404/409/410 can mean the server genuinely has no cancellable ride —
+      // or that nothing answered at all (backend down, proxy error page), in
+      // which case the ride is still very much active. Releasing the driver on
+      // the status code alone bounced them to the profile screen, where the
+      // dashboard's refresh re-found the still-accepted ride and put them right
+      // back here — the button looked dead. Supabase is up independently of the
+      // Go backend, so ask it what actually happened.
       const status = e instanceof GoBackendError ? e.status : undefined;
+      let reallyOver = false;
       if (status === 404 || status === 409 || status === 410) {
+        try {
+          const { data: row } = await supabase
+            .from('rides')
+            .select('status')
+            .eq('id', activeTrip.id)
+            .maybeSingle();
+          // No row, or a terminal status, means the trip really is finished.
+          reallyOver = !row || ['cancelled', 'completed', 'expired'].includes(String((row as { status?: string }).status ?? ''));
+        } catch {
+          // Supabase read failed — treat as "not over" and keep the driver on screen.
+        }
+      }
+
+      if (reallyOver) {
         toast.info('This trip is no longer active');
         navigate(profilePath, { replace: true });
         onTripComplete();
