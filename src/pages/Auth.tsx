@@ -48,7 +48,7 @@ const Auth = () => {
     if (!email || !password) return;
     setIsSubmitting(true);
 
-    const identifier = loginIdentifierToEmail(email);
+    const identifier = await loginIdentifierToEmail(email);
     const isNetworkError = (err: unknown) => {
       const m = (err as Error)?.message?.toLowerCase() ?? '';
       return m.includes('failed to fetch')
