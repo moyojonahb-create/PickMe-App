@@ -50,6 +50,9 @@ verify_jwt = true
 [functions.twilio-otp]
 verify_jwt = false
 
+[functions.omniflex-otp]
+verify_jwt = false
+
 [functions.sms-invite]
 verify_jwt = true
 

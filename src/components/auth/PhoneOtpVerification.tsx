@@ -37,7 +37,7 @@ const PhoneOtpVerification = ({ phone, onVerified, onBack }: PhoneOtpVerificatio
     
     setIsSending(true);
     try {
-      const { data, error } = await supabase.functions.invoke('twilio-otp', {
+      const { data, error } = await supabase.functions.invoke('omniflex-otp', {
         body: { action: 'send', phone }
       });
 
@@ -74,7 +74,7 @@ const PhoneOtpVerification = ({ phone, onVerified, onBack }: PhoneOtpVerificatio
 
     setIsVerifying(true);
     try {
-      const { data, error } = await supabase.functions.invoke('twilio-otp', {
+      const { data, error } = await supabase.functions.invoke('omniflex-otp', {
         body: { action: 'verify', phone, code: otp }
       });
 
