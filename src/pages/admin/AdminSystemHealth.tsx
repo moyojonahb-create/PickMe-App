@@ -573,7 +573,7 @@ export default function AdminSystemHealth() {
           severity: otpFailures > 25 ? 'critical' : 'high',
           title: `📱 ${otpFailures} OTP verifications failed (24h)`,
           description: 'Phone numbers exhausted all 3 attempts without verifying. Likely SMS delivery or Africa\'s Talking issue.',
-          suggestion: 'Check the OmniFlex sender ID, account balance, and omniflex-otp edge function logs.'
+          suggestion: 'Check the OmniFlex sender ID, account balance, and omniflex-otp edge function logs.',
           timestamp: now.toISOString(),
           affectedUsers: otpFailures,
           context: 'New user enters phone → never receives SMS → can\'t sign up',
