@@ -119,11 +119,17 @@ const Auth = () => {
     return cleaned;
   };
 
-  const loginIdentifierToEmail = (identifier: string) => {
+  const loginIdentifierToEmail = async (identifier: string) => {
     const v = identifier.trim();
     if (v.includes('@')) return v;
-    const formatted = formatPhone(v);
-    return `${formatted.replace(/\+/g, '')}@pickme.phone`;
+    // Phone number → synthetic email used at signup
+    if (/^\+?[0-9\s-]+$/.test(v)) {
+      const formatted = formatPhone(v);
+      return `${formatted.replace(/\+/g, '')}@pickme.phone`;
+    }
+    // Otherwise treat it as a nickname and resolve it to the account's email
+    const { data } = await (supabase.rpc as any)('email_for_nickname', { _nickname: v });
+    return (data as string | null) || v;
   };
 
   const handleSignup = async (e: React.FormEvent) => {
