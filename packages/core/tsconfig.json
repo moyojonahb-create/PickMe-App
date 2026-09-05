@@ -1,0 +1,23 @@
+{
+  // DOM is included only for the ambient *types* this package genuinely needs
+  // and that both browsers and React Native provide: fetch/Response,
+  // AbortController/AbortSignal, WebSocket/MessageEvent, and the timer
+  // functions. DOM *globals* — document, window, location, localStorage — must
+  // never be used here; that is what breaks the package on React Native, and
+  // it is enforced by the no-restricted-globals rule in .eslintrc.cjs rather
+  // than by dropping the lib (which would take fetch and WebSocket with it).
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM"],
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["src/**/*"]
+}

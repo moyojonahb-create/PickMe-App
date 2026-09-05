@@ -1,0 +1,64 @@
+{
+  "expo": {
+    "name": "CruiXe Mobile",
+    "slug": "cruixe-mobile",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "backgroundColor": "#B81104",
+      "resizeMode": "contain"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "zw.co.cruixe.mobile",
+      "infoPlist": {
+        "UIBackgroundModes": [
+          "location",
+          "fetch",
+          "processing"
+        ],
+        "NSLocationWhenInUseUsageDescription": "CruiXe uses your location to match you with riders nearby and show them where your car is. It is only used while you are signed in and online.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Riders watch your car approach on their map, so CruiXe needs your location while you are online — including when your screen is off or you are using a navigation app. With \"While Using\" only, your rider's map freezes mid-trip. CruiXe never uses your location when you are offline.",
+        "NSLocationAlwaysUsageDescription": "CruiXe needs your location while you are online so riders can watch your car approach, including when your screen is off. It is never used when you are offline.",
+        "NSMotionUsageDescription": "CruiXe uses motion activity to tell whether your car is moving or parked, so it can save battery while you are stopped."
+      }
+    },
+    "android": {
+      "package": "zw.co.cruixe.mobile",
+      "adaptiveIcon": {
+        "backgroundColor": "#B81104",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION",
+        "WAKE_LOCK",
+        "RECEIVE_BOOT_COMPLETED",
+        "ACTIVITY_RECOGNITION"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "react-native-background-geolocation",
+      "react-native-background-fetch",
+      "expo-sharing"
+    ],
+    "extra": {
+      "//": "Values are read at runtime via expo-constants / process.env.EXPO_PUBLIC_*. Do not hardcode secrets here — app.json ships inside the binary.",
+      "note": "Set EXPO_PUBLIC_* in .env before building. See README.",
+      "eas": {
+        "projectId": "3204ae35-90c5-4b9a-8511-8af73b6ac769"
+      }
+    }
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "name": "mobile",
+  "version": "1.0.0",
+  "main": "index.ts",
+  "dependencies": {
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "@supabase/supabase-js": "^2.115.0",
+    "expo": "~57.0.19",
+    "expo-battery": "~57.0.2",
+    "expo-dev-client": "~57.0.18",
+    "expo-device": "~57.0.1",
+    "expo-file-system": "~57.0.6",
+    "expo-sharing": "~57.0.17",
+    "expo-status-bar": "~57.0.1",
+    "react": "19.2.3",
+    "react-native": "0.86.3",
+    "react-native-background-fetch": "^4.4.2",
+    "react-native-background-geolocation": "^5.5.0"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.2",
+    "typescript": "~6.0.3"
+  },
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web"
+  },
+  "private": true
+}

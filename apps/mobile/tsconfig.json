@@ -1,0 +1,17 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    // Metro resolves @cruixe/core via extraNodeModules in metro.config.js;
+    // tsc needs to be told separately or it reports the import as missing.
+    // Both must stay in step — if one is changed, change the other.
+    // No baseUrl: TypeScript 6 deprecates it, and paths resolve relative to
+    // this file without it.
+    "paths": {
+      "@cruixe/core": ["../../packages/core/src/index.ts"],
+      "@cruixe/core/*": ["../../packages/core/src/*"]
+    }
+  },
+  "include": ["**/*.ts", "**/*.tsx"],
+  "exclude": ["node_modules"]
+}

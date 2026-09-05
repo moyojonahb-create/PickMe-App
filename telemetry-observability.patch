@@ -1,0 +1,116 @@
+Subject: [PATCH] Make mobile telemetry state observable instead of silent
+
+STATUS: NOT APPLIED. Review, then from the repo root:
+    git apply telemetry-observability.patch
+
+Verified: applies cleanly to src/main.tsx at 63699db0, and `npx tsc --noEmit`
+passes with it applied.
+
+WHY THIS DOESN'T WAIT ON THE DISCRIMINATOR
+------------------------------------------
+Both orgs show zero Android events in 90 days, so DSN misrouting is ruled out —
+events aren't being sent at all, and the PROD flag is the leading cause. But the
+root problem isn't which flag is wrong. It's that "telemetry disabled" and
+"telemetry enabled and quiet" are indistinguishable from outside the app. That's
+what let this run unnoticed through a closed test, and it recurs in the React
+Native app unless fixed structurally. So this is correct under either cause.
+
+WHAT IT CHANGES
+---------------
+1. `enabled` no longer depends solely on import.meta.env.PROD — a native build
+   always reports. package.json ships both `build` and `build:dev`, there's no
+   Android CI, and the AAB is assembled by hand, so today one wrong script
+   silently produces a blind release. Web dev is unchanged: local `vite` still
+   sends nothing.
+
+2. A startup log naming the resolved project id and enabled state, so
+   `adb logcat | grep Telemetry` answers "is this build reporting?" in seconds.
+
+3. A deliberate boot event, proving the pipeline end to end — init, egress from
+   the WebView, correct project — rather than proving only that init() returned.
+   It also makes real cold-start volume visible, which matters because the other
+   explanation for zero events is that no tester has genuinely used the app, and
+   that carries its own Play Store deadline.
+
+TRADE-OFF NEEDING A DECISION
+----------------------------
+Item 3 sends one info event per cold start. Intentional while diagnosing at
+closed-test volume; drop or sample it before a wide release, or it scales with
+your install base. Written as one clearly-named call so it's easy to find.
+
+NOTE
+----
+This touches src/, breaking the zero-diff discipline that protects Lovable's
+ability to keep shipping the web app. That's why it's a patch for review and not
+an applied change — and Lovable may overwrite it, so verify it survives.
+
+diff --git a/src/main.tsx b/src/main.tsx
+index 0e6ae15d..18bbedb9 100644
+--- a/src/main.tsx
++++ b/src/main.tsx
+@@ -1,6 +1,7 @@
+ // Environment polyfill MUST be imported first to patch missing env vars
+ import './lib/envPolyfill';
+ 
++import { Capacitor } from "@capacitor/core";
+ import { createRoot } from "react-dom/client";
+ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+ import { ThemeProvider } from "next-themes";
+@@ -16,6 +17,18 @@ import "./index.css";
+ 
+ const SENTRY_DSN = "https://dd32fb52f690c164bc144e1c36438bf5@o4511105677328384.ingest.de.sentry.io/4511989333098576";
+ 
++// A packaged app must report regardless of which vite script built the bundle.
++// `build:dev` sets PROD false, which silently disabled Sentry in any AAB built
++// with it — and with no Android CI, that choice is made by hand every release.
++// Web dev behaviour is unchanged: a local `vite` run still sends nothing.
++const IS_NATIVE_BUILD = Capacitor.isNativePlatform();
++const TELEMETRY_ENABLED = import.meta.env.PROD || IS_NATIVE_BUILD;
++
++/** Project id from the DSN path — the part that says where events actually land. */
++function sentryProjectId(dsn: string): string {
++  return dsn.split('/').pop() ?? 'unknown';
++}
++
+ window.addEventListener('unhandledrejection', (event) => {
+   captureError(event.reason);
+   console.error('[PickMe] Unhandled promise rejection:', event.reason);
+@@ -42,7 +55,7 @@ async function initTelemetry() {
+   Sentry.init({
+     dsn: SENTRY_DSN,
+     environment: import.meta.env.MODE,
+-    enabled: import.meta.env.PROD,
++    enabled: TELEMETRY_ENABLED,
+     release: import.meta.env.VITE_APP_VERSION,
+     // Was `true` — this app records wallet PINs (WalletPinModal), driver
+     // licence/ID uploads, phone numbers and home addresses. Sending default
+@@ -74,6 +87,29 @@ async function initTelemetry() {
+     },
+   });
+ 
++  // Answers "is this build reporting, and to where?" without a Sentry login.
++  // Deliberately console.info rather than a debug-gated logger: it has to
++  // survive into a production bundle, because that is exactly where the
++  // question gets asked.
++  console.info(
++    `[Telemetry] sentry enabled=${TELEMETRY_ENABLED} project=${sentryProjectId(SENTRY_DSN)} ` +
++      `native=${IS_NATIVE_BUILD} mode=${import.meta.env.MODE}`,
++  );
++
++  // Proves the pipeline end to end — init, egress from the WebView, correct
++  // project — rather than proving only that init() returned. Also makes real
++  // cold-start volume visible, so "telemetry is broken" and "nobody has used
++  // the app" stop being indistinguishable from the outside.
++  //
++  // Sampling note: one info event per cold start. Fine at closed-test volume;
++  // drop or sample this before a wide release.
++  if (TELEMETRY_ENABLED) {
++    Sentry.captureMessage('telemetry_boot', {
++      level: 'info',
++      tags: { native: String(IS_NATIVE_BUILD), build_mode: import.meta.env.MODE },
++    });
++  }
++
+   markTelemetryReady((error) => Sentry.captureException(error));
+ 
+   // Session replay is the heaviest integration (DOM mutation observers +
